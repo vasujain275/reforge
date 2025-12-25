@@ -1,0 +1,204 @@
+version: "3"
+
+dotenv: [".env"]
+
+vars:
+  MIGRATIONS_DIR: internal/adapters/postgres/migrations
+  BINARY_NAME: kiro-api
+  BIN_DIR: bin
+  CMD_DIR: ./cmd
+
+tasks:
+  default:
+    desc: Run the API server
+    cmds:
+      - task: run
+
+  run:
+    desc: Run the API server
+    cmds:
+      - go run {{.CMD_DIR}}
+
+  build:
+    desc: Build the API binary
+    cmds:
+      - mkdir -p {{.BIN_DIR}}
+      - go build -o {{.BIN_DIR}}/{{.BINARY_NAME}} {{.CMD_DIR}}
+    sources:
+      - "**/*.go"
+      - go.mod
+      - go.sum
+    generates:
+      - "{{.BIN_DIR}}/{{.BINARY_NAME}}"
+
+  dev:
+    desc: Run server with hot reload (requires air)
+    cmds:
+      - air
+    preconditions:
+      - sh: command -v air
+        msg: "air is not installed. Run 'task install:tools' or 'go install github.com/air-verse/air@latest'"
+
+  # SQLC Tasks
+  sqlc:generate:
+    desc: Generate Go code from SQL queries using sqlc
+    cmds:
+      - sqlc generate
+    sources:
+      - sqlc.yaml
+      - internal/adapters/postgres/queries/**/*.sql
+      - internal/adapters/postgres/migrations/**/*.sql
+    generates:
+      - internal/adapters/postgres/sqlc/**/*.go
+
+  sqlc:verify:
+    desc: Verify sqlc configuration
+    cmds:
+      - sqlc verify
+
+  # Goose Migration Tasks
+  goose:up:
+    desc: Apply all pending migrations
+    cmds:
+      - goose up
+
+  goose:down:
+    desc: Rollback the last migration
+    cmds:
+      - goose down
+
+  goose:reset:
+    desc: Rollback all migrations
+    cmds:
+      - goose reset
+
+  goose:status:
+    desc: Show migration status
+    cmds:
+      - goose status
+
+  goose:create:
+    desc: Create a new migration file
+    cmds:
+      - goose create {{.CLI_ARGS}} sql
+    requires:
+      vars: [CLI_ARGS]
+
+  goose:redo:
+    desc: Rollback and reapply the last migration
+    cmds:
+      - goose redo
+
+  goose:version:
+    desc: Print current migration version
+    cmds:
+      - goose version
+
+  # Combined Tasks
+  migrate:
+    desc: Apply migrations and generate SQLC code
+    cmds:
+      - task: goose:up
+      - task: sqlc:generate
+
+  db:reset:
+    desc: Reset database, apply all migrations, and regenerate code
+    cmds:
+      - task: goose:reset
+      - task: goose:up
+      - task: sqlc:generate
+
+  db:fresh:
+    desc: Fresh database setup (reset + migrate + generate)
+    cmds:
+      - task: db:reset
+
+  # Testing Tasks
+  test:
+    desc: Run all tests
+    cmds:
+      - go test -v ./...
+
+  test:coverage:
+    desc: Run tests with coverage report
+    cmds:
+      - go test -v -coverprofile=coverage.out ./...
+      - go tool cover -html=coverage.out -o coverage.html
+      - echo "Coverage report generated at coverage.html"
+
+  test:race:
+    desc: Run tests with race detector
+    cmds:
+      - go test -race -v ./...
+
+  # Code Quality Tasks
+  lint:
+    desc: Run golangci-lint
+    cmds:
+      - golangci-lint run ./...
+    preconditions:
+      - sh: command -v golangci-lint
+        msg: "golangci-lint is not installed. Run 'task install:tools'"
+
+  fmt:
+    desc: Format Go code
+    cmds:
+      - go fmt ./...
+
+  vet:
+    desc: Run go vet
+    cmds:
+      - go vet ./...
+
+  tidy:
+    desc: Tidy go.mod
+    cmds:
+      - go mod tidy
+
+  verify:
+    desc: Verify go.mod
+    cmds:
+      - go mod verify
+
+  # Dependency Management
+  deps:
+    desc: Download dependencies
+    cmds:
+      - go mod download
+
+  deps:update:
+    desc: Update all dependencies
+    cmds:
+      - go get -u ./...
+      - go mod tidy
+
+  # Installation Tasks
+  install:tools:
+    desc: Install required development tools
+    cmds:
+      - go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest
+      - go install github.com/pressly/goose/v3/cmd/goose@latest
+      - go install github.com/air-verse/air@latest
+      - go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+      - echo "All tools installed successfully"
+
+  # Cleanup Tasks
+  clean:
+    desc: Clean build artifacts and generated files
+    cmds:
+      - rm -rf {{.BIN_DIR}}
+      - rm -f coverage.out coverage.html
+
+  clean:all:
+    desc: Clean everything including generated SQLC code
+    cmds:
+      - task: clean
+      - rm -rf internal/adapters/postgres/sqlc/*.go
+
+  # Project Setup
+  setup:
+    desc: Initial project setup
+    cmds:
+      - task: install:tools
+      - task: deps
+      - echo "Project setup complete! Run 'task migrate' to set up the database."

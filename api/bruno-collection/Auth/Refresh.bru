@@ -1,0 +1,15 @@
+meta {
+  name: Refresh
+  type: http
+  seq: 2
+}
+
+post {
+  url: {{base}}/auth/refresh
+  body: none
+  auth: inherit
+}
+
+settings {
+  encodeUrl: true
+}

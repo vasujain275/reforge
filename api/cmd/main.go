@@ -15,13 +15,23 @@ import (
 func main() {
 	ctx := context.Background()
 
+	secret := os.Getenv("JWT_SECRET")
+	if secret == "" {
+		slog.Error("JWT_SECRET environment variable is not set")
+		os.Exit(1)
+	}
+
 	cfg := config{
-		addr: ":8080",
+		addr: env.GetString("ADDR", ":8080"),
+		env:  env.GetString("ENV", "dev"),
 		db: dbConfig{
 			dsn: env.GetString(
 				"GOOSE_DBSTRING",
 				"file:./data/reforge.db?_pragma=journal_mode(WAL)&_pragma=foreign_keys(ON)",
 			),
+		},
+		auth: authConfig{
+			secret: secret,
 		},
 	}
 

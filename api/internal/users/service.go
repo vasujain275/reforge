@@ -9,6 +9,7 @@ import (
 
 type Service interface {
 	CreateUser(ctx context.Context, body CreateUserBody) (repo.CreateUserRow, error)
+	GetUserByID(ctx context.Context, userID int64) (repo.GetUserByIDRow, error)
 }
 
 type userService struct {
@@ -37,4 +38,14 @@ func (s *userService) CreateUser(ctx context.Context, body CreateUserBody) (repo
 
 	return s.repo.CreateUser(ctx, params)
 
+}
+
+func (s *userService) GetUserByID(ctx context.Context, userID int64) (repo.GetUserByIDRow, error) {
+	
+	user, err := s.repo.GetUserByID(ctx,userID)
+	if err != nil {
+		return repo.GetUserByIDRow{},err
+	}
+	
+	return user,nil
 }

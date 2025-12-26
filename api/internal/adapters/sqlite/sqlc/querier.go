@@ -11,15 +11,25 @@ import (
 type Querier interface {
 	// Used for checking if the system has been initialized (seed logic)
 	CountUsers(ctx context.Context) (int64, error)
+	CreatePattern(ctx context.Context, arg CreatePatternParams) (Pattern, error)
+	CreateProblem(ctx context.Context, arg CreateProblemParams) (Problem, error)
 	CreateRefreshToken(ctx context.Context, arg CreateRefreshTokenParams) (CreateRefreshTokenRow, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (CreateUserRow, error)
 	DeleteExpiredTokens(ctx context.Context) error
+	DeleteProblemPatterns(ctx context.Context, problemID int64) error
 	DeleteUser(ctx context.Context, id int64) error
+	GetPattern(ctx context.Context, id int64) (Pattern, error)
+	GetPatternsByIDs(ctx context.Context, ids []int64) ([]Pattern, error)
+	GetPatternsForProblem(ctx context.Context, problemID int64) ([]Pattern, error)
+	GetProblem(ctx context.Context, id int64) (Problem, error)
 	GetRefreshTokenByHash(ctx context.Context, tokenHash string) (GetRefreshTokenByHashRow, error)
 	// Used for Login: Fetch everything including the password_hash
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	// Used for Session/Context: Fetch user details without the sensitive hash
 	GetUserByID(ctx context.Context, id int64) (GetUserByIDRow, error)
+	LinkProblemToPattern(ctx context.Context, arg LinkProblemToPatternParams) error
+	ListPatterns(ctx context.Context) ([]Pattern, error)
+	ListProblems(ctx context.Context, arg ListProblemsParams) ([]Problem, error)
 	RevokeRefreshToken(ctx context.Context, tokenHash string) error
 	UpdateUserEmail(ctx context.Context, arg UpdateUserEmailParams) error
 	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error

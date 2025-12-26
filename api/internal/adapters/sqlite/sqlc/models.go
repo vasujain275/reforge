@@ -8,9 +8,20 @@ import (
 	"database/sql"
 )
 
+type Attempt struct {
+	ID              int64          `json:"id"`
+	UserID          int64          `json:"user_id"`
+	ProblemID       int64          `json:"problem_id"`
+	SessionID       sql.NullInt64  `json:"session_id"`
+	ConfidenceScore sql.NullInt64  `json:"confidence_score"`
+	DurationSeconds sql.NullInt64  `json:"duration_seconds"`
+	Outcome         sql.NullString `json:"outcome"`
+	Notes           sql.NullString `json:"notes"`
+	PerformedAt     sql.NullString `json:"performed_at"`
+}
+
 type Pattern struct {
 	ID          int64          `json:"id"`
-	Key         string         `json:"key"`
 	Title       string         `json:"title"`
 	Description sql.NullString `json:"description"`
 }
@@ -48,6 +59,13 @@ type RevisionSession struct {
 	ItemsOrdered       sql.NullString `json:"items_ordered"`
 }
 
+type SystemSetting struct {
+	Key         string         `json:"key"`
+	Value       string         `json:"value"`
+	Description sql.NullString `json:"description"`
+	UpdatedAt   sql.NullString `json:"updated_at"`
+}
+
 type User struct {
 	ID           int64          `json:"id"`
 	Email        string         `json:"email"`
@@ -66,16 +84,16 @@ type UserPatternStat struct {
 }
 
 type UserProblemStat struct {
-	ID              int64          `json:"id"`
-	UserID          int64          `json:"user_id"`
-	ProblemID       int64          `json:"problem_id"`
-	Status          sql.NullString `json:"status"`
-	Confidence      sql.NullInt64  `json:"confidence"`
-	AvgConfidence   sql.NullInt64  `json:"avg_confidence"`
-	LastAttemptAt   sql.NullString `json:"last_attempt_at"`
-	TotalAttempts   sql.NullInt64  `json:"total_attempts"`
-	AvgTimeSeconds  sql.NullInt64  `json:"avg_time_seconds"`
-	LastOutcome     sql.NullString `json:"last_outcome"`
-	RevisionHistory sql.NullString `json:"revision_history"`
-	UpdatedAt       sql.NullString `json:"updated_at"`
+	ID                int64          `json:"id"`
+	UserID            int64          `json:"user_id"`
+	ProblemID         int64          `json:"problem_id"`
+	Status            sql.NullString `json:"status"`
+	Confidence        sql.NullInt64  `json:"confidence"`
+	AvgConfidence     sql.NullInt64  `json:"avg_confidence"`
+	LastAttemptAt     sql.NullString `json:"last_attempt_at"`
+	TotalAttempts     sql.NullInt64  `json:"total_attempts"`
+	AvgTimeSeconds    sql.NullInt64  `json:"avg_time_seconds"`
+	LastOutcome       sql.NullString `json:"last_outcome"`
+	RecentHistoryJson sql.NullString `json:"recent_history_json"`
+	UpdatedAt         sql.NullString `json:"updated_at"`
 }

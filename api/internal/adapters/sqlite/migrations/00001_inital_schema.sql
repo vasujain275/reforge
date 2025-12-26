@@ -5,10 +5,32 @@
 PRAGMA foreign_keys = ON;
 
 -- ============================================================================
+-- SYSTEM CONFIGURATION
+-- ============================================================================
+
+-- 2. System Settings (Global tuning parameters)
+CREATE TABLE system_settings (
+    key TEXT PRIMARY KEY,        -- e.g., 'w_conf'
+    value TEXT NOT NULL,         -- Stored as string, app casts to float/int
+    description TEXT,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Seed default values
+INSERT INTO system_settings (key, value, description) VALUES 
+('w_conf', '0.30', 'Weight for confidence urgency'),
+('w_days', '0.20', 'Weight for time since last attempt'),
+('w_attempts', '0.10', 'Weight for attempt count'),
+('w_time', '0.05', 'Weight for solve duration'),
+('w_difficulty', '0.15', 'Weight for problem difficulty'),
+('w_failed', '0.10', 'Weight for last outcome failure'),
+('w_pattern', '0.10', 'Weight for pattern weakness aggregate');
+
+-- ============================================================================
 -- AUTHENTICATION & USERS
 -- ============================================================================
 
--- 2. Users
+-- 3. Users
 CREATE TABLE users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     email TEXT UNIQUE NOT NULL,       -- Used for login
@@ -17,16 +39,15 @@ CREATE TABLE users (
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
--- 3. Refresh Tokens (Stateful Auth)
--- Allows multiple devices/sessions per user. Revocable.
+-- 4. Refresh Tokens (Stateful Auth)
 CREATE TABLE refresh_tokens (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
-    token_hash TEXT NOT NULL,         -- Store hash of the token, not raw token
+    token_hash TEXT NOT NULL,         -- Store hash of the token
     expires_at TEXT NOT NULL,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-    user_agent TEXT,                  -- Optional: "Chrome on MacOS"
-    ip_address TEXT,                  -- Optional: Security auditing
+    user_agent TEXT,
+    ip_address TEXT,
 
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
@@ -38,7 +59,7 @@ CREATE INDEX idx_refresh_tokens_user ON refresh_tokens(user_id);
 -- CORE DOMAIN (Problems & Patterns)
 -- ============================================================================
 
--- 4. Problems
+-- 5. Problems
 CREATE TABLE problems (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     title TEXT NOT NULL,
@@ -48,15 +69,14 @@ CREATE TABLE problems (
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
--- 5. Patterns
+-- 6. Patterns
 CREATE TABLE patterns (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    key TEXT UNIQUE NOT NULL,         -- Immutable key for code lookups e.g., 'sliding-window'
     title TEXT NOT NULL,              -- Display name e.g., 'Sliding Window'
     description TEXT
 );
 
--- 6. Problem <-> Patterns (Many-to-Many)
+-- 7. Problem <-> Patterns (Many-to-Many)
 CREATE TABLE problem_patterns (
     problem_id INTEGER NOT NULL,
     pattern_id INTEGER NOT NULL,
@@ -72,7 +92,41 @@ CREATE INDEX idx_problem_patterns_pattern ON problem_patterns(pattern_id);
 -- USER PROGRESS & STATS
 -- ============================================================================
 
--- 7. User Problem Stats (The "Brain" of the scoring system)
+-- 8. Revision Sessions (Study sessions history)
+CREATE TABLE revision_sessions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    template_key TEXT,                -- e.g., 'daily_revision'
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    planned_duration_min INTEGER,
+    items_ordered TEXT,               -- JSON Array of planned problems
+
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+-- 9. Attempts (The detailed log of every practice run)
+CREATE TABLE attempts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    problem_id INTEGER NOT NULL,
+    session_id INTEGER,               -- Nullable (can solve outside a session)
+
+    confidence_score INTEGER CHECK (confidence_score BETWEEN 0 AND 100),
+    duration_seconds INTEGER,
+    outcome TEXT CHECK (outcome IN ('passed', 'failed')),
+    notes TEXT,                       -- Optional user reflection
+    performed_at TEXT DEFAULT CURRENT_TIMESTAMP,
+
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (problem_id) REFERENCES problems(id) ON DELETE CASCADE,
+    FOREIGN KEY (session_id) REFERENCES revision_sessions(id) ON DELETE SET NULL
+);
+
+CREATE INDEX idx_attempts_user_problem ON attempts(user_id, problem_id);
+CREATE INDEX idx_attempts_performed_at ON attempts(user_id, performed_at);
+
+-- 10. User Problem Stats (The "Brain" of the scoring system)
+-- This is an aggregate table updated after every attempt to make scoring fast.
 CREATE TABLE user_problem_stats (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
@@ -91,8 +145,10 @@ CREATE TABLE user_problem_stats (
     avg_time_seconds INTEGER,
     last_outcome TEXT,                -- 'passed' or 'failed'
 
-    -- Audit trail (JSON Array string)
-    revision_history TEXT,
+    -- NOTE: 'revision_history' removed or kept as lightweight JSON cache?
+    -- Since we have a proper 'attempts' table now, we don't strictly need it,
+    -- but we can keep it as a small JSON array of the last 3-5 dates for quick UI display.
+    recent_history_json TEXT, 
 
     updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
 
@@ -104,7 +160,7 @@ CREATE TABLE user_problem_stats (
 CREATE INDEX idx_stats_user_lookup ON user_problem_stats(user_id);
 CREATE INDEX idx_stats_urgency ON user_problem_stats(user_id, last_attempt_at);
 
--- 8. User Pattern Stats (Aggregates for "weakness" analysis)
+-- 11. User Pattern Stats (Aggregates for "weakness" analysis)
 CREATE TABLE user_pattern_stats (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
@@ -117,19 +173,6 @@ CREATE TABLE user_pattern_stats (
     UNIQUE(user_id, pattern_id),
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     FOREIGN KEY (pattern_id) REFERENCES patterns(id) ON DELETE CASCADE
-);
-
--- 9. Revision Sessions (Study sessions history)
--- Renamed from 'sessions' to avoid conflict with Auth sessions
-CREATE TABLE revision_sessions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
-    template_key TEXT,                -- e.g., 'daily_quick_win'
-    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-    planned_duration_min INTEGER,
-    items_ordered TEXT,               -- JSON Array of intended problems
-
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
 -- ============================================================================
@@ -148,12 +191,14 @@ END;
 -- +goose Down
 -- +goose StatementBegin
 DROP TRIGGER IF EXISTS update_user_problem_stats_timestamp;
-DROP TABLE IF EXISTS revision_sessions;
 DROP TABLE IF EXISTS user_pattern_stats;
 DROP TABLE IF EXISTS user_problem_stats;
+DROP TABLE IF EXISTS attempts;
+DROP TABLE IF EXISTS revision_sessions;
 DROP TABLE IF EXISTS problem_patterns;
 DROP TABLE IF EXISTS patterns;
 DROP TABLE IF EXISTS problems;
 DROP TABLE IF EXISTS refresh_tokens;
 DROP TABLE IF EXISTS users;
+DROP TABLE IF EXISTS system_settings;
 -- +goose StatementEnd

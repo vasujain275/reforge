@@ -18,7 +18,7 @@ var (
 )
 
 type Service interface {
-	Login(ctx context.Context, email, password, userAgent, ip string) (string, string, error)
+	Login(ctx context.Context, email, password, userAgent, ip string) (string, string, repo.GetUserByIDRow, error)
 	Refresh(ctx context.Context, rawRefreshToken string) (string, error)
 	Logout(ctx context.Context, rawRefreshToken string) error
 }
@@ -35,30 +35,30 @@ func NewService(repo repo.Querier, jwtSecret string) Service {
 	}
 }
 
-// Login validates user, returns (AccessToken, RefreshToken, error)
-func (s *authService) Login(ctx context.Context, email, password, userAgent, ip string) (string, string, error) {
+// Login validates user, returns (AccessToken, RefreshToken, UserData, error)
+func (s *authService) Login(ctx context.Context, email, password, userAgent, ip string) (string, string, repo.GetUserByIDRow, error) {
 
 	// Fetch user
 	user, err := s.repo.GetUserByEmail(ctx, email)
 	if err != nil {
-		return "", "", ErrInvalidCredentials
+		return "", "", repo.GetUserByIDRow{}, ErrInvalidCredentials
 	}
 
 	// Verify Password
 	if !security.CheckPasswordHash(password, user.PasswordHash) {
-		return "", "", ErrInvalidCredentials
+		return "", "", repo.GetUserByIDRow{}, ErrInvalidCredentials
 	}
 
 	// Generate Access Token (JWT)
 	accessToken, err := s.generateJWT(user.ID, user.Email)
 	if err != nil {
-		return "", "", err
+		return "", "", repo.GetUserByIDRow{}, err
 	}
 
 	// Generate Refresh Token (Random String)
 	rawRefreshToken, err := security.GenerateSecureToken(32)
 	if err != nil {
-		return "", "", err
+		return "", "", repo.GetUserByIDRow{}, err
 	}
 
 	// Hash Refresh Token for DB Storage
@@ -77,10 +77,16 @@ func (s *authService) Login(ctx context.Context, email, password, userAgent, ip 
 
 	_, err = s.repo.CreateRefreshToken(ctx, params)
 	if err != nil {
-		return "", "", err
+		return "", "", repo.GetUserByIDRow{}, err
 	}
 
-	return accessToken, rawRefreshToken, nil
+	// Fetch user data (without password hash)
+	userData, err := s.repo.GetUserByID(ctx, user.ID)
+	if err != nil {
+		return "", "", repo.GetUserByIDRow{}, err
+	}
+
+	return accessToken, rawRefreshToken, userData, nil
 }
 
 // Refresh validates the raw token and issues a new Access Token

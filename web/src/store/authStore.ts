@@ -3,7 +3,7 @@ import type { LoginCredentials, RegisterData } from "@/lib/schemas";
 import { create } from "zustand";
 
 interface User {
-    id: string; // ID is number in Go (int64) but string in API JSON response usually, need to check
+    id: number; // ID is int64 in Go, comes as number in JSON
     name: string;
     email: string;
 }
@@ -26,11 +26,12 @@ export const useAuthStore = create<AuthState>((set) => ({
     isAuthenticated: false,
 
     login: async (credentials) => {
-        // 1. Perform login
-        await api.post("/auth/login", credentials);
-        // 2. Fetch user details to confirm and update state
-        const { data } = await api.get("/users/me");
-        set({ user: data, isAuthenticated: true });
+        // 1. Perform login and get user data
+        const response = await api.post("/auth/login", credentials);
+        console.log("Login response:", response.data);
+        // 2. Extract user from response (response.data.data.user)
+        const userData = response.data.data.user;
+        set({ user: userData, isAuthenticated: true });
     },
 
     register: async (data: RegisterData) => {
@@ -55,10 +56,14 @@ export const useAuthStore = create<AuthState>((set) => ({
     checkAuth: async () => {
         set({ isLoading: true });
         try {
-            const { data } = await api.get("/users/me");
-            set({ user: data, isAuthenticated: true });
+            const response = await api.get("/users/me");
+            console.log("checkAuth response:", response.data);
+            // response.data.data contains the user object directly
+            const userData = response.data.data;
+            set({ user: userData, isAuthenticated: true });
         } catch (error) {
             // 401 or network error
+            console.log("checkAuth failed:", error);
             set({ user: null, isAuthenticated: false });
         } finally {
             set({ isLoading: false });

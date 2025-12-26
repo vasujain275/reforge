@@ -1,15 +1,23 @@
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { registerSchema } from "@/lib/schemas";
 import { useAuthStore } from "@/store/authStore";
-import { AlertCircle, Loader2 } from "lucide-react";
+import { AlertCircle, Loader2, Shield } from "lucide-react";
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 export default function RegisterPage() {
   const { register } = useAuthStore();
+  const navigate = useNavigate();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -31,24 +39,34 @@ export default function RegisterPage() {
 
     try {
       await register(result.data);
-    } catch (err: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-      setError(err.response?.data?.message || "Registration failed. Try again.");
+      // Registration successful, redirect to login
+      navigate("/login");
+    } catch (err: any) {
+      // eslint-disable-line @typescript-eslint/no-explicit-any
+      setError(
+        err.response?.data?.message || "Registration failed. Try again."
+      );
     } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
-    <div className="flex items-center justify-center min-h-[calc(100vh-8rem)] px-4">
-      <Card className="w-full max-w-sm">
-        <CardHeader className="space-y-1">
-          <CardTitle className="text-2xl font-bold text-center">Create an account</CardTitle>
-          <CardDescription className="text-center">
-            Enter your email below to create your account
+    <div className="flex items-center justify-center min-h-[calc(100vh-8rem)] px-4 py-8">
+      <Card className="w-full max-w-md border-2">
+        <CardHeader className="space-y-2 pb-6">
+          <div className="flex justify-center mb-2">
+            <Shield className="h-8 w-8 text-primary" />
+          </div>
+          <CardTitle className="text-2xl font-bold text-center tracking-tight">
+            Initialize System
+          </CardTitle>
+          <CardDescription className="text-center text-base">
+            Create your account to begin
           </CardDescription>
         </CardHeader>
         <form onSubmit={handleSubmit}>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-5 px-6">
             {error && (
               <div className="bg-destructive/15 text-destructive text-sm p-3 rounded-md flex items-center gap-2">
                 <AlertCircle className="h-4 w-4" />
@@ -87,9 +105,9 @@ export default function RegisterPage() {
               />
             </div>
           </CardContent>
-          <CardFooter className="flex flex-col space-y-4">
+          <CardFooter className="flex flex-col space-y-4 pt-6">
             <Button className="w-full" type="submit" disabled={isSubmitting}>
-               {isSubmitting ? (
+              {isSubmitting ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Creating account...
@@ -100,7 +118,10 @@ export default function RegisterPage() {
             </Button>
             <div className="text-center text-sm text-muted-foreground">
               Already have an account?{" "}
-              <Link to="/login" className="text-primary hover:underline underline-offset-4">
+              <Link
+                to="/login"
+                className="text-primary hover:underline underline-offset-4"
+              >
                 Login
               </Link>
             </div>

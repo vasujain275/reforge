@@ -36,7 +36,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	userAgent := r.UserAgent()
 	ip := r.RemoteAddr
 
-	accessToken, refreshToken, err := h.service.Login(r.Context(), req.Email, req.Password, userAgent, ip)
+	accessToken, refreshToken, userData, err := h.service.Login(r.Context(), req.Email, req.Password, userAgent, ip)
 	if err != nil {
 		utils.Unauthorized(w, "Invalid Credentials")
 		return
@@ -45,7 +45,10 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	// Set Cookies
 	h.setTokenCookies(w, accessToken, refreshToken)
 
-	utils.WriteSuccess(w, http.StatusOK, map[string]string{"message": "Login Successful"})
+	utils.WriteSuccess(w, http.StatusOK, map[string]interface{}{
+		"message": "Login Successful",
+		"user":    userData,
+	})
 }
 
 func (h *Handler) Refresh(w http.ResponseWriter, r *http.Request) {

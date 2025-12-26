@@ -1,9 +1,12 @@
 import { Button } from "@/components/ui/button";
+import { useAuthStore } from "@/store/authStore";
 import { motion } from "framer-motion";
-import { Brain, Server, Shield, Terminal } from "lucide-react";
+import { ArrowRight, Brain, Server, Shield, Terminal } from "lucide-react";
 import { Link } from "react-router-dom";
 
 export default function LandingPage() {
+  const { isAuthenticated } = useAuthStore();
+
   return (
     <div className="flex flex-col min-h-[calc(100vh-4rem)] bg-background relative selection:bg-primary selection:text-primary-foreground">
       {/* Subtle Grid Background */}
@@ -27,33 +30,43 @@ export default function LandingPage() {
                     <span className="text-sm font-mono text-primary font-bold">v1.0.0</span>
                 </div>
 
-                <h1 className="text-5xl md:text-6xl font-bold tracking-tight text-foreground">
-                    <span className="text-primary block mb-2">Reforge.</span>
-                    <span className="text-2xl md:text-3xl font-light text-muted-foreground block">
-                        Self-hosted Mastery.
+                <h1 className="text-4xl md:text-5xl font-bold tracking-tight text-foreground">
+                    <span className="text-primary block mb-3">Reforge.</span>
+                    <span className="text-2xl md:text-3xl font-light text-muted-foreground block leading-snug">
+                        Local-first. Self-hostable.<br/> Explainable Revision.
                     </span>
                 </h1>
 
                 <p className="text-lg text-muted-foreground/80 max-w-md leading-relaxed">
-                    Your personal, offline-first knowledge retention system.
-                    Built for engineers who prefer to own their data.
-                    <span className="block mt-2 italic text-sm text-primary/80">
-                        // No Cloud. No subscriptions. Pure Logic.
+                    Minimal ops, maximum clarity. A single Go binary serving a React SPA with SQLite as the single source of truth.
+                    <span className="block mt-4 italic text-sm text-primary/80 font-mono">
+                        // No ML. No Cloud. Pure Logic.
                     </span>
                 </p>
 
                 <div className="flex flex-col sm:flex-row gap-4 pt-4">
-                    <Link to="/register">
-                         <Button size="lg" className="h-12 px-8 text-base font-medium rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground transition-all shadow-md hover:shadow-primary/20 hover:translate-y-[-1px]">
-                            <Terminal className="mr-2 h-4 w-4" />
-                            Initialize System
-                        </Button>
-                    </Link>
-                    <Link to="/login">
-                         <Button variant="outline" size="lg" className="h-12 px-8 text-base font-medium rounded-lg border-2 hover:bg-accent hover:text-accent-foreground transition-all">
-                            Access Console
-                        </Button>
-                    </Link>
+                    {isAuthenticated ? (
+                         <Link to="/dashboard">
+                            <Button size="lg" className="h-12 px-8 text-base font-medium rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground transition-all shadow-md hover:shadow-primary/20 hover:translate-y-[-1px]">
+                                <ArrowRight className="mr-2 h-4 w-4" />
+                                Go to Dashboard
+                            </Button>
+                         </Link>
+                    ) : (
+                        <>
+                             <Link to="/register">
+                                  <Button size="lg" className="h-12 px-8 text-base font-medium rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground transition-all shadow-md hover:shadow-primary/20 hover:translate-y-[-1px]">
+                                     <Terminal className="mr-2 h-4 w-4" />
+                                     Initialize System
+                                 </Button>
+                             </Link>
+                             <Link to="/login">
+                                  <Button variant="outline" size="lg" className="h-12 px-8 text-base font-medium rounded-lg border-2 hover:bg-accent hover:text-accent-foreground transition-all">
+                                     Access Console
+                                 </Button>
+                             </Link>
+                        </>
+                    )}
                 </div>
             </motion.div>
 
@@ -70,9 +83,9 @@ export default function LandingPage() {
                     <div className="relative bg-card/50 backdrop-blur-sm border border-border rounded-xl p-8 shadow-2xl">
                         <div className="grid grid-cols-2 gap-4">
                             <FeatureBox icon={<Brain className="h-8 w-8 text-primary" />} label="Neural Sched" />
-                            <FeatureBox icon={<Server className="h-8 w-8 text-blue-400" />} label="Local Core" />
-                            <FeatureBox icon={<Shield className="h-8 w-8 text-emerald-400" />} label="Air-gapped" />
-                            <FeatureBox icon={<Terminal className="h-8 w-8 text-orange-400" />} label="CLI Ready" />
+                            <FeatureBox icon={<Server className="h-8 w-8 text-blue-400" />} label="Single Binary" />
+                            <FeatureBox icon={<Shield className="h-8 w-8 text-emerald-400" />} label="SQLite Only" />
+                            <FeatureBox icon={<Terminal className="h-8 w-8 text-orange-400" />} label="Local First" />
                         </div>
                         <div className="mt-8 space-y-3">
                              <div className="h-2 w-3/4 bg-border/50 rounded-full overflow-hidden">
@@ -84,14 +97,14 @@ export default function LandingPage() {
                                 />
                              </div>
                              <div className="flex justify-between text-xs font-mono text-muted-foreground">
-                                <span>Retention Index</span>
+                                <span>Revision Index</span>
                                 <span>98.4%</span>
                              </div>
                         </div>
                         {/* Decorative Code Lines */}
                         <div className="mt-6 space-y-2 opacity-50 font-mono text-xs text-muted-foreground border-t border-border/50 pt-4">
                             <div>$ reforge status --verbose</div>
-                            <div className="text-green-500">✔ Database mounted</div>
+                            <div className="text-green-500">✔ Database mounted (SQLite)</div>
                             <div className="text-green-500">✔ Spaced repetition active</div>
                         </div>
                     </div>
@@ -101,17 +114,17 @@ export default function LandingPage() {
       </section>
 
       {/* Footer / Status Bar Area */}
-        <footer className="border-t bg-card/30 backdrop-blur-sm py-4">
-            <div className="container mx-auto px-6 flex justify-between items-center text-xs font-mono text-muted-foreground">
-                <div className="flex gap-4">
-                   <Link to="#" className="hover:text-primary transition-colors">Documentation</Link>
-                   <Link to="#" className="hover:text-primary transition-colors">GitHub</Link>
-                </div>
-                <div>
-                   Reforge v1.0.0-release-candidate
-                </div>
-            </div>
-        </footer>
+      <footer className="border-t bg-card/30 backdrop-blur-sm py-4">
+          <div className="container mx-auto px-6 flex justify-between items-center text-xs font-mono text-muted-foreground">
+              <div className="flex gap-4">
+                 <Link to="#" className="hover:text-primary transition-colors">Documentation</Link>
+                 <Link to="#" className="hover:text-primary transition-colors">GitHub</Link>
+              </div>
+              <div>
+                 Reforge v0.0.1-alpha
+              </div>
+          </div>
+      </footer>
     </div>
   );
 }

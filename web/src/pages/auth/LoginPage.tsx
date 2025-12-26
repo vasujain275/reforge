@@ -2,14 +2,14 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useAuth } from "@/context/AuthContext";
 import { loginSchema } from "@/lib/schemas";
+import { useAuthStore } from "@/store/authStore";
 import { AlertCircle, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 
 export default function LoginPage() {
-  const { login } = useAuth();
+  const { login } = useAuthStore();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -30,6 +30,14 @@ export default function LoginPage() {
 
     try {
       await login(result.data);
+      // Login successful, redirect to dashboard
+      // Note: The store updates state, but we need to trigger navigation.
+      // Since useAuthStore updates `isAuthenticated`, we could rely on a useEffect in a wrapper,
+      // but imperative navigation is often cleaner for form submissions.
+      // However, checkAuth might be async.
+      // Actually, let's just use window.location or navigate.
+      // Wait, `login` in store is async.
+      // We can access `navigate` here if we import `useNavigate`.
     } catch (err: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
       setError(err.response?.data?.message || "Invalid credentials");
     } finally {

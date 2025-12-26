@@ -1,3 +1,4 @@
+import { ModeToggle } from "@/components/ModeToggle";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -38,6 +39,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
 
           {/* Desktop Nav */}
           <nav className="hidden md:flex items-center gap-4">
+            <ModeToggle />
             {user ? (
               <>
                 <Link to="/dashboard">

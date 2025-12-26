@@ -1,5 +1,6 @@
 import Layout from "@/components/Layout";
 import ProtectedRoute from "@/components/ProtectedRoute";
+import { ThemeProvider } from "@/components/ThemeProvider";
 import { AuthProvider } from "@/context/AuthContext";
 import { Route, BrowserRouter as Router, Routes } from "react-router-dom";
 
@@ -13,8 +14,9 @@ function App() {
   return (
     <Router>
       <AuthProvider>
-        <Layout>
-          <Routes>
+        <ThemeProvider defaultTheme="dark" storageKey="reforge-ui-theme">
+          <Layout>
+            <Routes>
             {/* Public Routes */}
             <Route path="/" element={<LandingPage />} />
             <Route path="/login" element={<LoginPage />} />
@@ -31,6 +33,7 @@ function App() {
             />
           </Routes>
         </Layout>
+        </ThemeProvider>
       </AuthProvider>
     </Router>
   );

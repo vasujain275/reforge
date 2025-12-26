@@ -49,19 +49,17 @@ func (app *application) mount() http.Handler {
 			r.Post("/logout", authHandler.Logout)
 			r.Post("/refresh", authHandler.Refresh)
 		})
-		
-		// User Creation
-		r.Post("/users",userHandler.CreateUser)
 
-		r.Group(func(r chi.Router) {
-			r.Use(app.AuthTokenMiddleware)
-			
-			// User Endpoints
-			r.Route("/users", func(r chi.Router) {
+		// User Routes
+		r.Route("/users", func(r chi.Router) {
+			r.Post("/", userHandler.CreateUser) // Public Registration
+
+			r.Group(func(r chi.Router) {
+				r.Use(app.AuthTokenMiddleware)
 				r.Get("/me", userHandler.GetCurrentUser)
 			})
 		})
-		
+
 	})
 
 	return r

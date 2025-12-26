@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/context/AuthContext";
+import { registerSchema } from "@/lib/schemas";
 import { AlertCircle, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router-dom";
@@ -20,8 +21,16 @@ export default function RegisterPage() {
     setIsSubmitting(true);
     setError("");
 
+    // Zod Validation
+    const result = registerSchema.safeParse({ name, email, password });
+    if (!result.success) {
+      setError(result.error.issues[0].message);
+      setIsSubmitting(false);
+      return;
+    }
+
     try {
-      await register({ name, email, password });
+      await register(result.data);
     } catch (err: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
       setError(err.response?.data?.message || "Registration failed. Try again.");
     } finally {

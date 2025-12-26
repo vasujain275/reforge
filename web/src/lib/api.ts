@@ -14,6 +14,11 @@ api.interceptors.response.use(
 
         // Prevent infinite loops
         if (error.response?.status === 401 && !originalRequest._retry) {
+            // If the failed request was a refresh attempt, don't retry
+            if (originalRequest.url?.includes("/auth/refresh")) {
+                return Promise.reject(error);
+            }
+
             originalRequest._retry = true;
 
             try {

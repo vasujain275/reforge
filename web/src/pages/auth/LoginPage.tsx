@@ -3,32 +3,33 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/context/AuthContext";
+import { loginSchema } from "@/lib/schemas";
 import { AlertCircle, Loader2 } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router-dom";
 
 export default function LoginPage() {
   const { login } = useAuth();
-  const [email, setEmail] = useState(""); // Assuming email/password based on typical flow, though API might just use 'password' for single user or 'username'. Checking API spec...
-  // API spec in main.go/api.go doesn't explicitly show `authHandler.Login` body, but usuall req fields.
-  // Reforge.md says: `POST /api/v1/users` -> create user. `POST /api/v1/auth/login`.
-  // Assuming standard Email/Password for now. The user said "create go backend api... implemented jwt access token...".
-  // I'll stick to Email/Password.
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // Correction: Reforge.md mentions "Add user auth (local password) for multi-user desktop environments (optional)" in FUTURE/QoL.
-  // BUT the user request says: "I have created go backend api... implemented jwt access token...".
-  // So likely the current backend supports it. I will assume 'email' and 'password' fields.
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
     setError("");
 
+    // Zod Validation
+    const result = loginSchema.safeParse({ email, password });
+    if (!result.success) {
+      setError(result.error.issues[0].message);
+      setIsSubmitting(false);
+      return;
+    }
+
     try {
-      await login({ email, password });
+      await login(result.data);
     } catch (err: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
       setError(err.response?.data?.message || "Invalid credentials");
     } finally {

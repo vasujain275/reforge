@@ -1,106 +1,416 @@
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { useAuthStore } from "@/store/authStore";
-import { Activity, CreditCard, DollarSign, Users } from "lucide-react";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
+import type { DashboardStats, SessionTemplate, UrgentProblem } from "@/types";
+import {
+  Activity,
+  BarChart3,
+  BookOpen,
+  Calendar,
+  Flame,
+  Terminal,
+  TrendingUp,
+  Zap,
+} from "lucide-react";
+import { useEffect, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
+
+const SESSION_TEMPLATES: SessionTemplate[] = [
+  {
+    key: "daily_revision",
+    display_name: "Daily Revision",
+    icon: "⚡",
+    duration_min: 35,
+    estimated_problems: "3-4 problems",
+    description: "Quick daily practice for consistent progress",
+  },
+  {
+    key: "daily_mixed",
+    display_name: "Daily Mixed",
+    icon: "📚",
+    duration_min: 55,
+    estimated_problems: "4-6 problems",
+    description: "Balanced mix of revision and new challenges",
+  },
+  {
+    key: "weekend_comprehensive",
+    display_name: "Weekend Deep Dive",
+    icon: "🏖️",
+    duration_min: 150,
+    estimated_problems: "10-12 problems",
+    description: "Comprehensive weekend practice session",
+  },
+];
 
 export default function DashboardHome() {
-  const { user } = useAuthStore();
+  const navigate = useNavigate();
+  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [urgentProblems, setUrgentProblems] = useState<UrgentProblem[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, []);
+
+  const fetchDashboardData = async () => {
+    try {
+      // TODO: Replace with actual API calls
+      // const statsRes = await api.get("/dashboard/stats");
+      // const urgentRes = await api.get("/problems/urgent");
+      // setStats(statsRes.data.data);
+      // setUrgentProblems(urgentRes.data.data);
+
+      // Mock data for now
+      setStats({
+        total_problems: 47,
+        mastered_problems: 12,
+        avg_confidence: 67,
+        current_streak: 5,
+        weakest_pattern: {
+          name: "Backtracking",
+          confidence: 42,
+        },
+      });
+
+      setUrgentProblems([
+        {
+          id: 1,
+          title: "Merge K Sorted Lists",
+          difficulty: "hard",
+          source: "LeetCode",
+          score: 0.89,
+          days_since_last: 23,
+          confidence: 35,
+          reason: "Low confidence (35%), 23 days old, failed last",
+          created_at: "",
+        },
+        {
+          id: 2,
+          title: "LRU Cache",
+          difficulty: "medium",
+          source: "LeetCode",
+          score: 0.84,
+          days_since_last: 18,
+          confidence: 42,
+          reason: "Low confidence (42%), 18 days old",
+          created_at: "",
+        },
+        {
+          id: 3,
+          title: "Word Break II",
+          difficulty: "hard",
+          source: "LeetCode",
+          score: 0.78,
+          days_since_last: 15,
+          confidence: 48,
+          reason: "Medium confidence (48%), 15 days old",
+          created_at: "",
+        },
+        {
+          id: 4,
+          title: "Serialize Binary Tree",
+          difficulty: "hard",
+          source: "LeetCode",
+          score: 0.72,
+          days_since_last: 12,
+          confidence: 51,
+          reason: "Medium confidence (51%), 12 days old",
+          created_at: "",
+        },
+        {
+          id: 5,
+          title: "Coin Change",
+          difficulty: "medium",
+          source: "LeetCode",
+          score: 0.68,
+          days_since_last: 9,
+          confidence: 60,
+          reason: "Moderate confidence (60%), 9 days old",
+          created_at: "",
+        },
+      ]);
+    } catch (error) {
+      console.error("Failed to fetch dashboard data:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleStartSession = (templateKey: string) => {
+    navigate(`/dashboard/sessions/new?template=${templateKey}`);
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-full animate-in fade-in duration-300">
+        <div className="flex flex-col items-center gap-6">
+          <div className="relative">
+            <div className="absolute inset-0 rounded-full bg-primary/20 animate-ping" />
+            <Terminal className="relative h-10 w-10 text-primary animate-pulse" />
+          </div>
+          <div className="flex flex-col items-center gap-2">
+            <p className="text-sm font-mono text-foreground">
+              Initializing system...
+            </p>
+            <div className="flex items-center gap-1 font-mono text-xs text-muted-foreground">
+              <span className="animate-pulse">$</span>
+              <span className="animate-[pulse_1s_ease-in-out_0.2s_infinite]">
+                r
+              </span>
+              <span className="animate-[pulse_1s_ease-in-out_0.3s_infinite]">
+                e
+              </span>
+              <span className="animate-[pulse_1s_ease-in-out_0.4s_infinite]">
+                f
+              </span>
+              <span className="animate-[pulse_1s_ease-in-out_0.5s_infinite]">
+                o
+              </span>
+              <span className="animate-[pulse_1s_ease-in-out_0.6s_infinite]">
+                r
+              </span>
+              <span className="animate-[pulse_1s_ease-in-out_0.7s_infinite]">
+                g
+              </span>
+              <span className="animate-[pulse_1s_ease-in-out_0.8s_infinite]">
+                e
+              </span>
+              <span className="ml-1 animate-pulse">--load</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const confidenceTrend = stats ? ((stats.avg_confidence - 62) / 62) * 100 : 0;
 
   return (
-    <div className="flex-1 space-y-4 p-8 pt-6 animate-in fade-in duration-500">
-      <div className="flex items-center justify-between space-y-2">
-        <h2 className="text-3xl font-bold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-primary to-blue-400">
-            Welcome back, {user?.name || "Engineer"}
-        </h2>
-        <div className="flex items-center space-x-2">
-          <Button onClick={() => alert("Not implemented yet")}>Download Report</Button>
+    <div className="flex-1 space-y-6 p-6">
+      {/* System Status Bar */}
+      <div className="flex items-center justify-between border-b pb-4">
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 font-mono text-sm">
+            <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
+            <span className="text-muted-foreground uppercase tracking-wider">
+              System Active
+            </span>
+            <span className="text-muted-foreground/50">|</span>
+            <span className="text-primary">DB: SQLite</span>
+            <span className="text-muted-foreground/50">|</span>
+            <span className="text-muted-foreground">v0.0.1-alpha</span>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 font-mono text-xs text-muted-foreground">
+          <span>
+            Total: {stats?.total_problems} | Mastered:{" "}
+            {stats?.mastered_problems}
+          </span>
         </div>
       </div>
 
-      {/* Quick Actions / System Status */}
+      {/* Session Launcher */}
+      <Card className="border-2 border-primary/20 bg-gradient-to-br from-card to-card/50">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Zap className="h-5 w-5 text-primary" />
+            Start Revision Session
+          </CardTitle>
+          <CardDescription>
+            Choose a template to generate an optimized practice session
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+            {SESSION_TEMPLATES.map((template) => (
+              <button
+                key={template.key}
+                onClick={() => handleStartSession(template.key)}
+                className="p-4 border-2 rounded-lg hover:border-primary hover:bg-accent/50 transition-all text-left group"
+              >
+                <div className="text-2xl mb-2">{template.icon}</div>
+                <div className="font-semibold mb-1">
+                  {template.display_name}
+                </div>
+                <div className="text-sm text-muted-foreground mb-2">
+                  {template.duration_min} min · {template.estimated_problems}
+                </div>
+                <div className="text-xs text-muted-foreground/80">
+                  {template.description}
+                </div>
+              </button>
+            ))}
+          </div>
+          <div className="flex gap-2">
+            <Link to="/dashboard/sessions/new" className="flex-1">
+              <Button variant="outline" className="w-full">
+                Custom Session Builder
+              </Button>
+            </Link>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Quick Stats Grid */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card className="hover:border-primary/50 transition-colors cursor-pointer group">
+        <Card className="hover:border-primary/50 transition-colors">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
+            <CardTitle className="text-sm font-medium">Problems</CardTitle>
+            <BookOpen className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">$45,231.89</div>
-            <p className="text-xs text-muted-foreground">+20.1% from last month</p>
+            <div className="text-2xl font-bold font-mono">
+              {stats?.total_problems}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              <span className="text-green-500 font-semibold">
+                {stats?.mastered_problems} mastered
+              </span>{" "}
+              (
+              {Math.round(
+                ((stats?.mastered_problems || 0) /
+                  (stats?.total_problems || 1)) *
+                  100
+              )}
+              %)
+            </p>
           </CardContent>
         </Card>
-        <Card className="hover:border-primary/50 transition-colors cursor-pointer group">
+
+        <Card className="hover:border-primary/50 transition-colors">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Subscriptions</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
+            <CardTitle className="text-sm font-medium">
+              Avg Confidence
+            </CardTitle>
+            <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">+2350</div>
-            <p className="text-xs text-muted-foreground">+180.1% from last month</p>
+            <div className="text-2xl font-bold font-mono">
+              {stats?.avg_confidence}%
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              <span
+                className={
+                  confidenceTrend > 0 ? "text-green-500" : "text-red-500"
+                }
+              >
+                {confidenceTrend > 0 ? "↑" : "↓"}{" "}
+                {Math.abs(confidenceTrend).toFixed(1)}%
+              </span>{" "}
+              from last week
+            </p>
           </CardContent>
         </Card>
-        <Card className="hover:border-primary/50 transition-colors cursor-pointer group">
+
+        <Card className="hover:border-primary/50 transition-colors">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Sales</CardTitle>
-            <CreditCard className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
+            <CardTitle className="text-sm font-medium">Streak</CardTitle>
+            <Flame className="h-4 w-4 text-orange-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">+12,234</div>
-            <p className="text-xs text-muted-foreground">+19% from last month</p>
+            <div className="text-2xl font-bold font-mono">
+              {stats?.current_streak} days
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Personal best: 8 days
+            </p>
           </CardContent>
         </Card>
-        <Card className="hover:border-primary/50 transition-colors cursor-pointer group">
+
+        <Card className="hover:border-primary/50 transition-colors">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Active Now</CardTitle>
-            <Activity className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors" />
+            <CardTitle className="text-sm font-medium">Weak Pattern</CardTitle>
+            <BarChart3 className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">+573</div>
-            <p className="text-xs text-muted-foreground">+201 since last hour</p>
+            <div className="text-lg font-bold">
+              {stats?.weakest_pattern?.name || "N/A"}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              {stats?.weakest_pattern?.confidence}% confidence
+            </p>
           </CardContent>
         </Card>
       </div>
 
-       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-            <Card className="col-span-4 hover:border-primary/30 transition-colors">
-                  <CardHeader>
-                    <CardTitle>Overview</CardTitle>
-                  </CardHeader>
-                  <CardContent className="pl-2">
-                    <div className="h-[200px] flex items-center justify-center text-muted-foreground border border-dashed rounded-md bg-muted/20">
-                        Chart Placeholder
+      {/* Urgent Problems List */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Activity className="h-5 w-5 text-red-500" />
+            Top 5 Urgent Problems
+          </CardTitle>
+          <CardDescription>
+            Problems requiring immediate attention based on scoring algorithm
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-3">
+            {urgentProblems.map((problem, index) => (
+              <div
+                key={problem.id}
+                className="flex items-center gap-4 p-3 border rounded-lg hover:bg-accent/50 transition-colors group"
+              >
+                <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 text-primary font-bold font-mono text-sm">
+                  {index + 1}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <h4 className="font-semibold truncate">{problem.title}</h4>
+                    <span
+                      className={`text-xs px-2 py-0.5 rounded font-mono ${
+                        problem.difficulty === "hard"
+                          ? "bg-red-500/10 text-red-500"
+                          : problem.difficulty === "medium"
+                          ? "bg-orange-500/10 text-orange-500"
+                          : "bg-green-500/10 text-green-500"
+                      }`}
+                    >
+                      {problem.difficulty}
+                    </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {problem.reason}
+                  </p>
+                </div>
+                <div className="flex items-center gap-4">
+                  <div className="text-right">
+                    <div className="text-sm font-mono text-muted-foreground">
+                      {problem.confidence}%
                     </div>
-                  </CardContent>
-            </Card>
-            <Card className="col-span-3 hover:border-primary/30 transition-colors">
-                  <CardHeader>
-                    <CardTitle>Recent Sales</CardTitle>
-                    <CardDescription>
-                      You made 265 sales this month.
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                     <div className="space-y-4">
-                        <div className="flex items-center">
-                            <div className="h-9 w-9 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold">JD</div>
-                            <div className="ml-4 space-y-1">
-                                <p className="text-sm font-medium leading-none">Jackson Lee</p>
-                                <p className="text-sm text-muted-foreground">jackson.lee@email.com</p>
-                            </div>
-                            <div className="ml-auto font-medium">+$39.00</div>
-                        </div>
-                        <div className="flex items-center">
-                            <div className="h-9 w-9 rounded-full bg-primary/20 flex items-center justify-center text-primary font-bold">IL</div>
-                            <div className="ml-4 space-y-1">
-                                <p className="text-sm font-medium leading-none">Isabella Nguyen</p>
-                                <p className="text-sm text-muted-foreground">isabella.nguyen@email.com</p>
-                            </div>
-                            <div className="ml-auto font-medium">+$299.00</div>
-                        </div>
-                     </div>
-                  </CardContent>
-            </Card>
-       </div>
+                    <Progress
+                      value={problem.confidence}
+                      className="w-16 h-1.5 mt-1"
+                    />
+                  </div>
+                  <div className="text-right">
+                    <div className="text-sm font-mono text-muted-foreground">
+                      {problem.days_since_last}d
+                    </div>
+                  </div>
+                  <div className="text-right min-w-[3rem]">
+                    <div className="text-lg font-bold font-mono text-primary">
+                      {problem.score.toFixed(2)}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-4 pt-4 border-t">
+            <Button className="w-full" variant="outline">
+              <Calendar className="h-4 w-4 mr-2" />
+              Start Quick Session with Top 3
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

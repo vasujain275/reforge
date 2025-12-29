@@ -1,3 +1,4 @@
+import ApiError from "@/components/ApiError";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -6,14 +7,16 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { api } from "@/lib/api";
 import type { RevisionSession } from "@/types";
-import { Calendar, Check, Clock, Play } from "lucide-react";
+import { Calendar, Check, Clock, Play, Terminal } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
 export default function SessionsPage() {
   const [sessions, setSessions] = useState<RevisionSession[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<"all" | "active" | "completed">("all");
 
   useEffect(() => {
@@ -21,40 +24,16 @@ export default function SessionsPage() {
   }, []);
 
   const fetchSessions = async () => {
+    setLoading(true);
+    setError(null);
     try {
-      // TODO: Replace with actual API call
-      // const response = await api.get("/sessions");
-      // setSessions(response.data.data);
-
-      // Mock data
-      setSessions([
-        {
-          id: 1,
-          user_id: 1,
-          template_key: "daily_revision",
-          created_at: "2025-12-27T09:30:00",
-          planned_duration_min: 35,
-          completed: true,
-        },
-        {
-          id: 2,
-          user_id: 1,
-          template_key: "daily_mixed",
-          created_at: "2025-12-26T14:15:00",
-          planned_duration_min: 55,
-          completed: true,
-        },
-        {
-          id: 3,
-          user_id: 1,
-          template_key: "daily_revision",
-          created_at: "2025-12-25T10:00:00",
-          planned_duration_min: 35,
-          completed: false,
-        },
-      ]);
-    } catch (error) {
-      console.error("Failed to fetch sessions:", error);
+      const response = await api.get("/sessions");
+      setSessions(response.data.data || []);
+    } catch (err: unknown) {
+      console.error("Failed to fetch sessions:", err);
+      setError(
+        "Failed to load sessions. Please ensure the backend is running."
+      );
     } finally {
       setLoading(false);
     }
@@ -85,6 +64,23 @@ export default function SessionsPage() {
     if (filter === "completed") return session.completed;
     return true;
   });
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="flex flex-col items-center gap-4">
+          <Terminal className="h-8 w-8 text-primary animate-pulse" />
+          <p className="text-sm font-mono text-muted-foreground">
+            Loading sessions...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return <ApiError message={error} onRetry={fetchSessions} />;
+  }
 
   return (
     <div className="flex-1 space-y-6 p-6">
@@ -129,11 +125,7 @@ export default function SessionsPage() {
 
       {/* Sessions List */}
       <div className="space-y-4">
-        {loading ? (
-          <div className="text-center py-12 text-muted-foreground">
-            Loading sessions...
-          </div>
-        ) : filteredSessions.length === 0 ? (
+        {filteredSessions.length === 0 ? (
           <Card>
             <CardContent className="py-12 text-center">
               <Calendar className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
@@ -196,12 +188,6 @@ export default function SessionsPage() {
                     {session.completed && (
                       <Button variant="ghost" size="sm">
                         Repeat Session
-                      </Button>
-                    )}
-                    {!session.completed && (
-                      <Button size="sm">
-                        <Play className="h-3 w-3 mr-1" />
-                        Resume
                       </Button>
                     )}
                   </div>

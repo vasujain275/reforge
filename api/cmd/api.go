@@ -38,7 +38,7 @@ func (app *application) mount() http.Handler {
 	userHandler := users.NewHandler(userService)
 	authHandler := auth.NewHandler(authService, isProd)
 
-	r.Route("/v1", func(r chi.Router) {
+	r.Route("/api/v1", func(r chi.Router) {
 		r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 			utils.Write(w, http.StatusOK, healthResponse{Status: "ok"})
 		})

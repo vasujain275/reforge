@@ -1,3 +1,4 @@
+import ApiError from "@/components/ApiError";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -7,6 +8,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
+import { api } from "@/lib/api";
 import type { DashboardStats, SessionTemplate, UrgentProblem } from "@/types";
 import {
   Activity,
@@ -53,90 +55,27 @@ export default function DashboardHome() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [urgentProblems, setUrgentProblems] = useState<UrgentProblem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     fetchDashboardData();
   }, []);
 
   const fetchDashboardData = async () => {
+    setLoading(true);
+    setError(null);
     try {
-      // TODO: Replace with actual API calls
-      // const statsRes = await api.get("/dashboard/stats");
-      // const urgentRes = await api.get("/problems/urgent");
-      // setStats(statsRes.data.data);
-      // setUrgentProblems(urgentRes.data.data);
-
-      // Mock data for now
-      setStats({
-        total_problems: 47,
-        mastered_problems: 12,
-        avg_confidence: 67,
-        current_streak: 5,
-        weakest_pattern: {
-          name: "Backtracking",
-          confidence: 42,
-        },
-      });
-
-      setUrgentProblems([
-        {
-          id: 1,
-          title: "Merge K Sorted Lists",
-          difficulty: "hard",
-          source: "LeetCode",
-          score: 0.89,
-          days_since_last: 23,
-          confidence: 35,
-          reason: "Low confidence (35%), 23 days old, failed last",
-          created_at: "",
-        },
-        {
-          id: 2,
-          title: "LRU Cache",
-          difficulty: "medium",
-          source: "LeetCode",
-          score: 0.84,
-          days_since_last: 18,
-          confidence: 42,
-          reason: "Low confidence (42%), 18 days old",
-          created_at: "",
-        },
-        {
-          id: 3,
-          title: "Word Break II",
-          difficulty: "hard",
-          source: "LeetCode",
-          score: 0.78,
-          days_since_last: 15,
-          confidence: 48,
-          reason: "Medium confidence (48%), 15 days old",
-          created_at: "",
-        },
-        {
-          id: 4,
-          title: "Serialize Binary Tree",
-          difficulty: "hard",
-          source: "LeetCode",
-          score: 0.72,
-          days_since_last: 12,
-          confidence: 51,
-          reason: "Medium confidence (51%), 12 days old",
-          created_at: "",
-        },
-        {
-          id: 5,
-          title: "Coin Change",
-          difficulty: "medium",
-          source: "LeetCode",
-          score: 0.68,
-          days_since_last: 9,
-          confidence: 60,
-          reason: "Moderate confidence (60%), 9 days old",
-          created_at: "",
-        },
+      const [statsRes, urgentRes] = await Promise.all([
+        api.get("/dashboard/stats"),
+        api.get("/problems/urgent"),
       ]);
-    } catch (error) {
-      console.error("Failed to fetch dashboard data:", error);
+      setStats(statsRes.data.data);
+      setUrgentProblems(urgentRes.data.data);
+    } catch (err: unknown) {
+      console.error("Failed to fetch dashboard data:", err);
+      setError(
+        "Failed to load dashboard data. Please ensure the backend is running."
+      );
     } finally {
       setLoading(false);
     }
@@ -189,6 +128,10 @@ export default function DashboardHome() {
     );
   }
 
+  if (error) {
+    return <ApiError message={error} onRetry={fetchDashboardData} />;
+  }
+
   const confidenceTrend = stats ? ((stats.avg_confidence - 62) / 62) * 100 : 0;
 
   return (
@@ -209,8 +152,8 @@ export default function DashboardHome() {
         </div>
         <div className="flex items-center gap-2 font-mono text-xs text-muted-foreground">
           <span>
-            Total: {stats?.total_problems} | Mastered:{" "}
-            {stats?.mastered_problems}
+            Total: {stats?.total_problems ?? 0} | Mastered:{" "}
+            {stats?.mastered_problems ?? 0}
           </span>
         </div>
       </div>
@@ -266,11 +209,11 @@ export default function DashboardHome() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold font-mono">
-              {stats?.total_problems}
+              {stats?.total_problems ?? 0}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
               <span className="text-green-500 font-semibold">
-                {stats?.mastered_problems} mastered
+                {stats?.mastered_problems ?? 0} mastered
               </span>{" "}
               (
               {Math.round(
@@ -292,7 +235,7 @@ export default function DashboardHome() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold font-mono">
-              {stats?.avg_confidence}%
+              {stats?.avg_confidence ?? 0}%
             </div>
             <p className="text-xs text-muted-foreground mt-1">
               <span
@@ -315,11 +258,9 @@ export default function DashboardHome() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold font-mono">
-              {stats?.current_streak} days
+              {stats?.current_streak ?? 0} days
             </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Personal best: 8 days
-            </p>
+            <p className="text-xs text-muted-foreground mt-1">Keep it going!</p>
           </CardContent>
         </Card>
 
@@ -333,7 +274,7 @@ export default function DashboardHome() {
               {stats?.weakest_pattern?.name || "N/A"}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              {stats?.weakest_pattern?.confidence}% confidence
+              {stats?.weakest_pattern?.confidence ?? 0}% confidence
             </p>
           </CardContent>
         </Card>
@@ -351,64 +292,76 @@ export default function DashboardHome() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-3">
-            {urgentProblems.map((problem, index) => (
-              <div
-                key={problem.id}
-                className="flex items-center gap-4 p-3 border rounded-lg hover:bg-accent/50 transition-colors group"
-              >
-                <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 text-primary font-bold font-mono text-sm">
-                  {index + 1}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <h4 className="font-semibold truncate">{problem.title}</h4>
-                    <span
-                      className={`text-xs px-2 py-0.5 rounded font-mono ${
-                        problem.difficulty === "hard"
-                          ? "bg-red-500/10 text-red-500"
-                          : problem.difficulty === "medium"
-                          ? "bg-orange-500/10 text-orange-500"
-                          : "bg-green-500/10 text-green-500"
-                      }`}
-                    >
-                      {problem.difficulty}
-                    </span>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    {problem.reason}
-                  </p>
-                </div>
-                <div className="flex items-center gap-4">
-                  <div className="text-right">
-                    <div className="text-sm font-mono text-muted-foreground">
-                      {problem.confidence}%
+          {urgentProblems.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <Activity className="h-8 w-8 mx-auto mb-3 opacity-50" />
+              <p className="text-sm">No urgent problems yet.</p>
+              <p className="text-xs mt-1">Add some problems to get started!</p>
+            </div>
+          ) : (
+            <>
+              <div className="space-y-3">
+                {urgentProblems.map((problem, index) => (
+                  <div
+                    key={problem.id}
+                    className="flex items-center gap-4 p-3 border rounded-lg hover:bg-accent/50 transition-colors group"
+                  >
+                    <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 text-primary font-bold font-mono text-sm">
+                      {index + 1}
                     </div>
-                    <Progress
-                      value={problem.confidence}
-                      className="w-16 h-1.5 mt-1"
-                    />
-                  </div>
-                  <div className="text-right">
-                    <div className="text-sm font-mono text-muted-foreground">
-                      {problem.days_since_last}d
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <h4 className="font-semibold truncate">
+                          {problem.title}
+                        </h4>
+                        <span
+                          className={`text-xs px-2 py-0.5 rounded font-mono ${
+                            problem.difficulty === "hard"
+                              ? "bg-red-500/10 text-red-500"
+                              : problem.difficulty === "medium"
+                              ? "bg-orange-500/10 text-orange-500"
+                              : "bg-green-500/10 text-green-500"
+                          }`}
+                        >
+                          {problem.difficulty}
+                        </span>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        {problem.reason}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <div className="text-right">
+                        <div className="text-sm font-mono text-muted-foreground">
+                          {problem.confidence}%
+                        </div>
+                        <Progress
+                          value={problem.confidence}
+                          className="w-16 h-1.5 mt-1"
+                        />
+                      </div>
+                      <div className="text-right">
+                        <div className="text-sm font-mono text-muted-foreground">
+                          {problem.days_since_last}d
+                        </div>
+                      </div>
+                      <div className="text-right min-w-[3rem]">
+                        <div className="text-lg font-bold font-mono text-primary">
+                          {problem.score.toFixed(2)}
+                        </div>
+                      </div>
                     </div>
                   </div>
-                  <div className="text-right min-w-[3rem]">
-                    <div className="text-lg font-bold font-mono text-primary">
-                      {problem.score.toFixed(2)}
-                    </div>
-                  </div>
-                </div>
+                ))}
               </div>
-            ))}
-          </div>
-          <div className="mt-4 pt-4 border-t">
-            <Button className="w-full" variant="outline">
-              <Calendar className="h-4 w-4 mr-2" />
-              Start Quick Session with Top 3
-            </Button>
-          </div>
+              <div className="mt-4 pt-4 border-t">
+                <Button className="w-full" variant="outline">
+                  <Calendar className="h-4 w-4 mr-2" />
+                  Start Quick Session with Top 3
+                </Button>
+              </div>
+            </>
+          )}
         </CardContent>
       </Card>
     </div>

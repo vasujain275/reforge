@@ -1,3 +1,4 @@
+import ApiError from "@/components/ApiError";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -14,6 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { api } from "@/lib/api";
 import type { SessionTemplate, UrgentProblem } from "@/types";
 import { ArrowLeft, Clock, Loader2, Play, Terminal, Zap } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -58,6 +60,7 @@ export default function NewSessionPage() {
     []
   );
   const [customDuration, setCustomDuration] = useState("35");
+  const [error, setError] = useState<string | null>(null);
 
   // Pre-select template from URL params
   useEffect(() => {
@@ -75,68 +78,37 @@ export default function NewSessionPage() {
     if (!selectedTemplate) return;
 
     setIsGenerating(true);
+    setError(null);
     try {
-      // TODO: Replace with actual API call
-      // const response = await api.post("/sessions/generate", {
-      //   template_key: selectedTemplate,
-      //   duration_min: parseInt(customDuration),
-      // });
-      // setGeneratedProblems(response.data.data.problems);
-
-      // Mock generated problems
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-      setGeneratedProblems([
-        {
-          id: 1,
-          title: "Merge K Sorted Lists",
-          difficulty: "hard",
-          source: "LeetCode",
-          score: 0.89,
-          days_since_last: 23,
-          confidence: 35,
-          reason: "Low confidence (35%), 23 days old",
-          created_at: "",
-        },
-        {
-          id: 2,
-          title: "LRU Cache",
-          difficulty: "medium",
-          source: "LeetCode",
-          score: 0.84,
-          days_since_last: 18,
-          confidence: 42,
-          reason: "Low confidence (42%), 18 days old",
-          created_at: "",
-        },
-        {
-          id: 3,
-          title: "Two Sum",
-          difficulty: "easy",
-          source: "LeetCode",
-          score: 0.65,
-          days_since_last: 10,
-          confidence: 68,
-          reason: "Quick win, moderate confidence",
-          created_at: "",
-        },
-      ]);
-    } catch (error) {
-      console.error("Failed to generate session:", error);
+      const response = await api.post("/sessions/generate", {
+        template_key: selectedTemplate,
+        duration_min: parseInt(customDuration),
+      });
+      setGeneratedProblems(response.data.data?.problems || []);
+    } catch (err: unknown) {
+      console.error("Failed to generate session:", err);
+      setError(
+        "Failed to generate session. Please ensure the backend is running."
+      );
     } finally {
       setIsGenerating(false);
     }
   };
 
   const handleStartSession = async () => {
+    setError(null);
     try {
-      // TODO: Create session and navigate to active session view
-      // await api.post("/sessions", {
-      //   template_key: selectedTemplate,
-      //   problems: generatedProblems.map((p) => p.id),
-      // });
+      await api.post("/sessions", {
+        template_key: selectedTemplate,
+        duration_min: parseInt(customDuration),
+        problem_ids: generatedProblems.map((p) => p.id),
+      });
       navigate("/dashboard/sessions");
-    } catch (error) {
-      console.error("Failed to start session:", error);
+    } catch (err: unknown) {
+      console.error("Failed to start session:", err);
+      setError(
+        "Failed to start session. Please ensure the backend is running."
+      );
     }
   };
 
@@ -161,7 +133,15 @@ export default function NewSessionPage() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      {error && (
+        <ApiError
+          variant="inline"
+          message={error}
+          onRetry={handleGenerateSession}
+        />
+      )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
         {/* Left: Configuration */}
         <div className="space-y-6">
           {/* Template Selection */}
@@ -184,6 +164,7 @@ export default function NewSessionPage() {
                       setSelectedTemplate(template.key);
                       setCustomDuration(template.duration_min.toString());
                       setGeneratedProblems([]);
+                      setError(null);
                     }}
                     className={`p-4 border-2 rounded-lg text-left transition-all ${
                       selectedTemplate === template.key

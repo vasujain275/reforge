@@ -1,3 +1,4 @@
+import ApiError from "@/components/ApiError";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -16,35 +17,87 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { api } from "@/lib/api";
 import { useAuthStore } from "@/store/authStore";
 import { Bell, Clock, Loader2, Moon, Save, Terminal, User } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+
+interface UserSettings {
+  name: string;
+  email: string;
+  theme: string;
+  default_duration: number;
+  daily_goal: number;
+  reminder_time: string;
+  notifications_enabled: boolean;
+}
 
 export default function SettingsPage() {
   const { user } = useAuthStore();
+  const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [settings, setSettings] = useState({
+  const [error, setError] = useState<string | null>(null);
+  const [settings, setSettings] = useState<UserSettings>({
     name: user?.name || "",
     email: user?.email || "",
     theme: "dark",
-    defaultDuration: "35",
-    dailyGoal: "3",
-    reminderTime: "09:00",
-    notificationsEnabled: true,
+    default_duration: 35,
+    daily_goal: 3,
+    reminder_time: "09:00",
+    notifications_enabled: true,
   });
+
+  useEffect(() => {
+    fetchSettings();
+  }, []);
+
+  const fetchSettings = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await api.get("/users/settings");
+      if (response.data.data) {
+        setSettings(response.data.data);
+      }
+    } catch (err: unknown) {
+      console.error("Failed to fetch settings:", err);
+      setError(
+        "Failed to load settings. Please ensure the backend is running."
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleSave = async () => {
     setIsSaving(true);
+    setError(null);
     try {
-      // TODO: Replace with actual API call
-      // await api.put("/users/settings", settings);
-      await new Promise((resolve) => setTimeout(resolve, 1000));
-    } catch (error) {
-      console.error("Failed to save settings:", error);
+      await api.put("/users/settings", settings);
+    } catch (err: unknown) {
+      console.error("Failed to save settings:", err);
+      setError("Failed to save settings. Please try again.");
     } finally {
       setIsSaving(false);
     }
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="flex flex-col items-center gap-4">
+          <Terminal className="h-8 w-8 text-primary animate-pulse" />
+          <p className="text-sm font-mono text-muted-foreground">
+            Loading settings...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error && !settings.email) {
+    return <ApiError message={error} onRetry={fetchSettings} />;
+  }
 
   return (
     <div className="flex-1 p-6 max-w-4xl">
@@ -56,7 +109,11 @@ export default function SettingsPage() {
         </p>
       </div>
 
-      <div className="space-y-6">
+      {error && (
+        <ApiError variant="inline" message={error} onRetry={handleSave} />
+      )}
+
+      <div className="space-y-6 mt-6">
         {/* Profile Settings */}
         <Card className="border-2">
           <CardHeader>
@@ -87,9 +144,6 @@ export default function SettingsPage() {
                   id="email"
                   type="email"
                   value={settings.email}
-                  onChange={(e) =>
-                    setSettings({ ...settings, email: e.target.value })
-                  }
                   className="font-mono"
                   disabled
                 />
@@ -153,9 +207,12 @@ export default function SettingsPage() {
               <div className="space-y-2">
                 <Label>Default Session Duration</Label>
                 <Select
-                  value={settings.defaultDuration}
+                  value={settings.default_duration.toString()}
                   onValueChange={(value) =>
-                    setSettings({ ...settings, defaultDuration: value })
+                    setSettings({
+                      ...settings,
+                      default_duration: parseInt(value),
+                    })
                   }
                 >
                   <SelectTrigger>
@@ -172,9 +229,9 @@ export default function SettingsPage() {
               <div className="space-y-2">
                 <Label>Daily Problem Goal</Label>
                 <Select
-                  value={settings.dailyGoal}
+                  value={settings.daily_goal.toString()}
                   onValueChange={(value) =>
-                    setSettings({ ...settings, dailyGoal: value })
+                    setSettings({ ...settings, daily_goal: parseInt(value) })
                   }
                 >
                   <SelectTrigger>
@@ -213,26 +270,26 @@ export default function SettingsPage() {
                 </p>
               </div>
               <Button
-                variant={settings.notificationsEnabled ? "default" : "outline"}
+                variant={settings.notifications_enabled ? "default" : "outline"}
                 size="sm"
                 onClick={() =>
                   setSettings({
                     ...settings,
-                    notificationsEnabled: !settings.notificationsEnabled,
+                    notifications_enabled: !settings.notifications_enabled,
                   })
                 }
               >
-                {settings.notificationsEnabled ? "Enabled" : "Disabled"}
+                {settings.notifications_enabled ? "Enabled" : "Disabled"}
               </Button>
             </div>
-            {settings.notificationsEnabled && (
+            {settings.notifications_enabled && (
               <div className="space-y-2 pt-2">
                 <Label>Reminder Time</Label>
                 <Input
                   type="time"
-                  value={settings.reminderTime}
+                  value={settings.reminder_time}
                   onChange={(e) =>
-                    setSettings({ ...settings, reminderTime: e.target.value })
+                    setSettings({ ...settings, reminder_time: e.target.value })
                   }
                   className="font-mono w-full max-w-xs"
                 />

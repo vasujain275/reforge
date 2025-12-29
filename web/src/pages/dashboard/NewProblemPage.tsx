@@ -1,3 +1,4 @@
+import ApiError from "@/components/ApiError";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -29,6 +30,7 @@ import { Link, useNavigate } from "react-router-dom";
 export default function NewProblemPage() {
   const navigate = useNavigate();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     title: "",
     source: "",
@@ -39,14 +41,16 @@ export default function NewProblemPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
+    setError(null);
 
     try {
-      // TODO: Replace with actual API call
       await api.post("/problems", formData);
       navigate("/dashboard/problems");
-    } catch (error) {
-      console.error("Failed to create problem:", error);
-      // TODO: Show error toast
+    } catch (err: unknown) {
+      console.error("Failed to create problem:", err);
+      setError(
+        "Failed to create problem. Please ensure the backend is running."
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -69,8 +73,10 @@ export default function NewProblemPage() {
         </p>
       </div>
 
+      {error && <ApiError variant="inline" message={error} />}
+
       {/* Form */}
-      <div className="max-w-2xl">
+      <div className="max-w-2xl mt-6">
         <Card className="border-2">
           <CardHeader>
             <div className="flex items-center gap-2">

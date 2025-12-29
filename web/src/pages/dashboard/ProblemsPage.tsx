@@ -1,3 +1,4 @@
+import ApiError from "@/components/ApiError";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -9,14 +10,24 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { api } from "@/lib/api";
 import type { Problem } from "@/types";
-import { Check, ExternalLink, Filter, Plus, Search, X } from "lucide-react";
+import {
+  Check,
+  ExternalLink,
+  Filter,
+  Plus,
+  Search,
+  Terminal,
+  X,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
 export default function ProblemsPage() {
   const [problems, setProblems] = useState<Problem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [difficultyFilter, setDifficultyFilter] = useState("all");
@@ -26,76 +37,16 @@ export default function ProblemsPage() {
   }, []);
 
   const fetchProblems = async () => {
+    setLoading(true);
+    setError(null);
     try {
-      // TODO: Replace with actual API call
-      // const response = await api.get("/problems");
-      // setProblems(response.data.data);
-
-      // Mock data
-      setProblems([
-        {
-          id: 1,
-          title: "Two Sum",
-          source: "LeetCode",
-          url: "https://leetcode.com/problems/two-sum",
-          difficulty: "easy",
-          created_at: "2025-01-15",
-          stats: {
-            id: 1,
-            user_id: 1,
-            problem_id: 1,
-            status: "solved",
-            confidence: 70,
-            avg_confidence: 68,
-            last_attempt_at: "2025-12-22",
-            total_attempts: 3,
-            last_outcome: "passed",
-            updated_at: "2025-12-22",
-          },
-        },
-        {
-          id: 2,
-          title: "LRU Cache",
-          source: "LeetCode",
-          url: "https://leetcode.com/problems/lru-cache",
-          difficulty: "medium",
-          created_at: "2025-01-10",
-          stats: {
-            id: 2,
-            user_id: 1,
-            problem_id: 2,
-            status: "unsolved",
-            confidence: 42,
-            avg_confidence: 40,
-            last_attempt_at: "2025-12-09",
-            total_attempts: 5,
-            last_outcome: "failed",
-            updated_at: "2025-12-09",
-          },
-        },
-        {
-          id: 3,
-          title: "Merge K Sorted Lists",
-          source: "LeetCode",
-          url: "https://leetcode.com/problems/merge-k-sorted-lists",
-          difficulty: "hard",
-          created_at: "2025-01-08",
-          stats: {
-            id: 3,
-            user_id: 1,
-            problem_id: 3,
-            status: "unsolved",
-            confidence: 35,
-            avg_confidence: 38,
-            last_attempt_at: "2025-12-04",
-            total_attempts: 7,
-            last_outcome: "failed",
-            updated_at: "2025-12-04",
-          },
-        },
-      ]);
-    } catch (error) {
-      console.error("Failed to fetch problems:", error);
+      const response = await api.get("/problems");
+      setProblems(response.data.data || []);
+    } catch (err: unknown) {
+      console.error("Failed to fetch problems:", err);
+      setError(
+        "Failed to load problems. Please ensure the backend is running."
+      );
     } finally {
       setLoading(false);
     }
@@ -119,6 +70,23 @@ export default function ProblemsPage() {
     );
     return `${days} days ago`;
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="flex flex-col items-center gap-4">
+          <Terminal className="h-8 w-8 text-primary animate-pulse" />
+          <p className="text-sm font-mono text-muted-foreground">
+            Loading problems...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return <ApiError message={error} onRetry={fetchProblems} />;
+  }
 
   return (
     <div className="flex-1 space-y-6 p-6">
@@ -184,13 +152,19 @@ export default function ProblemsPage() {
 
       {/* Problems List */}
       <div className="space-y-3">
-        {loading ? (
+        {filteredProblems.length === 0 ? (
           <div className="text-center py-12 text-muted-foreground">
-            Loading problems...
-          </div>
-        ) : filteredProblems.length === 0 ? (
-          <div className="text-center py-12 text-muted-foreground">
-            No problems found. Add your first problem to get started!
+            <Terminal className="h-12 w-12 mx-auto mb-4 opacity-50" />
+            <p>No problems found.</p>
+            <p className="text-sm mt-1">
+              Add your first problem to get started!
+            </p>
+            <Link to="/dashboard/problems/new" className="inline-block mt-4">
+              <Button>
+                <Plus className="h-4 w-4 mr-2" />
+                Add Problem
+              </Button>
+            </Link>
           </div>
         ) : (
           filteredProblems.map((problem) => (

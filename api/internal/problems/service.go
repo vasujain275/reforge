@@ -12,8 +12,8 @@ import (
 
 type Service interface {
 	CreateProblem(ctx context.Context, userID int64, body CreateProblemBody) (*ProblemWithStats, error)
-	GetProblem(ctx context.Context, problemID int64) (*repo.Problem, error)
-	UpdateProblem(ctx context.Context, problemID int64, body UpdateProblemBody) (*repo.Problem, error)
+	GetProblem(ctx context.Context, problemID int64) (*ProblemWithStats, error)
+	UpdateProblem(ctx context.Context, problemID int64, body UpdateProblemBody) (*ProblemWithStats, error)
 	DeleteProblem(ctx context.Context, problemID int64) error
 	ListProblemsForUser(ctx context.Context, userID int64) ([]ProblemWithStats, error)
 	GetUrgentProblems(ctx context.Context, userID int64, limit int64) ([]UrgentProblem, error)
@@ -93,15 +93,30 @@ func (s *problemService) CreateProblem(ctx context.Context, userID int64, body C
 	}, nil
 }
 
-func (s *problemService) GetProblem(ctx context.Context, problemID int64) (*repo.Problem, error) {
+func (s *problemService) GetProblem(ctx context.Context, problemID int64) (*ProblemWithStats, error) {
 	problem, err := s.repo.GetProblem(ctx, problemID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get problem: %w", err)
 	}
-	return &problem, nil
+
+	// Fetch patterns for the problem
+	patterns, err := s.repo.GetPatternsForProblem(ctx, problemID)
+	if err != nil {
+		patterns = []repo.Pattern{} // empty if error
+	}
+
+	return &ProblemWithStats{
+		ID:         problem.ID,
+		Title:      problem.Title,
+		Source:     nullStringToPtr(problem.Source),
+		URL:        nullStringToPtr(problem.Url),
+		Difficulty: nullStringToStr(problem.Difficulty, "medium"),
+		CreatedAt:  problem.CreatedAt.String,
+		Patterns:   convertPatternsFromRepo(patterns),
+	}, nil
 }
 
-func (s *problemService) UpdateProblem(ctx context.Context, problemID int64, body UpdateProblemBody) (*repo.Problem, error) {
+func (s *problemService) UpdateProblem(ctx context.Context, problemID int64, body UpdateProblemBody) (*ProblemWithStats, error) {
 	problem, err := s.repo.UpdateProblem(ctx, repo.UpdateProblemParams{
 		ID:         problemID,
 		Title:      body.Title,
@@ -124,7 +139,21 @@ func (s *problemService) UpdateProblem(ctx context.Context, problemID int64, bod
 		}
 	}
 
-	return &problem, nil
+	// Fetch patterns for the updated problem
+	patterns, err := s.repo.GetPatternsForProblem(ctx, problemID)
+	if err != nil {
+		patterns = []repo.Pattern{} // empty if error
+	}
+
+	return &ProblemWithStats{
+		ID:         problem.ID,
+		Title:      problem.Title,
+		Source:     nullStringToPtr(problem.Source),
+		URL:        nullStringToPtr(problem.Url),
+		Difficulty: nullStringToStr(problem.Difficulty, "medium"),
+		CreatedAt:  problem.CreatedAt.String,
+		Patterns:   convertPatternsFromRepo(patterns),
+	}, nil
 }
 
 func (s *problemService) DeleteProblem(ctx context.Context, problemID int64) error {

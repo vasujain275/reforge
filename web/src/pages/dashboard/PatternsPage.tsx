@@ -7,6 +7,17 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import { api } from "@/lib/api";
 import type { PatternWithStats } from "@/types";
@@ -16,6 +27,9 @@ import {
   Terminal,
   TrendingDown,
   TrendingUp,
+  Edit,
+  Trash2,
+  Save,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -23,6 +37,15 @@ export default function PatternsPage() {
   const [patterns, setPatterns] = useState<PatternWithStats[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [editingPattern, setEditingPattern] = useState<PatternWithStats | null>(
+    null
+  );
+  const [isSaving, setIsSaving] = useState(false);
+  const [formData, setFormData] = useState({
+    title: "",
+    description: "",
+  });
 
   useEffect(() => {
     fetchPatterns();
@@ -41,6 +64,65 @@ export default function PatternsPage() {
       );
     } finally {
       setLoading(false);
+    }
+  };
+
+  const openCreateDialog = () => {
+    setEditingPattern(null);
+    setFormData({ title: "", description: "" });
+    setIsDialogOpen(true);
+  };
+
+  const openEditDialog = (pattern: PatternWithStats) => {
+    setEditingPattern(pattern);
+    setFormData({
+      title: pattern.title,
+      description: pattern.description || "",
+    });
+    setIsDialogOpen(true);
+  };
+
+  const handleSave = async () => {
+    if (!formData.title.trim()) {
+      setError("Pattern title is required");
+      return;
+    }
+
+    setIsSaving(true);
+    setError(null);
+    try {
+      if (editingPattern) {
+        // Update existing pattern
+        await api.put(`/patterns/${editingPattern.id}`, {
+          title: formData.title,
+          description: formData.description || undefined,
+        });
+      } else {
+        // Create new pattern
+        await api.post("/patterns", {
+          title: formData.title,
+          description: formData.description || undefined,
+        });
+      }
+      setIsDialogOpen(false);
+      fetchPatterns();
+    } catch (err: unknown) {
+      console.error("Failed to save pattern:", err);
+      setError("Failed to save pattern. Please try again.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDelete = async (patternId: number) => {
+    if (!confirm("Are you sure you want to delete this pattern?")) return;
+
+    try {
+      await api.delete(`/patterns/${patternId}`);
+      fetchPatterns();
+    } catch (err: unknown) {
+      console.error("Failed to delete pattern:", err);
+      setError("Failed to delete pattern. Please try again.");
     }
   };
 
@@ -87,7 +169,7 @@ export default function PatternsPage() {
             Track mastery across problem-solving patterns
           </p>
         </div>
-        <Button className="rounded-md">
+        <Button className="rounded-md" onClick={openCreateDialog}>
           <Plus className="h-4 w-4 mr-2" />
           Initialize Pattern
         </Button>
@@ -162,7 +244,7 @@ export default function PatternsPage() {
               <p className="text-muted-foreground font-mono uppercase tracking-wider text-sm">
                 No Patterns Registered
               </p>
-              <Button className="mt-4 rounded-md">
+              <Button className="mt-4 rounded-md" onClick={openCreateDialog}>
                 Initialize First Pattern
               </Button>
             </CardContent>
@@ -193,6 +275,24 @@ export default function PatternsPage() {
                       <div className="text-xs text-muted-foreground font-mono uppercase tracking-wider">
                         Confidence
                       </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="rounded-md"
+                        onClick={() => openEditDialog(pattern)}
+                      >
+                        <Edit className="h-3 w-3" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="rounded-md text-red-500 hover:text-red-600 hover:bg-red-500/10"
+                        onClick={() => handleDelete(pattern.id)}
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
                     </div>
                   </div>
                 </div>
@@ -228,6 +328,73 @@ export default function PatternsPage() {
           ))
         )}
       </div>
+
+      {/* Create/Edit Pattern Dialog */}
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent className="rounded-md">
+          <DialogHeader>
+            <DialogTitle className="font-mono uppercase tracking-wider">
+              {editingPattern ? "Edit Pattern" : "Initialize Pattern"}
+            </DialogTitle>
+            <DialogDescription>
+              {editingPattern
+                ? "Update pattern information"
+                : "Create a new problem-solving pattern"}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="title" className="font-mono uppercase tracking-wider text-xs">
+                Pattern Title
+              </Label>
+              <Input
+                id="title"
+                value={formData.title}
+                onChange={(e) =>
+                  setFormData({ ...formData, title: e.target.value })
+                }
+                placeholder="e.g., Two Pointers, Sliding Window"
+                className="rounded-md font-mono"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="description" className="font-mono uppercase tracking-wider text-xs">
+                Description (Optional)
+              </Label>
+              <Textarea
+                id="description"
+                value={formData.description}
+                onChange={(e) =>
+                  setFormData({ ...formData, description: e.target.value })
+                }
+                placeholder="Describe this pattern..."
+                className="rounded-md"
+                rows={3}
+              />
+            </div>
+            {error && (
+              <p className="text-sm text-red-500 font-mono">{error}</p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setIsDialogOpen(false)}
+              className="rounded-md"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSave}
+              disabled={isSaving}
+              className="rounded-md"
+            >
+              <Save className="h-4 w-4 mr-2" />
+              {isSaving ? "Saving..." : editingPattern ? "Update" : "Create"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

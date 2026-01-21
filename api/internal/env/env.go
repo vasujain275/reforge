@@ -21,3 +21,12 @@ func GetInt(key string, fallback int) int {
 	}
 	return fallback
 }
+
+func GetFloat(key string, fallback float64) float64 {
+	if val, ok := os.LookupEnv(key); ok {
+		if f, err := strconv.ParseFloat(val, 64); err == nil {
+			return f
+		}
+	}
+	return fallback
+}

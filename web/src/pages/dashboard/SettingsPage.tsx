@@ -20,6 +20,7 @@ export default function SettingsPage() {
   const { user } = useAuthStore();
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [weights, setWeights] = useState<ScoringWeights>({
     w_conf: 0.25,
@@ -30,9 +31,13 @@ export default function SettingsPage() {
     w_failed: 0.1,
     w_pattern: 0.05,
   });
+  const [defaultWeights, setDefaultWeights] = useState<ScoringWeights | null>(
+    null
+  );
 
   useEffect(() => {
     fetchWeights();
+    fetchDefaultWeights();
   }, []);
 
   const fetchWeights = async () => {
@@ -53,6 +58,17 @@ export default function SettingsPage() {
     }
   };
 
+  const fetchDefaultWeights = async () => {
+    try {
+      const response = await api.get("/settings/weights/defaults");
+      if (response.data.data) {
+        setDefaultWeights(response.data.data);
+      }
+    } catch (err: unknown) {
+      console.error("Failed to fetch default weights:", err);
+    }
+  };
+
   const handleSave = async () => {
     setIsSaving(true);
     setError(null);
@@ -63,6 +79,24 @@ export default function SettingsPage() {
       setError("Failed to save settings. Please try again.");
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleReset = async () => {
+    if (!defaultWeights) return;
+    
+    if (!confirm("Reset all scoring weights to default values?")) return;
+
+    setIsResetting(true);
+    setError(null);
+    try {
+      await api.put("/settings/weights", defaultWeights);
+      setWeights(defaultWeights);
+    } catch (err: unknown) {
+      console.error("Failed to reset settings:", err);
+      setError("Failed to reset settings. Please try again.");
+    } finally {
+      setIsResetting(false);
     }
   };
 
@@ -307,32 +341,52 @@ export default function SettingsPage() {
 
         <Separator />
 
-        {/* Save Button */}
-        <div className="flex justify-end gap-4">
+        {/* Action Buttons */}
+        <div className="flex justify-between items-center gap-4">
           <Button
             variant="outline"
-            onClick={() => window.history.back()}
-            className="rounded-md"
+            onClick={handleReset}
+            disabled={isResetting || !defaultWeights}
+            className="rounded-md border-orange-400/50 text-orange-400 hover:bg-orange-400/10"
           >
-            Cancel
-          </Button>
-          <Button
-            onClick={handleSave}
-            disabled={isSaving}
-            className="rounded-md"
-          >
-            {isSaving ? (
+            {isResetting ? (
               <>
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Saving...
+                Resetting...
               </>
             ) : (
               <>
-                <Save className="h-4 w-4 mr-2" />
-                Save Configuration
+                <Terminal className="h-4 w-4 mr-2" />
+                Reset to Defaults
               </>
             )}
           </Button>
+          <div className="flex gap-4">
+            <Button
+              variant="outline"
+              onClick={() => window.history.back()}
+              className="rounded-md"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSave}
+              disabled={isSaving}
+              className="rounded-md"
+            >
+              {isSaving ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Save className="h-4 w-4 mr-2" />
+                  Save Configuration
+                </>
+              )}
+            </Button>
+          </div>
         </div>
       </div>
     </div>

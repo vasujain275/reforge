@@ -7,8 +7,22 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -17,20 +31,28 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { api } from "@/lib/api";
+import type { Pattern } from "@/types";
 import {
   ArrowLeft,
+  Check,
+  ChevronsUpDown,
   Link as LinkIcon,
   Loader2,
   Plus,
   Terminal,
+  X,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 export default function NewProblemPage() {
   const navigate = useNavigate();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [patterns, setPatterns] = useState<Pattern[]>([]);
+  const [selectedPatterns, setSelectedPatterns] = useState<number[]>([]);
+  const [open, setOpen] = useState(false);
+  
   const [formData, setFormData] = useState({
     title: "",
     source: "",
@@ -38,13 +60,30 @@ export default function NewProblemPage() {
     difficulty: "medium" as "easy" | "medium" | "hard",
   });
 
+  useEffect(() => {
+    fetchPatterns();
+  }, []);
+
+  const fetchPatterns = async () => {
+    try {
+      const response = await api.get("/patterns");
+      setPatterns(response.data.data || []);
+    } catch (err: unknown) {
+      console.error("Failed to fetch patterns:", err);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
     setError(null);
 
     try {
-      await api.post("/problems", formData);
+      const payload = {
+        ...formData,
+        pattern_ids: selectedPatterns.length > 0 ? selectedPatterns : undefined,
+      };
+      await api.post("/problems", payload);
       navigate("/dashboard/problems");
     } catch (err: unknown) {
       console.error("Failed to create problem:", err);
@@ -54,6 +93,18 @@ export default function NewProblemPage() {
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const togglePattern = (patternId: number) => {
+    setSelectedPatterns((prev) =>
+      prev.includes(patternId)
+        ? prev.filter((id) => id !== patternId)
+        : [...prev, patternId]
+    );
+  };
+
+  const removePattern = (patternId: number) => {
+    setSelectedPatterns((prev) => prev.filter((id) => id !== patternId));
   };
 
   return (
@@ -68,8 +119,8 @@ export default function NewProblemPage() {
           Back to Problems
         </Link>
         <h2 className="text-3xl font-bold tracking-tight">Add New Problem</h2>
-        <p className="text-muted-foreground mt-1">
-          Add a coding problem to your library
+        <p className="text-muted-foreground mt-1 font-mono text-sm">
+          Register problem to tracking system
         </p>
       </div>
 
@@ -84,7 +135,7 @@ export default function NewProblemPage() {
               <CardTitle>Problem Details</CardTitle>
             </div>
             <CardDescription>
-              Enter the problem information below
+              Enter problem metadata and configuration
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -175,21 +226,91 @@ export default function NewProblemPage() {
                 </Select>
               </div>
 
-              {/* Patterns Section - Placeholder */}
+              {/* Patterns Section */}
               <div className="space-y-2">
-                <Label>Patterns (Optional)</Label>
-                <p className="text-xs text-muted-foreground mb-2">
-                  Associate this problem with patterns for better tracking
+                <Label className="font-mono text-xs uppercase tracking-wider">Patterns (Optional)</Label>
+                <p className="text-xs text-muted-foreground mb-2 font-mono">
+                  Link patterns for statistics aggregation
                 </p>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="text-xs"
-                >
-                  <Plus className="h-3 w-3 mr-1" />
-                  Add Pattern
-                </Button>
+                
+                {/* Selected Patterns */}
+                {selectedPatterns.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mb-2">
+                    {selectedPatterns.map((patternId) => {
+                      const pattern = patterns.find((p) => p.id === patternId);
+                      return (
+                        <div
+                          key={patternId}
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-primary/10 text-primary text-xs font-mono border border-primary/20"
+                        >
+                          <span>{pattern?.title}</span>
+                          <button
+                            type="button"
+                            onClick={() => removePattern(patternId)}
+                            className="hover:bg-primary/20 rounded-md p-0.5"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Pattern Selector */}
+                <Popover open={open} onOpenChange={setOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={open}
+                      className="w-full justify-between font-mono"
+                    >
+                      <span className="flex items-center gap-2">
+                        <Plus className="h-4 w-4" />
+                        Link Pattern
+                      </span>
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-full p-0" align="start">
+                    <Command>
+                      <CommandInput placeholder="Search patterns..." className="font-mono" />
+                      <CommandList>
+                        <CommandEmpty className="font-mono text-xs">No patterns found</CommandEmpty>
+                        <CommandGroup>
+                          {patterns.map((pattern) => (
+                            <CommandItem
+                              key={pattern.id}
+                              value={pattern.title}
+                              onSelect={() => {
+                                togglePattern(pattern.id);
+                              }}
+                              className="font-mono"
+                            >
+                              <Checkbox
+                                checked={selectedPatterns.includes(pattern.id)}
+                                className="mr-2"
+                              />
+                              <div className="flex-1">
+                                <div className="font-medium font-mono text-xs">{pattern.title}</div>
+                                {pattern.description && (
+                                  <div className="text-xs text-muted-foreground font-mono">
+                                    {pattern.description}
+                                  </div>
+                                )}
+                              </div>
+                              {selectedPatterns.includes(pattern.id) && (
+                                <Check className="h-4 w-4 text-primary" />
+                              )}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
               </div>
 
               {/* Actions */}
@@ -221,24 +342,21 @@ export default function NewProblemPage() {
           </CardContent>
         </Card>
 
-        {/* Tips Card */}
-        <Card className="mt-6 bg-muted/30 border-dashed">
+        {/* System Reference */}
+        <Card className="mt-6 border-border bg-card">
           <CardContent className="pt-6">
             <div className="flex gap-4">
               <Terminal className="h-5 w-5 text-primary shrink-0 mt-0.5" />
-              <div className="space-y-2 text-sm text-muted-foreground">
-                <p className="font-medium text-foreground">Quick Tips</p>
-                <ul className="list-disc list-inside space-y-1">
-                  <li>Use consistent naming (e.g., "Two Sum" not "2 Sum")</li>
-                  <li>Add the problem URL for quick access during practice</li>
-                  <li>Associate patterns to track your progress by topic</li>
-                  <li>
-                    <span className="font-mono text-xs bg-muted px-1 rounded">
-                      Ctrl+Enter
-                    </span>{" "}
-                    to quickly submit
-                  </li>
-                </ul>
+              <div className="space-y-2 text-sm">
+                <p className="font-medium text-foreground font-mono uppercase tracking-wider text-xs">
+                  Input Guidelines
+                </p>
+                <div className="space-y-1 text-muted-foreground font-mono text-xs">
+                  <div>Use consistent naming conventions</div>
+                  <div>Include URL for external reference access</div>
+                  <div>Associate patterns for metric aggregation</div>
+                  <div className="text-primary">Ctrl+Enter: Submit form</div>
+                </div>
               </div>
             </div>
           </CardContent>

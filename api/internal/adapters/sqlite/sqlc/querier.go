@@ -10,9 +10,14 @@ import (
 )
 
 type Querier interface {
-	// Used for checking if the system has been initialized (seed logic)
-	CountUsers(ctx context.Context) (int64, error)
+	// Check if any admin exists (used for seeding)
+	CountAdmins(ctx context.Context) (int64, error)
+	// Used for pagination and checking if admin exists
+	CountAllUsers(ctx context.Context) (int64, error)
+	CountInviteCodes(ctx context.Context) (int64, error)
 	CreateAttempt(ctx context.Context, arg CreateAttemptParams) (Attempt, error)
+	CreateInviteCode(ctx context.Context, arg CreateInviteCodeParams) (AdminInviteCode, error)
+	CreatePasswordResetToken(ctx context.Context, arg CreatePasswordResetTokenParams) (PasswordResetToken, error)
 	CreatePattern(ctx context.Context, arg CreatePatternParams) (Pattern, error)
 	CreateProblem(ctx context.Context, arg CreateProblemParams) (Problem, error)
 	CreateRefreshToken(ctx context.Context, arg CreateRefreshTokenParams) (CreateRefreshTokenRow, error)
@@ -20,17 +25,30 @@ type Querier interface {
 	CreateUser(ctx context.Context, arg CreateUserParams) (CreateUserRow, error)
 	CreateUserProblemStats(ctx context.Context, arg CreateUserProblemStatsParams) (UserProblemStat, error)
 	CreateUserSessionTemplate(ctx context.Context, arg CreateUserSessionTemplateParams) (UserSessionTemplate, error)
+	// Cleanup job: Remove expired codes
+	DeleteExpiredInviteCodes(ctx context.Context) error
+	// Cleanup job: Remove expired tokens
+	DeleteExpiredPasswordResetTokens(ctx context.Context) error
 	DeleteExpiredTokens(ctx context.Context) error
+	DeleteInviteCode(ctx context.Context, id int64) error
+	DeletePasswordResetToken(ctx context.Context, id int64) error
 	DeletePattern(ctx context.Context, id int64) error
 	DeleteProblem(ctx context.Context, id int64) error
 	DeleteProblemPatterns(ctx context.Context, problemID int64) error
 	DeleteSession(ctx context.Context, arg DeleteSessionParams) error
+	// Cleanup job: Remove tokens that were already used
+	DeleteUsedPasswordResetTokens(ctx context.Context) error
 	DeleteUser(ctx context.Context, id int64) error
 	DeleteUserSessionTemplate(ctx context.Context, arg DeleteUserSessionTemplateParams) error
+	// Admin: List all users (supports pagination)
+	GetAllUsers(ctx context.Context, arg GetAllUsersParams) ([]GetAllUsersRow, error)
 	GetAttempt(ctx context.Context, arg GetAttemptParams) (Attempt, error)
 	GetAverageConfidenceForUser(ctx context.Context, userID int64) (interface{}, error)
+	GetInviteCodeByCode(ctx context.Context, code string) (AdminInviteCode, error)
+	GetInviteCodeByID(ctx context.Context, id int64) (AdminInviteCode, error)
 	GetLatestAttemptForProblemInSession(ctx context.Context, arg GetLatestAttemptForProblemInSessionParams) (Attempt, error)
 	GetMasteredProblemsForUser(ctx context.Context, userID int64) (int64, error)
+	GetPasswordResetToken(ctx context.Context, tokenHash string) (PasswordResetToken, error)
 	GetPattern(ctx context.Context, id int64) (Pattern, error)
 	GetPatternProblemCount(ctx context.Context, patternID int64) (int64, error)
 	GetPatternsByIDs(ctx context.Context, ids []int64) ([]Pattern, error)
@@ -44,6 +62,7 @@ type Querier interface {
 	GetScoringWeights(ctx context.Context) ([]GetScoringWeightsRow, error)
 	GetSession(ctx context.Context, arg GetSessionParams) (RevisionSession, error)
 	GetSessionCount(ctx context.Context, userID int64) (int64, error)
+	GetSignupSettings(ctx context.Context) ([]GetSignupSettingsRow, error)
 	GetSystemSetting(ctx context.Context, key string) (SystemSetting, error)
 	GetTemplateUseCount(ctx context.Context, arg GetTemplateUseCountParams) (sql.NullInt64, error)
 	GetTotalProblemsForUser(ctx context.Context, userID int64) (int64, error)
@@ -52,17 +71,22 @@ type Querier interface {
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	// Used for Session/Context: Fetch user details without the sensitive hash
 	GetUserByID(ctx context.Context, id int64) (GetUserByIDRow, error)
+	// Used for password verification: Fetch user with password hash
+	GetUserByIDWithPassword(ctx context.Context, id int64) (User, error)
 	GetUserPatternStats(ctx context.Context, arg GetUserPatternStatsParams) (UserPatternStat, error)
 	GetUserProblemStats(ctx context.Context, arg GetUserProblemStatsParams) (UserProblemStat, error)
 	GetUserProblemStatsWithProblem(ctx context.Context, userID int64) ([]GetUserProblemStatsWithProblemRow, error)
 	GetUserSessionTemplate(ctx context.Context, arg GetUserSessionTemplateParams) (UserSessionTemplate, error)
 	GetWeakestPattern(ctx context.Context, userID int64) (GetWeakestPatternRow, error)
+	IncrementInviteCodeUses(ctx context.Context, id int64) error
 	IncrementTemplateUseCount(ctx context.Context, arg IncrementTemplateUseCountParams) error
 	LinkProblemToPattern(ctx context.Context, arg LinkProblemToPatternParams) error
 	ListAllProblems(ctx context.Context) ([]Problem, error)
 	ListAttemptsForProblem(ctx context.Context, arg ListAttemptsForProblemParams) ([]Attempt, error)
 	ListAttemptsForUser(ctx context.Context, arg ListAttemptsForUserParams) ([]ListAttemptsForUserRow, error)
 	ListFavoriteTemplates(ctx context.Context, userID int64) ([]UserSessionTemplate, error)
+	// Admin: List all invite codes with pagination
+	ListInviteCodes(ctx context.Context, arg ListInviteCodesParams) ([]AdminInviteCode, error)
 	ListPatterns(ctx context.Context) ([]Pattern, error)
 	ListProblems(ctx context.Context, arg ListProblemsParams) ([]Problem, error)
 	ListSessionsForUser(ctx context.Context, arg ListSessionsForUserParams) ([]RevisionSession, error)
@@ -70,15 +94,20 @@ type Querier interface {
 	ListUserPatternStats(ctx context.Context, userID int64) ([]UserPatternStat, error)
 	ListUserProblemStats(ctx context.Context, userID int64) ([]UserProblemStat, error)
 	ListUserSessionTemplates(ctx context.Context, userID int64) ([]UserSessionTemplate, error)
+	MarkPasswordResetTokenUsed(ctx context.Context, id int64) error
 	RevokeRefreshToken(ctx context.Context, tokenHash string) error
 	UpdatePattern(ctx context.Context, arg UpdatePatternParams) (Pattern, error)
 	UpdateProblem(ctx context.Context, arg UpdateProblemParams) (Problem, error)
 	UpdateSessionCompleted(ctx context.Context, arg UpdateSessionCompletedParams) error
 	UpdateSessionTimer(ctx context.Context, arg UpdateSessionTimerParams) error
 	UpdateSystemSetting(ctx context.Context, arg UpdateSystemSettingParams) (SystemSetting, error)
+	// Admin: Soft activate/deactivate users
+	UpdateUserActiveStatus(ctx context.Context, arg UpdateUserActiveStatusParams) error
 	UpdateUserEmail(ctx context.Context, arg UpdateUserEmailParams) error
 	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error
 	UpdateUserProblemStats(ctx context.Context, arg UpdateUserProblemStatsParams) (UserProblemStat, error)
+	// Admin: Promote/Demote users
+	UpdateUserRole(ctx context.Context, arg UpdateUserRoleParams) error
 	UpdateUserSessionTemplate(ctx context.Context, arg UpdateUserSessionTemplateParams) error
 	UpsertSystemSetting(ctx context.Context, arg UpsertSystemSettingParams) (SystemSetting, error)
 	UpsertUserPatternStats(ctx context.Context, arg UpsertUserPatternStatsParams) (UserPatternStat, error)

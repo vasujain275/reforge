@@ -8,6 +8,16 @@ import (
 	"database/sql"
 )
 
+type AdminInviteCode struct {
+	ID               int64          `json:"id"`
+	Code             string         `json:"code"`
+	CreatedByAdminID int64          `json:"created_by_admin_id"`
+	MaxUses          sql.NullInt64  `json:"max_uses"`
+	CurrentUses      sql.NullInt64  `json:"current_uses"`
+	ExpiresAt        sql.NullString `json:"expires_at"`
+	CreatedAt        sql.NullString `json:"created_at"`
+}
+
 type Attempt struct {
 	ID              int64          `json:"id"`
 	UserID          int64          `json:"user_id"`
@@ -18,6 +28,16 @@ type Attempt struct {
 	Outcome         sql.NullString `json:"outcome"`
 	Notes           sql.NullString `json:"notes"`
 	PerformedAt     sql.NullString `json:"performed_at"`
+}
+
+type PasswordResetToken struct {
+	ID               int64          `json:"id"`
+	UserID           int64          `json:"user_id"`
+	TokenHash        string         `json:"token_hash"`
+	CreatedByAdminID sql.NullInt64  `json:"created_by_admin_id"`
+	ExpiresAt        string         `json:"expires_at"`
+	UsedAt           sql.NullString `json:"used_at"`
+	CreatedAt        sql.NullString `json:"created_at"`
 }
 
 type Pattern struct {
@@ -78,6 +98,8 @@ type User struct {
 	Email        string         `json:"email"`
 	PasswordHash string         `json:"password_hash"`
 	Name         string         `json:"name"`
+	Role         sql.NullString `json:"role"`
+	IsActive     sql.NullBool   `json:"is_active"`
 	CreatedAt    sql.NullString `json:"created_at"`
 }
 

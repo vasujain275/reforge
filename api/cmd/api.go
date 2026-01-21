@@ -10,9 +10,11 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-playground/validator/v10"
 	repo "github.com/vasujain275/reforge/internal/adapters/sqlite/sqlc"
+	"github.com/vasujain275/reforge/internal/admin"
 	"github.com/vasujain275/reforge/internal/attempts"
 	"github.com/vasujain275/reforge/internal/auth"
 	"github.com/vasujain275/reforge/internal/dashboard"
+	"github.com/vasujain275/reforge/internal/onboarding"
 	"github.com/vasujain275/reforge/internal/patterns"
 	"github.com/vasujain275/reforge/internal/problems"
 	"github.com/vasujain275/reforge/internal/scoring"
@@ -58,9 +60,11 @@ func (app *application) mount() http.Handler {
 		WPattern:    app.config.defaultWeights.wPattern,
 	}
 	settingsService := settings.NewService(repoInstance, defaultWeights)
+	adminService := admin.NewService(repoInstance)
+	onboardingService := onboarding.NewService(repoInstance)
 
 	// Handlers
-	userHandler := users.NewHandler(userService)
+	userHandler := users.NewHandler(userService, adminService)
 	authHandler := auth.NewHandler(authService, isProd)
 	problemHandler := problems.NewHandler(problemService)
 	patternHandler := patterns.NewHandler(patternService)
@@ -68,10 +72,18 @@ func (app *application) mount() http.Handler {
 	attemptHandler := attempts.NewHandler(attemptService)
 	dashboardHandler := dashboard.NewHandler(dashboardService)
 	settingsHandler := settings.NewHandler(settingsService)
+	adminHandler := admin.NewHandler(adminService)
+	onboardingHandler := onboarding.NewHandler(onboardingService)
 
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 			utils.Write(w, http.StatusOK, healthResponse{Status: "ok"})
+		})
+
+		// Onboarding Endpoints (Public - for first-time setup)
+		r.Route("/onboarding", func(r chi.Router) {
+			r.Get("/status", onboardingHandler.GetInitStatus)
+			r.Post("/setup", onboardingHandler.CreateFirstAdmin)
 		})
 
 		// Auth Endpoints
@@ -83,13 +95,19 @@ func (app *application) mount() http.Handler {
 
 		// User Routes
 		r.Route("/users", func(r chi.Router) {
-			r.Post("/", userHandler.CreateUser) // Public Registration
+			r.Post("/", userHandler.CreateUser)                  // Public Registration
+			r.Post("/reset-password", userHandler.ResetPassword) // Public Password Reset
 
 			r.Group(func(r chi.Router) {
 				r.Use(app.AuthTokenMiddleware)
 				r.Get("/me", userHandler.GetCurrentUser)
+				r.Put("/me/password", userHandler.ChangePassword)
+				r.Delete("/me", userHandler.DeleteOwnAccount)
 			})
 		})
+
+		// Public Settings Routes
+		r.Get("/settings/signup", adminHandler.GetSignupSettings) // Public access to check if signup is enabled
 
 		// Protected Routes (require authentication)
 		r.Group(func(r chi.Router) {
@@ -142,6 +160,35 @@ func (app *application) mount() http.Handler {
 				r.Get("/weights", settingsHandler.GetScoringWeights)
 				r.Get("/weights/defaults", settingsHandler.GetDefaultWeights)
 				r.Put("/weights", settingsHandler.UpdateScoringWeights)
+			})
+
+			// Admin Routes (require admin role)
+			r.Route("/admin", func(r chi.Router) {
+				r.Use(app.RequireAdminMiddleware)
+
+				// User Management
+				r.Route("/users", func(r chi.Router) {
+					r.Get("/", adminHandler.ListUsers)
+					r.Post("/{id}/role", adminHandler.UpdateUserRole)
+					r.Post("/{id}/deactivate", adminHandler.DeactivateUser)
+					r.Post("/{id}/reactivate", adminHandler.ReactivateUser)
+					r.Delete("/{id}", adminHandler.DeleteUser)
+					r.Post("/{id}/reset-password", adminHandler.InitiatePasswordReset)
+				})
+
+				// Invite Codes
+				r.Route("/invites", func(r chi.Router) {
+					r.Get("/", adminHandler.ListInviteCodes)
+					r.Post("/", adminHandler.CreateInviteCode)
+					r.Delete("/{id}", adminHandler.DeleteInviteCode)
+				})
+
+				// Settings Management
+				r.Route("/settings", func(r chi.Router) {
+					r.Get("/signup", adminHandler.GetSignupSettings)
+					r.Put("/signup/enabled", adminHandler.UpdateSignupEnabled)
+					r.Put("/signup/invites", adminHandler.UpdateInviteCodesEnabled)
+				})
 			})
 		})
 

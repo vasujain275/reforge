@@ -1,17 +1,10 @@
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { loginSchema } from "@/lib/schemas";
 import { useAuthStore } from "@/store/authStore";
-import { AlertCircle, Loader2, Terminal } from "lucide-react";
+import { motion } from "framer-motion";
+import { AlertCircle, ArrowRight, Loader2, Terminal } from "lucide-react";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
@@ -38,10 +31,8 @@ export default function LoginPage() {
 
     try {
       await login(result.data);
-      // Login successful, redirect to dashboard
       navigate("/dashboard");
     } catch (err: any) {
-      // eslint-disable-line @typescript-eslint/no-explicit-any
       setError(err.response?.data?.message || "Invalid credentials");
     } finally {
       setIsSubmitting(false);
@@ -49,72 +40,191 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex items-center justify-center min-h-[calc(100vh-8rem)] px-4 py-8">
-      <Card className="w-full max-w-md border-2">
-        <CardHeader className="space-y-2 pb-6">
-          <div className="flex justify-center mb-2">
-            <Terminal className="h-8 w-8 text-primary" />
+    <div className="min-h-[calc(100vh-4rem)] bg-background relative overflow-hidden flex items-center justify-center p-6">
+      {/* Subtle Grid Background */}
+      <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none" />
+      
+      {/* Gradient Orb */}
+      <div className="absolute top-1/3 left-1/2 -translate-x-1/2 w-[500px] h-[500px] bg-primary/10 rounded-full blur-3xl opacity-30 pointer-events-none" />
+
+      <div className="w-full max-w-5xl grid grid-cols-1 lg:grid-cols-2 gap-12 items-center relative z-10">
+        {/* Left Side - Branding */}
+        <motion.div
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.5 }}
+          className="hidden lg:block space-y-8"
+        >
+          {/* Logo */}
+          <div className="flex items-center gap-3">
+            <div className="p-3 rounded-xl bg-primary/10 border border-primary/20">
+              <Terminal className="h-8 w-8 text-primary" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold text-foreground">Reforge</h1>
+              <p className="text-xs font-mono text-muted-foreground">v0.0.1-alpha</p>
+            </div>
           </div>
-          <CardTitle className="text-2xl font-bold text-center tracking-tight">
-            Access Console
-          </CardTitle>
-          <CardDescription className="text-center text-base">
-            Enter your credentials to access the system
-          </CardDescription>
-        </CardHeader>
-        <form onSubmit={handleSubmit}>
-          <CardContent className="space-y-5 px-6">
-            {error && (
-              <div className="bg-destructive/15 text-destructive text-sm p-3 rounded-md flex items-center gap-2">
-                <AlertCircle className="h-4 w-4" />
-                {error}
+
+          {/* Description */}
+          <div className="space-y-4">
+            <h2 className="text-3xl font-bold tracking-tight text-foreground">
+              Welcome back to your
+              <span className="text-primary block">command center.</span>
+            </h2>
+            <p className="text-muted-foreground leading-relaxed">
+              Your local-first DSA revision system is ready. Access your dashboard to continue building your coding interview preparation.
+            </p>
+          </div>
+
+          {/* Terminal Preview */}
+          <div className="bg-card/50 backdrop-blur-sm border border-border rounded-lg p-4">
+            <div className="flex items-center gap-2 mb-3 pb-2 border-b border-border">
+              <div className="w-3 h-3 rounded-full bg-red-500/50" />
+              <div className="w-3 h-3 rounded-full bg-yellow-500/50" />
+              <div className="w-3 h-3 rounded-full bg-green-500/50" />
+              <span className="text-xs font-mono text-muted-foreground ml-2">terminal</span>
+            </div>
+            <div className="font-mono text-sm space-y-1">
+              <p className="text-muted-foreground">$ reforge status</p>
+              <p className="text-green-500">✔ Database mounted (SQLite)</p>
+              <p className="text-green-500">✔ Spaced repetition active</p>
+              <p className="text-muted-foreground/70">Awaiting authentication...</p>
+            </div>
+          </div>
+        </motion.div>
+
+        {/* Right Side - Login Form */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.1 }}
+          className="w-full max-w-md mx-auto lg:mx-0"
+        >
+          <div className="bg-card/50 backdrop-blur-sm border border-border rounded-xl p-8 shadow-xl">
+            {/* Mobile Logo */}
+            <div className="lg:hidden flex items-center gap-3 mb-6">
+              <div className="p-2 rounded-lg bg-primary/10 border border-primary/20">
+                <Terminal className="h-6 w-6 text-primary" />
               </div>
-            )}
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="m@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-              />
+              <div>
+                <h1 className="text-xl font-bold text-foreground">Reforge</h1>
+                <p className="text-xs font-mono text-muted-foreground">v0.0.1-alpha</p>
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-              />
+
+            {/* Header */}
+            <div className="space-y-2 mb-6">
+              <h2 className="text-2xl font-bold tracking-tight text-foreground">
+                Access Console
+              </h2>
+              <p className="text-sm text-muted-foreground">
+                Enter your credentials to access the system
+              </p>
             </div>
-          </CardContent>
-          <CardFooter className="flex flex-col space-y-4 pt-6">
-            <Button className="w-full" type="submit" disabled={isSubmitting}>
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Logging in...
-                </>
-              ) : (
-                "Login"
+
+            {/* Form */}
+            <form onSubmit={handleSubmit} className="space-y-5">
+              {error && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="bg-destructive/15 text-destructive text-sm p-3 rounded-lg flex items-center gap-2 border border-destructive/20"
+                >
+                  <AlertCircle className="h-4 w-4 flex-shrink-0" />
+                  <span className="text-xs">{error}</span>
+                </motion.div>
               )}
-            </Button>
-            <div className="text-center text-sm text-muted-foreground">
-              Don&apos;t have an account?{" "}
-              <Link
-                to="/register"
-                className="text-primary hover:underline underline-offset-4"
+
+              <div className="space-y-2">
+                <Label htmlFor="email" className="text-sm font-medium">
+                  Email
+                </Label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="you@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  disabled={isSubmitting}
+                  className="h-11"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="password" className="text-sm font-medium">
+                    Password
+                  </Label>
+                  <Link
+                    to="/forgot-password"
+                    className="text-xs text-muted-foreground hover:text-primary transition-colors"
+                  >
+                    Forgot password?
+                  </Link>
+                </div>
+                <Input
+                  id="password"
+                  type="password"
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  disabled={isSubmitting}
+                  className="h-11"
+                />
+              </div>
+
+              <Button
+                type="submit"
+                disabled={isSubmitting}
+                className="w-full h-12 text-base font-medium rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground transition-all shadow-md hover:shadow-primary/20"
               >
-                Sign up
-              </Link>
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                    Authenticating...
+                  </>
+                ) : (
+                  <>
+                    Access Dashboard
+                    <ArrowRight className="ml-2 h-5 w-5" />
+                  </>
+                )}
+              </Button>
+            </form>
+
+            {/* Footer Link */}
+            <div className="mt-6 pt-6 border-t border-border text-center">
+              <p className="text-sm text-muted-foreground">
+                Don't have an account?{" "}
+                <Link
+                  to="/register"
+                  className="text-primary font-medium hover:underline underline-offset-4 transition-colors"
+                >
+                  Create account
+                </Link>
+              </p>
             </div>
-          </CardFooter>
-        </form>
-      </Card>
+          </div>
+
+          {/* Status Badge */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.4 }}
+            className="flex justify-center mt-6"
+          >
+            <div className="inline-flex items-center gap-2 bg-card/50 backdrop-blur-sm border border-border rounded-full px-4 py-2">
+              <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
+              <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">
+                System Online
+              </span>
+            </div>
+          </motion.div>
+        </motion.div>
+      </div>
     </div>
   );
 }

@@ -62,6 +62,8 @@ func main() {
 		panic(err)
 	}
 
+	// Note: No automatic admin seeding - use /onboarding endpoint for first-time setup
+
 	api := application{
 		config:   cfg,
 		db:       db,

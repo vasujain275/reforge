@@ -6,6 +6,7 @@ interface User {
     id: number; // ID is int64 in Go, comes as number in JSON
     name: string;
     email: string;
+    role: 'user' | 'admin';
 }
 
 interface AuthState {

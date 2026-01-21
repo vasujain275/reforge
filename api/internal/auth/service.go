@@ -18,7 +18,7 @@ var (
 )
 
 type Service interface {
-	Login(ctx context.Context, email, password, userAgent, ip string) (string, string, repo.GetUserByIDRow, error)
+	Login(ctx context.Context, email, password, userAgent, ip string) (string, string, UserResponse, error)
 	Refresh(ctx context.Context, rawRefreshToken string) (string, error)
 	Logout(ctx context.Context, rawRefreshToken string) error
 }
@@ -36,29 +36,40 @@ func NewService(repo repo.Querier, jwtSecret string) Service {
 }
 
 // Login validates user, returns (AccessToken, RefreshToken, UserData, error)
-func (s *authService) Login(ctx context.Context, email, password, userAgent, ip string) (string, string, repo.GetUserByIDRow, error) {
+func (s *authService) Login(ctx context.Context, email, password, userAgent, ip string) (string, string, UserResponse, error) {
 
 	// Fetch user
 	user, err := s.repo.GetUserByEmail(ctx, email)
 	if err != nil {
-		return "", "", repo.GetUserByIDRow{}, ErrInvalidCredentials
+		return "", "", UserResponse{}, ErrInvalidCredentials
+	}
+
+	// Check if user is active
+	if user.IsActive.Valid && !user.IsActive.Bool {
+		return "", "", UserResponse{}, errors.New("account is deactivated")
 	}
 
 	// Verify Password
 	if !security.CheckPasswordHash(password, user.PasswordHash) {
-		return "", "", repo.GetUserByIDRow{}, ErrInvalidCredentials
+		return "", "", UserResponse{}, ErrInvalidCredentials
 	}
 
-	// Generate Access Token (JWT)
-	accessToken, err := s.generateJWT(user.ID, user.Email)
+	// Extract role (default to 'user' if not set)
+	role := "user"
+	if user.Role.Valid {
+		role = user.Role.String
+	}
+
+	// Generate Access Token (JWT) - includes role
+	accessToken, err := s.generateJWT(user.ID, user.Email, role)
 	if err != nil {
-		return "", "", repo.GetUserByIDRow{}, err
+		return "", "", UserResponse{}, err
 	}
 
 	// Generate Refresh Token (Random String)
 	rawRefreshToken, err := security.GenerateSecureToken(32)
 	if err != nil {
-		return "", "", repo.GetUserByIDRow{}, err
+		return "", "", UserResponse{}, err
 	}
 
 	// Hash Refresh Token for DB Storage
@@ -77,16 +88,19 @@ func (s *authService) Login(ctx context.Context, email, password, userAgent, ip 
 
 	_, err = s.repo.CreateRefreshToken(ctx, params)
 	if err != nil {
-		return "", "", repo.GetUserByIDRow{}, err
+		return "", "", UserResponse{}, err
 	}
 
 	// Fetch user data (without password hash)
 	userData, err := s.repo.GetUserByID(ctx, user.ID)
 	if err != nil {
-		return "", "", repo.GetUserByIDRow{}, err
+		return "", "", UserResponse{}, err
 	}
 
-	return accessToken, rawRefreshToken, userData, nil
+	// Convert to UserResponse
+	userResponse := toUserResponse(userData.ID, userData.Email, userData.Name, userData.Role, userData.IsActive, userData.CreatedAt)
+
+	return accessToken, rawRefreshToken, userResponse, nil
 }
 
 // Refresh validates the raw token and issues a new Access Token
@@ -106,13 +120,19 @@ func (s *authService) Refresh(ctx context.Context, rawRefreshToken string) (stri
 		return "", ErrTokenExpired
 	}
 
-	// Fetch User to Ensure they still exist
+	// Fetch User to Ensure they still exist and get their role
 	user, err := s.repo.GetUserByID(ctx, storedToken.UserID)
 	if err != nil {
 		return "", ErrInvalidToken
 	}
 
-	return s.generateJWT(user.ID, user.Email)
+	// Extract role (default to 'user' if not set)
+	role := "user"
+	if user.Role.Valid {
+		role = user.Role.String
+	}
+
+	return s.generateJWT(user.ID, user.Email, role)
 }
 
 func (s *authService) Logout(ctx context.Context, rawRefreshToken string) error {
@@ -122,10 +142,11 @@ func (s *authService) Logout(ctx context.Context, rawRefreshToken string) error 
 
 // --- Helpers ---
 
-func (s *authService) generateJWT(userID int64, email string) (string, error) {
+func (s *authService) generateJWT(userID int64, email, role string) (string, error) {
 	claims := jwt.MapClaims{
 		"sub":   userID,
 		"email": email,
+		"role":  role,
 		"iss":   "reforge-api",
 		"exp":   time.Now().Add(30 * time.Minute).Unix(),
 	}

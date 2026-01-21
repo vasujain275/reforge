@@ -7,6 +7,7 @@ package repo
 
 import (
 	"context"
+	"database/sql"
 )
 
 const getScoringWeights = `-- name: GetScoringWeights :many
@@ -28,6 +29,39 @@ func (q *Queries) GetScoringWeights(ctx context.Context) ([]GetScoringWeightsRow
 	items := []GetScoringWeightsRow{}
 	for rows.Next() {
 		var i GetScoringWeightsRow
+		if err := rows.Scan(&i.Key, &i.Value); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getSignupSettings = `-- name: GetSignupSettings :many
+SELECT key, value FROM system_settings
+WHERE key IN ('signup_enabled', 'invite_codes_enabled')
+`
+
+type GetSignupSettingsRow struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
+}
+
+func (q *Queries) GetSignupSettings(ctx context.Context) ([]GetSignupSettingsRow, error) {
+	rows, err := q.db.QueryContext(ctx, getSignupSettings)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetSignupSettingsRow{}
+	for rows.Next() {
+		var i GetSignupSettingsRow
 		if err := rows.Scan(&i.Key, &i.Value); err != nil {
 			return nil, err
 		}
@@ -118,8 +152,8 @@ func (q *Queries) UpdateSystemSetting(ctx context.Context, arg UpdateSystemSetti
 }
 
 const upsertSystemSetting = `-- name: UpsertSystemSetting :one
-INSERT INTO system_settings (key, value)
-VALUES (?, ?)
+INSERT INTO system_settings (key, value, description)
+VALUES (?, ?, ?)
 ON CONFLICT(key) DO UPDATE SET
     value = excluded.value,
     updated_at = CURRENT_TIMESTAMP
@@ -127,12 +161,13 @@ RETURNING "key", value, description, updated_at
 `
 
 type UpsertSystemSettingParams struct {
-	Key   string `json:"key"`
-	Value string `json:"value"`
+	Key         string         `json:"key"`
+	Value       string         `json:"value"`
+	Description sql.NullString `json:"description"`
 }
 
 func (q *Queries) UpsertSystemSetting(ctx context.Context, arg UpsertSystemSettingParams) (SystemSetting, error) {
-	row := q.db.QueryRowContext(ctx, upsertSystemSetting, arg.Key, arg.Value)
+	row := q.db.QueryRowContext(ctx, upsertSystemSetting, arg.Key, arg.Value, arg.Description)
 	var i SystemSetting
 	err := row.Scan(
 		&i.Key,

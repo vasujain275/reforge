@@ -19,6 +19,8 @@ import {
   Settings,
   LogOut,
   User as UserIcon,
+  ShieldAlert,
+  KeyRound,
 } from "lucide-react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 
@@ -35,9 +37,18 @@ export default function DashboardLayout() {
     { path: "/dashboard/settings", label: "Config", icon: Settings },
   ];
 
+  // Admin-only nav items
+  const adminNavItems = user?.role === 'admin' ? [
+    { path: "/dashboard/admin", label: "Admin", icon: ShieldAlert },
+  ] : [];
+
   const isActive = (path: string, exact?: boolean) => {
     if (exact) {
       return location.pathname === path;
+    }
+    // Special case: /settings/security should NOT highlight Config
+    if (path === "/dashboard/settings" && location.pathname === "/dashboard/settings/security") {
+      return false;
     }
     return location.pathname.startsWith(path);
   };
@@ -83,6 +94,39 @@ export default function DashboardLayout() {
               </Link>
             );
           })}
+          
+          {/* Admin Section */}
+          {adminNavItems.length > 0 && (
+            <>
+              <div className="pt-4 pb-2 px-3">
+                <div className="h-px bg-border" />
+              </div>
+              {adminNavItems.map((item) => {
+                const Icon = item.icon;
+                const active = isActive(item.path);
+                return (
+                  <Link key={item.path} to={item.path}>
+                    <div
+                      className={cn(
+                        "flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-all font-mono",
+                        active
+                          ? "bg-primary/10 text-primary font-medium border border-primary/20 shadow-[0_0_15px_-3px_var(--primary)]"
+                          : "text-muted-foreground hover:text-foreground hover:bg-accent hover:border hover:border-border"
+                      )}
+                    >
+                      {active && (
+                        <div className="w-1 h-1 rounded-full bg-primary animate-pulse" />
+                      )}
+                      <Icon className="h-4 w-4" />
+                      <span className="uppercase tracking-wider text-xs">
+                        {item.label}
+                      </span>
+                    </div>
+                  </Link>
+                );
+              })}
+            </>
+          )}
         </nav>
 
         {/* User Profile & Theme Toggle */}
@@ -118,14 +162,20 @@ export default function DashboardLayout() {
                     <p className="text-xs leading-none text-muted-foreground">
                       {user?.email || "user@example.com"}
                     </p>
+                    {user?.role === 'admin' && (
+                      <span className="inline-flex items-center gap-1 w-fit px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold bg-primary/10 text-primary border border-primary/20 mt-1">
+                        <ShieldAlert className="h-2.5 w-2.5" />
+                        ADMIN
+                      </span>
+                    )}
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
-                  <div className="flex items-center w-full cursor-pointer">
-                    <UserIcon className="mr-2 h-4 w-4" />
-                    <span>Profile</span>
-                  </div>
+                  <Link to="/dashboard/settings/security" className="flex items-center w-full cursor-pointer">
+                    <KeyRound className="mr-2 h-4 w-4" />
+                    <span>Security</span>
+                  </Link>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem

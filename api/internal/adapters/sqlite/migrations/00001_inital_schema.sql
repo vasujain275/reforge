@@ -24,7 +24,9 @@ INSERT INTO system_settings (key, value, description) VALUES
 ('w_time', '0.05', 'Weight for solve duration'),
 ('w_difficulty', '0.15', 'Weight for problem difficulty'),
 ('w_failed', '0.10', 'Weight for last outcome failure'),
-('w_pattern', '0.10', 'Weight for pattern weakness aggregate');
+('w_pattern', '0.10', 'Weight for pattern weakness aggregate'),
+('signup_enabled', 'true', 'Allow new user registration'),
+('invite_codes_enabled', 'true', 'Require invite codes when signup is disabled');
 
 -- ============================================================================
 -- AUTHENTICATION & USERS
@@ -36,8 +38,13 @@ CREATE TABLE users (
     email TEXT UNIQUE NOT NULL,       -- Used for login
     password_hash TEXT NOT NULL,      -- Bcrypt/Argon2 hash
     name TEXT NOT NULL,
+    role TEXT CHECK (role IN ('user', 'admin')) DEFAULT 'user',
+    is_active BOOLEAN DEFAULT 1,      -- Soft delete/deactivation flag
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE INDEX idx_users_role ON users(role);
+CREATE INDEX idx_users_active ON users(is_active);
 
 -- 4. Refresh Tokens (Stateful Auth)
 CREATE TABLE refresh_tokens (
@@ -55,11 +62,44 @@ CREATE TABLE refresh_tokens (
 CREATE INDEX idx_refresh_tokens_hash ON refresh_tokens(token_hash);
 CREATE INDEX idx_refresh_tokens_user ON refresh_tokens(user_id);
 
+-- 5. Admin Invite Codes
+CREATE TABLE admin_invite_codes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    code TEXT UNIQUE NOT NULL,            -- UUID v4
+    created_by_admin_id INTEGER NOT NULL,
+    max_uses INTEGER DEFAULT 1,           -- How many signups allowed
+    current_uses INTEGER DEFAULT 0,
+    expires_at TEXT,                      -- NULL = never expires
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    
+    FOREIGN KEY (created_by_admin_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_invite_codes_code ON admin_invite_codes(code);
+CREATE INDEX idx_invite_codes_admin ON admin_invite_codes(created_by_admin_id);
+
+-- 6. Password Reset Tokens
+CREATE TABLE password_reset_tokens (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    token_hash TEXT NOT NULL UNIQUE,
+    created_by_admin_id INTEGER,          -- NULL if self-initiated
+    expires_at TEXT NOT NULL,
+    used_at TEXT,                         -- NULL = not used yet
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (created_by_admin_id) REFERENCES users(id) ON DELETE SET NULL
+);
+
+CREATE INDEX idx_password_reset_tokens_hash ON password_reset_tokens(token_hash);
+CREATE INDEX idx_password_reset_tokens_user ON password_reset_tokens(user_id);
+
 -- ============================================================================
 -- CORE DOMAIN (Problems & Patterns)
 -- ============================================================================
 
--- 5. Problems
+-- 7. Problems
 CREATE TABLE problems (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     title TEXT NOT NULL,
@@ -69,14 +109,14 @@ CREATE TABLE problems (
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
--- 6. Patterns
+-- 8. Patterns
 CREATE TABLE patterns (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     title TEXT NOT NULL,              -- Display name e.g., 'Sliding Window'
     description TEXT
 );
 
--- 7. Problem <-> Patterns (Many-to-Many)
+-- 9. Problem <-> Patterns (Many-to-Many)
 CREATE TABLE problem_patterns (
     problem_id INTEGER NOT NULL,
     pattern_id INTEGER NOT NULL,
@@ -92,7 +132,7 @@ CREATE INDEX idx_problem_patterns_pattern ON problem_patterns(pattern_id);
 -- USER PROGRESS & STATS
 -- ============================================================================
 
--- 8. Revision Sessions (Study sessions history)
+-- 10. Revision Sessions (Study sessions history)
 CREATE TABLE revision_sessions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
@@ -113,7 +153,7 @@ CREATE TABLE revision_sessions (
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
--- 9. Attempts (The detailed log of every practice run)
+-- 11. Attempts (The detailed log of every practice run)
 CREATE TABLE attempts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
@@ -134,7 +174,7 @@ CREATE TABLE attempts (
 CREATE INDEX idx_attempts_user_problem ON attempts(user_id, problem_id);
 CREATE INDEX idx_attempts_performed_at ON attempts(user_id, performed_at);
 
--- 10. User Problem Stats (The "Brain" of the scoring system)
+-- 12. User Problem Stats (The "Brain" of the scoring system)
 -- This is an aggregate table updated after every attempt to make scoring fast.
 CREATE TABLE user_problem_stats (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -169,7 +209,7 @@ CREATE TABLE user_problem_stats (
 CREATE INDEX idx_stats_user_lookup ON user_problem_stats(user_id);
 CREATE INDEX idx_stats_urgency ON user_problem_stats(user_id, last_attempt_at);
 
--- 11. User Pattern Stats (Aggregates for "weakness" analysis)
+-- 13. User Pattern Stats (Aggregates for "weakness" analysis)
 CREATE TABLE user_pattern_stats (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
@@ -184,7 +224,7 @@ CREATE TABLE user_pattern_stats (
     FOREIGN KEY (pattern_id) REFERENCES patterns(id) ON DELETE CASCADE
 );
 
--- 12. User Saved Session Templates
+-- 14. User Saved Session Templates
 CREATE TABLE user_session_templates (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
@@ -201,7 +241,7 @@ CREATE TABLE user_session_templates (
 
 CREATE INDEX idx_user_templates ON user_session_templates(user_id, is_favorite);
 
--- 13. Pattern Mastery Tracking (for graduation feature)
+-- 15. Pattern Mastery Tracking (for graduation feature)
 CREATE TABLE user_pattern_milestones (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
@@ -244,6 +284,8 @@ DROP TABLE IF EXISTS revision_sessions;
 DROP TABLE IF EXISTS problem_patterns;
 DROP TABLE IF EXISTS patterns;
 DROP TABLE IF EXISTS problems;
+DROP TABLE IF EXISTS password_reset_tokens;
+DROP TABLE IF EXISTS admin_invite_codes;
 DROP TABLE IF EXISTS refresh_tokens;
 DROP TABLE IF EXISTS users;
 DROP TABLE IF EXISTS system_settings;

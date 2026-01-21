@@ -1,4 +1,5 @@
 import DashboardLayout from "@/components/DashboardLayout";
+import RequireAdmin from "@/components/RequireAdmin";
 import { Route, Routes } from "react-router-dom";
 import AttemptsPage from "./dashboard/AttemptsPage";
 import DashboardHome from "./dashboard/DashboardHome";
@@ -11,6 +12,8 @@ import RecordAttemptPage from "./dashboard/RecordAttemptPage";
 import SessionDetailPage from "./dashboard/SessionDetailPage";
 import SessionsPage from "./dashboard/SessionsPage";
 import SettingsPage from "./dashboard/SettingsPage";
+import SecurityPage from "./dashboard/SecurityPage";
+import AdminDashboard from "./admin/AdminDashboard";
 
 export default function DashboardWrapper() {
   return (
@@ -27,6 +30,12 @@ export default function DashboardWrapper() {
         <Route path="attempts/new" element={<RecordAttemptPage />} />
         <Route path="patterns" element={<PatternsPage />} />
         <Route path="settings" element={<SettingsPage />} />
+        <Route path="settings/security" element={<SecurityPage />} />
+        
+        {/* Admin Routes (Protected - Requires Admin Role) */}
+        <Route element={<RequireAdmin />}>
+          <Route path="admin/*" element={<AdminDashboard />} />
+        </Route>
       </Route>
     </Routes>
   );

@@ -14,8 +14,8 @@ WHERE key = ?
 RETURNING *;
 
 -- name: UpsertSystemSetting :one
-INSERT INTO system_settings (key, value)
-VALUES (?, ?)
+INSERT INTO system_settings (key, value, description)
+VALUES (?, ?, ?)
 ON CONFLICT(key) DO UPDATE SET
     value = excluded.value,
     updated_at = CURRENT_TIMESTAMP
@@ -24,3 +24,7 @@ RETURNING *;
 -- name: GetScoringWeights :many
 SELECT key, value FROM system_settings
 WHERE key IN ('w_conf', 'w_days', 'w_attempts', 'w_time', 'w_difficulty', 'w_failed', 'w_pattern');
+
+-- name: GetSignupSettings :many
+SELECT key, value FROM system_settings
+WHERE key IN ('signup_enabled', 'invite_codes_enabled');

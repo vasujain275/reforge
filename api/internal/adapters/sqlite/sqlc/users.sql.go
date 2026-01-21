@@ -10,44 +10,66 @@ import (
 	"database/sql"
 )
 
-const countUsers = `-- name: CountUsers :one
-SELECT count(*) FROM users
+const countAdmins = `-- name: CountAdmins :one
+SELECT COUNT(*) FROM users WHERE role = 'admin'
 `
 
-// Used for checking if the system has been initialized (seed logic)
-func (q *Queries) CountUsers(ctx context.Context) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countUsers)
+// Check if any admin exists (used for seeding)
+func (q *Queries) CountAdmins(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countAdmins)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countAllUsers = `-- name: CountAllUsers :one
+SELECT COUNT(*) FROM users
+`
+
+// Used for pagination and checking if admin exists
+func (q *Queries) CountAllUsers(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countAllUsers)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
 }
 
 const createUser = `-- name: CreateUser :one
-INSERT INTO users (email, password_hash, name)
-VALUES (?, ?, ?)
-RETURNING id, email, name, created_at
+INSERT INTO users (email, password_hash, name, role)
+VALUES (?, ?, ?, ?)
+RETURNING id, email, name, role, is_active, created_at
 `
 
 type CreateUserParams struct {
-	Email        string `json:"email"`
-	PasswordHash string `json:"password_hash"`
-	Name         string `json:"name"`
+	Email        string         `json:"email"`
+	PasswordHash string         `json:"password_hash"`
+	Name         string         `json:"name"`
+	Role         sql.NullString `json:"role"`
 }
 
 type CreateUserRow struct {
 	ID        int64          `json:"id"`
 	Email     string         `json:"email"`
 	Name      string         `json:"name"`
+	Role      sql.NullString `json:"role"`
+	IsActive  sql.NullBool   `json:"is_active"`
 	CreatedAt sql.NullString `json:"created_at"`
 }
 
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (CreateUserRow, error) {
-	row := q.db.QueryRowContext(ctx, createUser, arg.Email, arg.PasswordHash, arg.Name)
+	row := q.db.QueryRowContext(ctx, createUser,
+		arg.Email,
+		arg.PasswordHash,
+		arg.Name,
+		arg.Role,
+	)
 	var i CreateUserRow
 	err := row.Scan(
 		&i.ID,
 		&i.Email,
 		&i.Name,
+		&i.Role,
+		&i.IsActive,
 		&i.CreatedAt,
 	)
 	return i, err
@@ -63,8 +85,60 @@ func (q *Queries) DeleteUser(ctx context.Context, id int64) error {
 	return err
 }
 
+const getAllUsers = `-- name: GetAllUsers :many
+SELECT id, email, name, role, is_active, created_at
+FROM users
+ORDER BY created_at DESC
+LIMIT ? OFFSET ?
+`
+
+type GetAllUsersParams struct {
+	Limit  int64 `json:"limit"`
+	Offset int64 `json:"offset"`
+}
+
+type GetAllUsersRow struct {
+	ID        int64          `json:"id"`
+	Email     string         `json:"email"`
+	Name      string         `json:"name"`
+	Role      sql.NullString `json:"role"`
+	IsActive  sql.NullBool   `json:"is_active"`
+	CreatedAt sql.NullString `json:"created_at"`
+}
+
+// Admin: List all users (supports pagination)
+func (q *Queries) GetAllUsers(ctx context.Context, arg GetAllUsersParams) ([]GetAllUsersRow, error) {
+	rows, err := q.db.QueryContext(ctx, getAllUsers, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetAllUsersRow{}
+	for rows.Next() {
+		var i GetAllUsersRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Email,
+			&i.Name,
+			&i.Role,
+			&i.IsActive,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, email, password_hash, name, created_at
+SELECT id, email, password_hash, name, role, is_active, created_at
 FROM users
 WHERE email = ? LIMIT 1
 `
@@ -78,13 +152,15 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.Email,
 		&i.PasswordHash,
 		&i.Name,
+		&i.Role,
+		&i.IsActive,
 		&i.CreatedAt,
 	)
 	return i, err
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, email, name, created_at
+SELECT id, email, name, role, is_active, created_at
 FROM users
 WHERE id = ? LIMIT 1
 `
@@ -93,6 +169,8 @@ type GetUserByIDRow struct {
 	ID        int64          `json:"id"`
 	Email     string         `json:"email"`
 	Name      string         `json:"name"`
+	Role      sql.NullString `json:"role"`
+	IsActive  sql.NullBool   `json:"is_active"`
 	CreatedAt sql.NullString `json:"created_at"`
 }
 
@@ -104,15 +182,56 @@ func (q *Queries) GetUserByID(ctx context.Context, id int64) (GetUserByIDRow, er
 		&i.ID,
 		&i.Email,
 		&i.Name,
+		&i.Role,
+		&i.IsActive,
 		&i.CreatedAt,
 	)
 	return i, err
 }
 
+const getUserByIDWithPassword = `-- name: GetUserByIDWithPassword :one
+SELECT id, email, password_hash, name, role, is_active, created_at
+FROM users
+WHERE id = ? LIMIT 1
+`
+
+// Used for password verification: Fetch user with password hash
+func (q *Queries) GetUserByIDWithPassword(ctx context.Context, id int64) (User, error) {
+	row := q.db.QueryRowContext(ctx, getUserByIDWithPassword, id)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.PasswordHash,
+		&i.Name,
+		&i.Role,
+		&i.IsActive,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const updateUserActiveStatus = `-- name: UpdateUserActiveStatus :exec
+UPDATE users
+SET is_active = ?
+WHERE id = ?
+`
+
+type UpdateUserActiveStatusParams struct {
+	IsActive sql.NullBool `json:"is_active"`
+	ID       int64        `json:"id"`
+}
+
+// Admin: Soft activate/deactivate users
+func (q *Queries) UpdateUserActiveStatus(ctx context.Context, arg UpdateUserActiveStatusParams) error {
+	_, err := q.db.ExecContext(ctx, updateUserActiveStatus, arg.IsActive, arg.ID)
+	return err
+}
+
 const updateUserEmail = `-- name: UpdateUserEmail :exec
 UPDATE users
 SET email = ?
-where id = ?
+WHERE id = ?
 `
 
 type UpdateUserEmailParams struct {
@@ -138,5 +257,22 @@ type UpdateUserPasswordParams struct {
 
 func (q *Queries) UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error {
 	_, err := q.db.ExecContext(ctx, updateUserPassword, arg.PasswordHash, arg.ID)
+	return err
+}
+
+const updateUserRole = `-- name: UpdateUserRole :exec
+UPDATE users
+SET role = ?
+WHERE id = ?
+`
+
+type UpdateUserRoleParams struct {
+	Role sql.NullString `json:"role"`
+	ID   int64          `json:"id"`
+}
+
+// Admin: Promote/Demote users
+func (q *Queries) UpdateUserRole(ctx context.Context, arg UpdateUserRoleParams) error {
+	_, err := q.db.ExecContext(ctx, updateUserRole, arg.Role, arg.ID)
 	return err
 }

@@ -1,4 +1,5 @@
 import ApiError from "@/components/ApiError";
+import SystemStatusBar from "@/components/SystemStatusBar";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -210,31 +211,15 @@ export default function DashboardHome() {
   const confidenceTrend = stats ? ((stats.avg_confidence - 62) / 62) * 100 : 0;
 
   return (
-    <div className="flex-1 space-y-6 p-6">
+    <div className="flex-1 flex flex-col h-full">
       {/* System Status Bar */}
-      <div className="flex items-center justify-between border-b pb-4">
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2 font-mono text-sm">
-            <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
-            <span className="text-muted-foreground uppercase tracking-wider">
-              System Active
-            </span>
-            <span className="text-muted-foreground/50">|</span>
-            <span className="text-primary">DB: SQLite</span>
-            <span className="text-muted-foreground/50">|</span>
-            <span className="text-muted-foreground">v0.0.1-alpha</span>
-          </div>
-        </div>
-        <div className="flex items-center gap-2 font-mono text-xs text-muted-foreground">
-          <span>
-            Total: {stats?.total_problems ?? 0} | Mastered:{" "}
-            {stats?.mastered_problems ?? 0}
-          </span>
-        </div>
-      </div>
+      <SystemStatusBar />
 
-      {/* Quick Session Launcher */}
-      <Card className="border border-primary/20">
+      {/* Main Content */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="space-y-6 p-6">
+          {/* Quick Session Launcher */}
+          <Card className="border border-primary/20">
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -446,6 +431,8 @@ export default function DashboardHome() {
           )}
         </CardContent>
       </Card>
+        </div>
+      </div>
     </div>
   );
 }

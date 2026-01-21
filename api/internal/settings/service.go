@@ -71,8 +71,8 @@ func (s *settingsService) GetScoringWeights(ctx context.Context) (*ScoringWeight
 }
 
 func (s *settingsService) UpdateScoringWeights(ctx context.Context, body UpdateScoringWeightsBody) (*ScoringWeightsResponse, error) {
-	// Update each provided weight
-	updates := map[string]*float64{
+	// Update each weight
+	updates := map[string]float64{
 		"w_conf":       body.WConf,
 		"w_days":       body.WDays,
 		"w_attempts":   body.WAttempts,
@@ -83,15 +83,13 @@ func (s *settingsService) UpdateScoringWeights(ctx context.Context, body UpdateS
 	}
 
 	for key, value := range updates {
-		if value != nil {
-			valueStr := fmt.Sprintf("%.2f", *value)
-			_, err := s.repo.UpdateSystemSetting(ctx, repo.UpdateSystemSettingParams{
-				Key:   key,
-				Value: valueStr,
-			})
-			if err != nil {
-				return nil, fmt.Errorf("failed to update %s: %w", key, err)
-			}
+		valueStr := fmt.Sprintf("%.2f", value)
+		_, err := s.repo.UpdateSystemSetting(ctx, repo.UpdateSystemSettingParams{
+			Key:   key,
+			Value: valueStr,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to update %s: %w", key, err)
 		}
 	}
 

@@ -10,7 +10,14 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-playground/validator/v10"
 	repo "github.com/vasujain275/reforge/internal/adapters/sqlite/sqlc"
+	"github.com/vasujain275/reforge/internal/attempts"
 	"github.com/vasujain275/reforge/internal/auth"
+	"github.com/vasujain275/reforge/internal/dashboard"
+	"github.com/vasujain275/reforge/internal/patterns"
+	"github.com/vasujain275/reforge/internal/problems"
+	"github.com/vasujain275/reforge/internal/scoring"
+	"github.com/vasujain275/reforge/internal/sessions"
+	"github.com/vasujain275/reforge/internal/settings"
 	"github.com/vasujain275/reforge/internal/users"
 	"github.com/vasujain275/reforge/internal/utils"
 )
@@ -31,12 +38,25 @@ func (app *application) mount() http.Handler {
 	isProd := app.config.env == "prod"
 
 	// Services
+	scoringService := scoring.NewService(repoInstance)
 	userService := users.NewService(repoInstance)
 	authService := auth.NewService(repoInstance, app.config.auth.secret)
+	problemService := problems.NewService(repoInstance, scoringService)
+	patternService := patterns.NewService(repoInstance)
+	sessionService := sessions.NewService(repoInstance, scoringService)
+	attemptService := attempts.NewService(repoInstance)
+	dashboardService := dashboard.NewService(repoInstance)
+	settingsService := settings.NewService(repoInstance)
 
 	// Handlers
 	userHandler := users.NewHandler(userService)
 	authHandler := auth.NewHandler(authService, isProd)
+	problemHandler := problems.NewHandler(problemService)
+	patternHandler := patterns.NewHandler(patternService)
+	sessionHandler := sessions.NewHandler(sessionService)
+	attemptHandler := attempts.NewHandler(attemptService)
+	dashboardHandler := dashboard.NewHandler(dashboardService)
+	settingsHandler := settings.NewHandler(settingsService)
 
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -57,6 +77,54 @@ func (app *application) mount() http.Handler {
 			r.Group(func(r chi.Router) {
 				r.Use(app.AuthTokenMiddleware)
 				r.Get("/me", userHandler.GetCurrentUser)
+			})
+		})
+
+		// Protected Routes (require authentication)
+		r.Group(func(r chi.Router) {
+			r.Use(app.AuthTokenMiddleware)
+
+			// Dashboard
+			r.Get("/dashboard/stats", dashboardHandler.GetDashboardStats)
+
+			// Problems
+			r.Route("/problems", func(r chi.Router) {
+				r.Get("/", problemHandler.ListProblemsForUser)
+				r.Post("/", problemHandler.CreateProblem)
+				r.Get("/urgent", problemHandler.GetUrgentProblems)
+				r.Get("/{id}", problemHandler.GetProblem)
+				r.Put("/{id}", problemHandler.UpdateProblem)
+				r.Delete("/{id}", problemHandler.DeleteProblem)
+				r.Get("/{id}/attempts", attemptHandler.ListAttemptsForProblem)
+			})
+
+			// Patterns
+			r.Route("/patterns", func(r chi.Router) {
+				r.Get("/", patternHandler.ListPatternsWithStats)
+				r.Post("/", patternHandler.CreatePattern)
+				r.Get("/{id}", patternHandler.GetPattern)
+				r.Put("/{id}", patternHandler.UpdatePattern)
+				r.Delete("/{id}", patternHandler.DeletePattern)
+			})
+
+			// Sessions
+			r.Route("/sessions", func(r chi.Router) {
+				r.Get("/", sessionHandler.ListSessionsForUser)
+				r.Post("/", sessionHandler.CreateSession)
+				r.Post("/generate", sessionHandler.GenerateSession)
+				r.Get("/{id}", sessionHandler.GetSession)
+			})
+
+			// Attempts
+			r.Route("/attempts", func(r chi.Router) {
+				r.Get("/", attemptHandler.ListAttemptsForUser)
+				r.Post("/", attemptHandler.CreateAttempt)
+			})
+
+			// Settings
+			r.Route("/settings", func(r chi.Router) {
+				r.Get("/weights", settingsHandler.GetScoringWeights)
+				r.Put("/weights", settingsHandler.UpdateScoringWeights)
 			})
 		})
 

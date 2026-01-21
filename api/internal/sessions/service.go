@@ -45,6 +45,8 @@ type Service interface {
 	GetSession(ctx context.Context, userID int64, sessionID int64) (*SessionResponse, error)
 	ListSessionsForUser(ctx context.Context, userID int64, limit, offset int64) ([]SessionResponse, error)
 	GenerateSession(ctx context.Context, userID int64, body GenerateSessionBody) (*GenerateSessionResponse, error)
+	CompleteSession(ctx context.Context, userID int64, sessionID int64) error
+	DeleteSession(ctx context.Context, userID int64, sessionID int64) error
 }
 
 type sessionService struct {
@@ -105,7 +107,7 @@ func (s *sessionService) GetSession(ctx context.Context, userID int64, sessionID
 		}
 	}
 
-	// Fetch problems for the session
+	// Fetch problems for the session with attempt data
 	problems := make([]SessionProblem, 0)
 	for _, problemID := range problemIDs {
 		problem, err := s.repo.GetProblem(ctx, problemID)
@@ -113,12 +115,69 @@ func (s *sessionService) GetSession(ctx context.Context, userID int64, sessionID
 			continue // Skip if problem not found
 		}
 
+		// Get user problem stats for scoring data
+		stats, err := s.repo.GetUserProblemStats(ctx, repo.GetUserProblemStatsParams{
+			UserID:    userID,
+			ProblemID: problemID,
+		})
+		if err != nil {
+			continue // Skip if stats not found
+		}
+
+		// Calculate score for this problem
+		score, err := s.scoringService.ComputeScore(ctx, userID, problemID)
+		if err != nil {
+			// If scoring fails, use default values
+			score = &scoring.ProblemScore{
+				ProblemID: problemID,
+				Score:     0.0,
+				Reason:    "No scoring data available",
+			}
+		}
+
+		// Calculate days since last attempt
+		var daysSinceLast *int
+		if stats.LastAttemptAt.Valid {
+			lastAttempt, err := time.Parse(time.RFC3339, stats.LastAttemptAt.String)
+			if err == nil {
+				days := int(time.Since(lastAttempt).Hours() / 24)
+				daysSinceLast = &days
+			}
+		}
+
+		// Get estimated time based on difficulty
+		difficulty := nullStringToStr(problem.Difficulty, "medium")
+		estimatedMin := getEstimatedTime(difficulty)
+
+		// Check if there's an attempt for this problem in this session
+		var completed bool
+		var outcome *string
+		attempt, err := s.repo.GetLatestAttemptForProblemInSession(ctx, repo.GetLatestAttemptForProblemInSessionParams{
+			UserID:    userID,
+			ProblemID: problemID,
+			SessionID: sql.NullInt64{Int64: sessionID, Valid: true},
+		})
+		if err == nil {
+			// Found an attempt
+			completed = true
+			outcomeStr := attempt.Outcome.String
+			outcome = &outcomeStr
+		}
+
 		problems = append(problems, SessionProblem{
-			ID:         problem.ID,
-			Title:      problem.Title,
-			Difficulty: nullStringToStr(problem.Difficulty, "medium"),
-			Source:     nullStringToPtr(problem.Source),
-			CreatedAt:  problem.CreatedAt.String,
+			ID:            problem.ID,
+			Title:         problem.Title,
+			Difficulty:    difficulty,
+			Source:        nullStringToPtr(problem.Source),
+			URL:           nullStringToPtr(problem.Url),
+			PlannedMin:    estimatedMin,
+			Score:         score.Score,
+			DaysSinceLast: daysSinceLast,
+			Confidence:    stats.Confidence.Int64,
+			Reason:        score.Reason,
+			CreatedAt:     problem.CreatedAt.String,
+			Completed:     completed,
+			Outcome:       outcome,
 		})
 	}
 
@@ -332,12 +391,15 @@ func (s *sessionService) buildSessionWithConstraints(
 			Title:         candidate.problem.Title,
 			Difficulty:    candidate.difficulty,
 			Source:        nullStringToPtr(candidate.problem.Source),
+			URL:           nullStringToPtr(candidate.problem.Url),
 			PlannedMin:    candidate.estimatedMin,
 			Score:         candidate.score.Score,
 			DaysSinceLast: candidate.daysSinceLast,
 			Confidence:    candidate.stats.Confidence.Int64,
 			Reason:        candidate.score.Reason,
 			CreatedAt:     candidate.problem.CreatedAt.String,
+			Completed:     false, // Not completed yet (session is being generated)
+			Outcome:       nil,   // No outcome yet
 		})
 
 		totalMinutes += int64(candidate.estimatedMin)
@@ -538,6 +600,42 @@ func (s *sessionService) applyProgressionMode(candidates []candidateProblem) []c
 	result = append(result, hard...)
 
 	return result
+}
+
+func (s *sessionService) CompleteSession(ctx context.Context, userID int64, sessionID int64) error {
+	// Verify session belongs to user
+	_, err := s.repo.GetSession(ctx, repo.GetSessionParams{
+		ID:     sessionID,
+		UserID: userID,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to get session: %w", err)
+	}
+
+	// Mark session as completed with current timestamp
+	completedAt := time.Now().Format(time.RFC3339)
+	err = s.repo.UpdateSessionCompleted(ctx, repo.UpdateSessionCompletedParams{
+		CompletedAt: sql.NullString{String: completedAt, Valid: true},
+		ID:          sessionID,
+		UserID:      userID,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to update session: %w", err)
+	}
+
+	return nil
+}
+
+func (s *sessionService) DeleteSession(ctx context.Context, userID int64, sessionID int64) error {
+	err := s.repo.DeleteSession(ctx, repo.DeleteSessionParams{
+		ID:     sessionID,
+		UserID: userID,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to delete session: %w", err)
+	}
+
+	return nil
 }
 
 // Helper functions

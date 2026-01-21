@@ -3,15 +3,17 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { api } from "@/lib/api";
 import type { RevisionSession } from "@/types";
-import { Calendar, Check, Clock, Play, Terminal, Zap, BookOpen, Target } from "lucide-react";
+import { Calendar, Check, Clock, Play, Terminal, Zap, BookOpen, Target, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 export default function SessionsPage() {
+  const navigate = useNavigate();
   const [sessions, setSessions] = useState<RevisionSession[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<"all" | "active" | "completed">("all");
+  const [repeatingSessionId, setRepeatingSessionId] = useState<number | null>(null);
 
   useEffect(() => {
     fetchSessions();
@@ -30,6 +32,45 @@ export default function SessionsPage() {
       );
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleRepeatSession = async (sessionId: number) => {
+    setRepeatingSessionId(sessionId);
+    try {
+      // Fetch the session details to get problem IDs and template
+      const sessionResponse = await api.get<{ data: RevisionSession }>(
+        `/sessions/${sessionId}`
+      );
+      const sessionData = sessionResponse.data.data;
+
+      // Extract problem IDs from the session
+      const problemIds = sessionData.problems?.map((p) => p.id) || [];
+
+      if (problemIds.length === 0) {
+        alert("Cannot repeat session: No problems found in the original session.");
+        return;
+      }
+
+      // Create a new session with the same problems and template
+      const createResponse = await api.post<{ data: { id: number } }>(
+        "/sessions",
+        {
+          template_key: sessionData.template_key,
+          session_name: sessionData.session_name,
+          planned_duration_min: sessionData.planned_duration_min,
+          problem_ids: problemIds,
+        }
+      );
+
+      // Navigate to the newly created session
+      const newSessionId = createResponse.data.data.id;
+      navigate(`/dashboard/sessions/${newSessionId}`);
+    } catch (err: unknown) {
+      console.error("Failed to repeat session:", err);
+      alert("Failed to repeat session. Please try again.");
+    } finally {
+      setRepeatingSessionId(null);
     }
   };
 
@@ -276,9 +317,24 @@ export default function SessionsPage() {
                           </Button>
                         </Link>
                         {session.completed && (
-                          <Button variant="ghost" size="sm" className="font-mono text-xs">
-                            <Play className="h-3 w-3 mr-1.5" />
-                            Repeat Session
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="font-mono text-xs"
+                            onClick={() => handleRepeatSession(session.id)}
+                            disabled={repeatingSessionId === session.id}
+                          >
+                            {repeatingSessionId === session.id ? (
+                              <>
+                                <Loader2 className="h-3 w-3 mr-1.5 animate-spin" />
+                                Repeating...
+                              </>
+                            ) : (
+                              <>
+                                <Play className="h-3 w-3 mr-1.5" />
+                                Repeat Session
+                              </>
+                            )}
                           </Button>
                         )}
                       </div>

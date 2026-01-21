@@ -28,3 +28,9 @@ JOIN problems p ON a.problem_id = p.id
 WHERE a.user_id = ?
 ORDER BY a.performed_at DESC
 LIMIT ?;
+
+-- name: GetLatestAttemptForProblemInSession :one
+SELECT * FROM attempts
+WHERE user_id = ? AND problem_id = ? AND session_id = ?
+ORDER BY performed_at DESC
+LIMIT 1;

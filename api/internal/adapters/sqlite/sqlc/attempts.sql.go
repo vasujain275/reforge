@@ -81,6 +81,36 @@ func (q *Queries) GetAttempt(ctx context.Context, arg GetAttemptParams) (Attempt
 	return i, err
 }
 
+const getLatestAttemptForProblemInSession = `-- name: GetLatestAttemptForProblemInSession :one
+SELECT id, user_id, problem_id, session_id, confidence_score, duration_seconds, outcome, notes, performed_at FROM attempts
+WHERE user_id = ? AND problem_id = ? AND session_id = ?
+ORDER BY performed_at DESC
+LIMIT 1
+`
+
+type GetLatestAttemptForProblemInSessionParams struct {
+	UserID    int64         `json:"user_id"`
+	ProblemID int64         `json:"problem_id"`
+	SessionID sql.NullInt64 `json:"session_id"`
+}
+
+func (q *Queries) GetLatestAttemptForProblemInSession(ctx context.Context, arg GetLatestAttemptForProblemInSessionParams) (Attempt, error) {
+	row := q.db.QueryRowContext(ctx, getLatestAttemptForProblemInSession, arg.UserID, arg.ProblemID, arg.SessionID)
+	var i Attempt
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.ProblemID,
+		&i.SessionID,
+		&i.ConfidenceScore,
+		&i.DurationSeconds,
+		&i.Outcome,
+		&i.Notes,
+		&i.PerformedAt,
+	)
+	return i, err
+}
+
 const getRecentAttempts = `-- name: GetRecentAttempts :many
 SELECT a.id, a.user_id, a.problem_id, a.session_id, a.confidence_score, a.duration_seconds, a.outcome, a.notes, a.performed_at, p.title as problem_title, p.difficulty as problem_difficulty
 FROM attempts a

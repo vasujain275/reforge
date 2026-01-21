@@ -40,12 +40,15 @@ type SessionProblem struct {
 	Title         string  `json:"title"`
 	Difficulty    string  `json:"difficulty"`
 	Source        *string `json:"source"`
+	URL           *string `json:"url"`
 	PlannedMin    int     `json:"planned_min"`
 	Score         float64 `json:"score"`
 	DaysSinceLast *int    `json:"days_since_last"`
 	Confidence    int64   `json:"confidence"`
 	Reason        string  `json:"reason"`
 	CreatedAt     string  `json:"created_at"`
+	Completed     bool    `json:"completed"`
+	Outcome       *string `json:"outcome"` // "passed" or "failed"
 }
 
 type GenerateSessionResponse struct {

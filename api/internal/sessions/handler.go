@@ -177,3 +177,57 @@ func (h *handler) GenerateCustomSession(w http.ResponseWriter, r *http.Request) 
 	// TODO: Implement GenerateCustomSession in service
 	utils.BadRequest(w, "Custom session generation not yet implemented", nil)
 }
+
+func (h *handler) CompleteSession(w http.ResponseWriter, r *http.Request) {
+	// Get user ID from context
+	userID, ok := r.Context().Value(auth.UserKey).(int64)
+	if !ok {
+		utils.InternalServerError(w, "User ID is missing from context")
+		return
+	}
+
+	sessionIDStr := chi.URLParam(r, "id")
+	sessionID, err := strconv.ParseInt(sessionIDStr, 10, 64)
+	if err != nil {
+		utils.BadRequest(w, "Invalid session ID", nil)
+		return
+	}
+
+	err = h.service.CompleteSession(r.Context(), userID, sessionID)
+	if err != nil {
+		slog.Error("Failed to complete session", "error", err)
+		utils.InternalServerError(w, "Failed to complete session")
+		return
+	}
+
+	utils.WriteSuccess(w, http.StatusOK, map[string]interface{}{
+		"message": "Session completed successfully",
+	})
+}
+
+func (h *handler) DeleteSession(w http.ResponseWriter, r *http.Request) {
+	// Get user ID from context
+	userID, ok := r.Context().Value(auth.UserKey).(int64)
+	if !ok {
+		utils.InternalServerError(w, "User ID is missing from context")
+		return
+	}
+
+	sessionIDStr := chi.URLParam(r, "id")
+	sessionID, err := strconv.ParseInt(sessionIDStr, 10, 64)
+	if err != nil {
+		utils.BadRequest(w, "Invalid session ID", nil)
+		return
+	}
+
+	err = h.service.DeleteSession(r.Context(), userID, sessionID)
+	if err != nil {
+		slog.Error("Failed to delete session", "error", err)
+		utils.InternalServerError(w, "Failed to delete session")
+		return
+	}
+
+	utils.WriteSuccess(w, http.StatusOK, map[string]interface{}{
+		"message": "Session deleted successfully",
+	})
+}

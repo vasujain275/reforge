@@ -24,10 +24,12 @@ type Querier interface {
 	DeletePattern(ctx context.Context, id int64) error
 	DeleteProblem(ctx context.Context, id int64) error
 	DeleteProblemPatterns(ctx context.Context, problemID int64) error
+	DeleteSession(ctx context.Context, arg DeleteSessionParams) error
 	DeleteUser(ctx context.Context, id int64) error
 	DeleteUserSessionTemplate(ctx context.Context, arg DeleteUserSessionTemplateParams) error
 	GetAttempt(ctx context.Context, arg GetAttemptParams) (Attempt, error)
 	GetAverageConfidenceForUser(ctx context.Context, userID int64) (interface{}, error)
+	GetLatestAttemptForProblemInSession(ctx context.Context, arg GetLatestAttemptForProblemInSessionParams) (Attempt, error)
 	GetMasteredProblemsForUser(ctx context.Context, userID int64) (int64, error)
 	GetPattern(ctx context.Context, id int64) (Pattern, error)
 	GetPatternProblemCount(ctx context.Context, patternID int64) (int64, error)

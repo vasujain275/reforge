@@ -59,6 +59,7 @@ export interface SessionProblem {
   title: string;
   difficulty: "easy" | "medium" | "hard";
   source?: string;
+  url?: string;
   planned_min: number;
   score: number;
   days_since_last?: number;

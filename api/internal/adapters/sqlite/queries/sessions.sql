@@ -23,3 +23,7 @@ WHERE user_id = ?;
 UPDATE revision_sessions
 SET completed_at = ?
 WHERE id = ? AND user_id = ?;
+
+-- name: DeleteSession :exec
+DELETE FROM revision_sessions
+WHERE id = ? AND user_id = ?;

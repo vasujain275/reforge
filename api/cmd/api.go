@@ -126,6 +126,8 @@ func (app *application) mount() http.Handler {
 				r.Post("/generate/custom", sessionHandler.GenerateCustomSession)
 				r.Get("/templates", sessionHandler.ListTemplates)
 				r.Get("/{id}", sessionHandler.GetSession)
+				r.Put("/{id}/complete", sessionHandler.CompleteSession)
+				r.Delete("/{id}", sessionHandler.DeleteSession)
 			})
 
 			// Attempts

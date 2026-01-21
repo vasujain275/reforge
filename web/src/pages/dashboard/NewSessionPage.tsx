@@ -136,13 +136,16 @@ export default function NewSessionPage() {
 
     setError(null);
     try {
-      await api.post("/sessions", {
+      const response = await api.post<{ data: { id: number } }>("/sessions", {
         template_key: selectedTemplateKey,
         session_name: generatedSession.template_name,
         planned_duration_min: generatedSession.planned_duration_min,
         problem_ids: generatedSession.problems.map((p) => p.id),
       });
-      navigate("/dashboard/sessions");
+      
+      // Redirect to the newly created session detail page
+      const sessionId = response.data.data.id;
+      navigate(`/dashboard/sessions/${sessionId}`);
     } catch (err: any) {
       console.error("Failed to start session:", err);
 

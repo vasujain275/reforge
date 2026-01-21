@@ -155,7 +155,7 @@ export default function NewSessionPage() {
   };
 
   return (
-    <div className="flex-1 p-6">
+    <div className="flex-1 p-4 md:p-6">
       {/* Header */}
       <div className="mb-6">
         <Link
@@ -166,12 +166,12 @@ export default function NewSessionPage() {
           Back to Sessions
         </Link>
         <div className="flex items-center gap-3 mb-2">
-          <Activity className="h-8 w-8 text-primary" />
-          <h2 className="text-3xl font-bold tracking-tight">
+          <Activity className="h-7 w-7 md:h-8 md:w-8 text-primary flex-shrink-0" />
+          <h2 className="text-2xl md:text-3xl font-bold tracking-tight">
             Session Generator Online
           </h2>
         </div>
-        <p className="text-muted-foreground font-mono text-sm">
+        <p className="text-muted-foreground font-mono text-xs md:text-sm">
           $ reforge session --generate --smart
         </p>
       </div>
@@ -184,9 +184,9 @@ export default function NewSessionPage() {
         />
       )}
 
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 mt-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6 mt-6">
         {/* Left: Template Selection */}
-        <div className="space-y-6">
+        <div className="space-y-4">
           {isLoadingTemplates ? (
             <Card className="border">
               <CardContent className="py-12">
@@ -216,23 +216,23 @@ export default function NewSessionPage() {
                     transition={{ duration: 0.3 }}
                   >
                     <Card className="border-2 border-primary/50">
-                      <CardHeader>
-                        <CardTitle className="text-sm font-mono uppercase tracking-wider">
+                      <CardHeader className="pb-3">
+                        <CardTitle className="text-xs md:text-sm font-mono uppercase tracking-wider">
                           Pattern Selection Required
                         </CardTitle>
-                        <CardDescription>
+                        <CardDescription className="text-xs">
                           This template focuses on a specific pattern
                         </CardDescription>
                       </CardHeader>
                       <CardContent>
-                        <Label>Select Pattern</Label>
+                        <Label className="text-xs">Select Pattern</Label>
                         <Select
                           value={selectedPatternId?.toString() || ""}
                           onValueChange={(val) =>
                             setSelectedPatternId(parseInt(val))
                           }
                         >
-                          <SelectTrigger className="font-mono mt-2">
+                          <SelectTrigger className="font-mono mt-2 text-sm">
                             <SelectValue placeholder="Choose a pattern..." />
                           </SelectTrigger>
                           <SelectContent>
@@ -265,18 +265,18 @@ export default function NewSessionPage() {
                       isGenerating ||
                       (needsPatternSelection && !selectedPatternId)
                     }
-                    className="w-full h-12"
+                    className="w-full h-11"
                     size="lg"
                   >
                     {isGenerating ? (
                       <>
                         <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        <span className="font-mono">Generating...</span>
+                        <span className="font-mono text-sm">Generating...</span>
                       </>
                     ) : (
                       <>
                         <Terminal className="h-4 w-4 mr-2" />
-                        <span className="font-mono">Generate Session</span>
+                        <span className="font-mono text-sm">Generate Session</span>
                       </>
                     )}
                   </Button>
@@ -287,14 +287,14 @@ export default function NewSessionPage() {
         </div>
 
         {/* Right: Generated Session Preview */}
-        <div>
+        <div className="lg:sticky lg:top-6 lg:self-start">
           <Card className="border h-full">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 font-mono text-sm uppercase tracking-wider">
-                <Terminal className="h-5 w-5" />
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 font-mono text-xs md:text-sm uppercase tracking-wider">
+                <Terminal className="h-4 w-4 md:h-5 md:w-5" />
                 Session Preview
               </CardTitle>
-              <CardDescription>
+              <CardDescription className="text-xs">
                 {generatedSession
                   ? `${generatedSession.problems.length} problems selected`
                   : "Problems will appear here after generation"}
@@ -302,12 +302,12 @@ export default function NewSessionPage() {
             </CardHeader>
             <CardContent>
               {!generatedSession ? (
-                <div className="text-center py-16 text-muted-foreground">
-                  <Terminal className="h-16 w-16 mx-auto mb-4 opacity-30" />
-                  <p className="font-mono text-sm">
+                <div className="text-center py-12 md:py-16 text-muted-foreground">
+                  <Terminal className="h-12 w-12 md:h-16 md:w-16 mx-auto mb-4 opacity-30" />
+                  <p className="font-mono text-xs md:text-sm">
                     $ reforge session --preview
                   </p>
-                  <p className="text-xs mt-2">
+                  <p className="text-[10px] md:text-xs mt-2">
                     Generate a session to see problem selection
                   </p>
                 </div>
@@ -316,56 +316,56 @@ export default function NewSessionPage() {
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ duration: 0.5 }}
-                  className="space-y-4"
+                  className="space-y-3 md:space-y-4"
                 >
                   {/* Session Info */}
-                  <div className="p-4 bg-muted/30 border rounded-lg space-y-2">
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-muted-foreground">
+                  <div className="p-3 md:p-4 bg-muted/30 border rounded-lg space-y-2">
+                    <div className="flex justify-between items-center gap-2">
+                      <span className="text-xs text-muted-foreground">
                         Template
                       </span>
-                      <span className="font-mono text-sm font-semibold">
+                      <span className="font-mono text-xs md:text-sm font-semibold text-right">
                         {generatedSession.template_name}
                       </span>
                     </div>
                     <div className="flex justify-between items-center">
-                      <span className="text-sm text-muted-foreground">
+                      <span className="text-xs text-muted-foreground">
                         Duration
                       </span>
-                      <span className="font-mono text-sm font-semibold">
+                      <span className="font-mono text-xs md:text-sm font-semibold">
                         {generatedSession.planned_duration_min} min
                       </span>
                     </div>
                     <div className="flex justify-between items-center">
-                      <span className="text-sm text-muted-foreground">
+                      <span className="text-xs text-muted-foreground">
                         Problems
                       </span>
-                      <span className="font-mono text-sm font-semibold">
+                      <span className="font-mono text-xs md:text-sm font-semibold">
                         {generatedSession.problems.length}
                       </span>
                     </div>
                   </div>
 
                   {/* Problem List */}
-                  <div className="space-y-2 max-h-[500px] overflow-y-auto">
+                  <div className="space-y-2 max-h-[400px] md:max-h-[500px] overflow-y-auto">
                     {generatedSession.problems.map((problem, index) => (
                       <motion.div
                         key={problem.id}
                         initial={{ opacity: 0, x: -20 }}
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ duration: 0.3, delay: index * 0.05 }}
-                        className="flex items-start gap-3 p-3 border rounded-lg hover:bg-muted/30 transition-colors"
+                        className="flex items-start gap-2 md:gap-3 p-2 md:p-3 border rounded-lg hover:bg-muted/30 transition-colors"
                       >
-                        <div className="flex items-center justify-center w-6 h-6 rounded-full bg-primary/10 text-primary font-bold font-mono text-xs flex-shrink-0">
+                        <div className="flex items-center justify-center w-5 h-5 md:w-6 md:h-6 rounded-full bg-primary/10 text-primary font-bold font-mono text-[10px] md:text-xs flex-shrink-0">
                           {index + 1}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-medium truncate">
+                          <div className="flex items-center gap-1.5 md:gap-2 flex-wrap">
+                            <span className="font-medium text-xs md:text-sm break-words">
                               {problem.title}
                             </span>
                             <span
-                              className={`text-xs px-1.5 py-0.5 rounded-md font-mono uppercase tracking-wider ${
+                              className={`text-[10px] md:text-xs px-1.5 py-0.5 rounded-md font-mono uppercase tracking-wider flex-shrink-0 ${
                                 problem.difficulty === "hard"
                                   ? "bg-red-500/10 text-red-500"
                                   : problem.difficulty === "medium"
@@ -376,14 +376,14 @@ export default function NewSessionPage() {
                               {problem.difficulty}
                             </span>
                           </div>
-                          <p className="text-xs text-muted-foreground mt-1">
+                          <p className="text-[10px] md:text-xs text-muted-foreground mt-1 line-clamp-2">
                             {problem.reason}
                           </p>
-                          <div className="flex gap-3 mt-2 text-xs font-mono text-muted-foreground">
-                            <span>Score: {problem.score.toFixed(2)}</span>
-                            <span>Confidence: {problem.confidence}%</span>
+                          <div className="flex gap-2 md:gap-3 mt-1.5 md:mt-2 text-[10px] md:text-xs font-mono text-muted-foreground flex-wrap">
+                            <span className="whitespace-nowrap">Score: {problem.score.toFixed(2)}</span>
+                            <span className="whitespace-nowrap">Confidence: {problem.confidence}%</span>
                             {problem.days_since_last !== undefined && (
-                              <span>
+                              <span className="whitespace-nowrap">
                                 Last: {problem.days_since_last}d ago
                               </span>
                             )}
@@ -396,11 +396,11 @@ export default function NewSessionPage() {
                   {/* Start Session Button */}
                   <Button
                     onClick={handleStartSession}
-                    className="w-full h-12"
+                    className="w-full h-11"
                     size="lg"
                   >
                     <Play className="h-4 w-4 mr-2" />
-                    <span className="font-mono">Start Session</span>
+                    <span className="font-mono text-sm">Start Session</span>
                   </Button>
                 </motion.div>
               )}

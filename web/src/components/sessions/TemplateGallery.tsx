@@ -40,7 +40,7 @@ export function TemplateGallery({ templates, selectedKey, onSelect }: TemplateGa
   const categories = ["daily", "pattern", "weekend"] as const;
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       {categories.map((category) => {
         const templates = templatesByCategory[category] || [];
         if (templates.length === 0) return null;
@@ -54,31 +54,31 @@ export function TemplateGallery({ templates, selectedKey, onSelect }: TemplateGa
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4, delay: 0.1 }}
-            className="space-y-4"
+            className="space-y-3"
           >
             {/* Category Header - HUD Style */}
-            <div className="flex items-center gap-3 pb-3 border-b border-border/50">
-              <div className="flex items-center justify-center w-8 h-8 rounded-md bg-primary/10 border border-primary/30">
+            <div className="flex items-center gap-3 pb-2 border-b border-border/50">
+              <div className="flex items-center justify-center w-7 h-7 rounded-md bg-primary/10 border border-primary/30">
                 <Icon className="h-4 w-4 text-primary" />
               </div>
-              <div className="flex-1">
-                <h2 className="text-lg font-semibold text-foreground tracking-tight">
+              <div className="flex-1 min-w-0">
+                <h2 className="text-base font-semibold text-foreground tracking-tight">
                   {config.label}
                 </h2>
-                <p className="text-xs text-muted-foreground mt-0.5">
+                <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight">
                   {config.description}
                 </p>
               </div>
               {/* Category badge - monospace */}
-              <div className="px-2.5 py-1 rounded-md bg-muted/30 border border-border">
-                <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">
+              <div className="px-2 py-1 rounded-md bg-muted/30 border border-border flex-shrink-0">
+                <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
                   {templates.length} Templates
                 </span>
               </div>
             </div>
 
             {/* Template Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
               {templates.map((template, index) => (
                 <motion.div
                   key={template.key}

@@ -58,6 +58,9 @@ type RevisionSession struct {
 	CompletedAt        sql.NullString `json:"completed_at"`
 	PlannedDurationMin sql.NullInt64  `json:"planned_duration_min"`
 	ItemsOrdered       sql.NullString `json:"items_ordered"`
+	SessionName        sql.NullString `json:"session_name"`
+	IsCustom           sql.NullBool   `json:"is_custom"`
+	CustomConfigJson   sql.NullString `json:"custom_config_json"`
 }
 
 type SystemSetting struct {
@@ -73,6 +76,18 @@ type User struct {
 	PasswordHash string         `json:"password_hash"`
 	Name         string         `json:"name"`
 	CreatedAt    sql.NullString `json:"created_at"`
+}
+
+type UserPatternMilestone struct {
+	ID               int64          `json:"id"`
+	UserID           int64          `json:"user_id"`
+	PatternID        int64          `json:"pattern_id"`
+	MilestoneType    sql.NullString `json:"milestone_type"`
+	ConfidenceBefore sql.NullInt64  `json:"confidence_before"`
+	ConfidenceAfter  sql.NullInt64  `json:"confidence_after"`
+	Notes            sql.NullString `json:"notes"`
+	AchievedAt       sql.NullString `json:"achieved_at"`
+	SessionID        sql.NullInt64  `json:"session_id"`
 }
 
 type UserPatternStat struct {
@@ -97,4 +112,17 @@ type UserProblemStat struct {
 	LastOutcome       sql.NullString `json:"last_outcome"`
 	RecentHistoryJson sql.NullString `json:"recent_history_json"`
 	UpdatedAt         sql.NullString `json:"updated_at"`
+}
+
+type UserSessionTemplate struct {
+	ID           int64          `json:"id"`
+	UserID       int64          `json:"user_id"`
+	TemplateName string         `json:"template_name"`
+	TemplateKey  sql.NullString `json:"template_key"`
+	ConfigJson   string         `json:"config_json"`
+	CreatedAt    sql.NullString `json:"created_at"`
+	UpdatedAt    sql.NullString `json:"updated_at"`
+	LastUsedAt   sql.NullString `json:"last_used_at"`
+	UseCount     sql.NullInt64  `json:"use_count"`
+	IsFavorite   sql.NullBool   `json:"is_favorite"`
 }

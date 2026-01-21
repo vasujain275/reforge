@@ -123,6 +123,8 @@ func (app *application) mount() http.Handler {
 				r.Get("/", sessionHandler.ListSessionsForUser)
 				r.Post("/", sessionHandler.CreateSession)
 				r.Post("/generate", sessionHandler.GenerateSession)
+				r.Post("/generate/custom", sessionHandler.GenerateCustomSession)
+				r.Get("/templates", sessionHandler.ListTemplates)
 				r.Get("/{id}", sessionHandler.GetSession)
 			})
 

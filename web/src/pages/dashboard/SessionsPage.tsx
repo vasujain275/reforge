@@ -33,16 +33,22 @@ export default function SessionsPage() {
     }
   };
 
-  const getTemplateDisplay = (key: string) => {
+  const getTemplateDisplay = (key: string | undefined) => {
     const templates: Record<string, { icon: typeof Zap; name: string }> = {
-      daily_revision: { icon: Zap, name: "Daily Revision" },
-      daily_mixed: { icon: BookOpen, name: "Daily Mixed" },
+      morning_momentum: { icon: Zap, name: "Morning Momentum Builder" },
+      weakness_crusher: { icon: Target, name: "Weakness Crusher" },
+      daily_mixed: { icon: BookOpen, name: "Daily Mixed Grind" },
+      pattern_deep_dive: { icon: Terminal, name: "Pattern Deep Dive" },
+      pattern_rotation: { icon: Calendar, name: "Pattern Rotation" },
+      pattern_combo: { icon: Target, name: "Pattern Combo Chains" },
+      pattern_graduation: { icon: Check, name: "Pattern Graduation" },
       weekend_comprehensive: { icon: Target, name: "Weekend Comprehensive" },
-      quick_warmup: { icon: Play, name: "Quick Warmup" },
-      weakness_focused: { icon: Terminal, name: "Weakness Focused" },
-      hard_only: { icon: Calendar, name: "Hard Only" },
-      mixed_difficulty: { icon: BookOpen, name: "Mixed Difficulty" },
+      weak_pattern_marathon: { icon: Play, name: "Weak Pattern Marathon" },
+      challenge_gauntlet: { icon: Zap, name: "Challenge Gauntlet" },
     };
+    if (!key) {
+      return { icon: Terminal, name: "Custom Session" };
+    }
     return templates[key] || { icon: Terminal, name: key.replace(/_/g, " ").toUpperCase() };
   };
 

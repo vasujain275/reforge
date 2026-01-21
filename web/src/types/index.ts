@@ -44,7 +44,9 @@ export interface UserPatternStats {
 export interface RevisionSession {
   id: number;
   user_id: number;
-  template_key: string;
+  template_key?: string;
+  session_name?: string;
+  is_custom: boolean;
   created_at: string;
   planned_duration_min: number;
   items_ordered?: string; // JSON array
@@ -79,23 +81,84 @@ export interface Attempt {
   performed_at: string;
 }
 
-export interface SessionTemplate {
+// Enhanced template types matching new backend
+export interface TemplateInfo {
   key: string;
   display_name: string;
+  description: string;
+  category: "daily" | "pattern" | "weekend";
   icon: string;
   duration_min: number;
-  estimated_problems: string;
-  description: string;
-  max_difficulty?: "easy" | "medium" | "hard";
 }
 
-export interface UrgentProblem extends Problem {
+export interface GenerateSessionResponse {
+  template_key?: string;
+  template_name: string;
+  template_description: string;
+  planned_duration_min: number;
+  problems: SessionProblem[];
+}
+
+export interface TemplateListResponse {
+  presets: TemplateInfo[];
+  custom: UserSessionTemplate[];
+}
+
+export interface UserSessionTemplate {
+  id: number;
+  user_id: number;
+  template_name: string;
+  template_key?: string;
+  config: CustomSessionConfig;
+  created_at: string;
+  updated_at: string;
+  last_used_at?: string;
+  use_count: number;
+  is_favorite: boolean;
+}
+
+export interface CustomSessionConfig {
+  session_name?: string;
+  duration_min: number;
+  problem_count_strategy: "auto" | "fixed";
+  fixed_problem_count?: number;
+  difficulty_distribution: DifficultyDistribution;
+  require_quick_win: boolean;
+  pattern_mode: "all" | "specific" | "exclude" | "weakest";
+  pattern_ids?: number[];
+  max_same_pattern: number;
+  scoring_emphasis: "standard" | "confidence" | "time" | "failure";
+  confidence_range?: ConfidenceRange;
+  min_days_since_last?: number;
+  goals?: string[];
+}
+
+export interface DifficultyDistribution {
+  easy_percent: number;
+  medium_percent: number;
+  hard_percent: number;
+}
+
+export interface ConfidenceRange {
+  min: number;
+  max: number;
+}
+
+// Urgent problem type for dashboard
+export interface UrgentProblem {
+  id: number;
+  title: string;
+  source?: string;
+  url?: string;
+  difficulty: "easy" | "medium" | "hard";
   score: number;
-  days_since_last: number;
+  days_since_last?: number;
   confidence: number;
   reason: string;
+  patterns?: Pattern[];
 }
 
+// Dashboard stats type
 export interface DashboardStats {
   total_problems: number;
   mastered_problems: number;
@@ -107,6 +170,7 @@ export interface DashboardStats {
   };
 }
 
+// Score breakdown type
 export interface ScoreBreakdown {
   total_score: number;
   features: {

@@ -13,7 +13,7 @@ import (
 const createSession = `-- name: CreateSession :one
 INSERT INTO revision_sessions (user_id, template_key, planned_duration_min, items_ordered)
 VALUES (?, ?, ?, ?)
-RETURNING id, user_id, template_key, created_at, completed_at, planned_duration_min, items_ordered
+RETURNING id, user_id, template_key, created_at, completed_at, planned_duration_min, items_ordered, session_name, is_custom, custom_config_json
 `
 
 type CreateSessionParams struct {
@@ -39,12 +39,15 @@ func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) (R
 		&i.CompletedAt,
 		&i.PlannedDurationMin,
 		&i.ItemsOrdered,
+		&i.SessionName,
+		&i.IsCustom,
+		&i.CustomConfigJson,
 	)
 	return i, err
 }
 
 const getSession = `-- name: GetSession :one
-SELECT id, user_id, template_key, created_at, completed_at, planned_duration_min, items_ordered FROM revision_sessions
+SELECT id, user_id, template_key, created_at, completed_at, planned_duration_min, items_ordered, session_name, is_custom, custom_config_json FROM revision_sessions
 WHERE id = ? AND user_id = ?
 LIMIT 1
 `
@@ -65,6 +68,9 @@ func (q *Queries) GetSession(ctx context.Context, arg GetSessionParams) (Revisio
 		&i.CompletedAt,
 		&i.PlannedDurationMin,
 		&i.ItemsOrdered,
+		&i.SessionName,
+		&i.IsCustom,
+		&i.CustomConfigJson,
 	)
 	return i, err
 }
@@ -83,7 +89,7 @@ func (q *Queries) GetSessionCount(ctx context.Context, userID int64) (int64, err
 }
 
 const listSessionsForUser = `-- name: ListSessionsForUser :many
-SELECT id, user_id, template_key, created_at, completed_at, planned_duration_min, items_ordered FROM revision_sessions
+SELECT id, user_id, template_key, created_at, completed_at, planned_duration_min, items_ordered, session_name, is_custom, custom_config_json FROM revision_sessions
 WHERE user_id = ?
 ORDER BY created_at DESC
 LIMIT ? OFFSET ?
@@ -112,6 +118,9 @@ func (q *Queries) ListSessionsForUser(ctx context.Context, arg ListSessionsForUs
 			&i.CompletedAt,
 			&i.PlannedDurationMin,
 			&i.ItemsOrdered,
+			&i.SessionName,
+			&i.IsCustom,
+			&i.CustomConfigJson,
 		); err != nil {
 			return nil, err
 		}

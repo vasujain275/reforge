@@ -145,3 +145,35 @@ func (h *handler) GenerateSession(w http.ResponseWriter, r *http.Request) {
 
 	utils.WriteSuccess(w, http.StatusOK, session)
 }
+
+// ListTemplates returns all available templates (presets + user custom)
+func (h *handler) ListTemplates(w http.ResponseWriter, r *http.Request) {
+	// Get preset templates
+	presets := GetAllTemplateInfos()
+
+	// TODO: Get user custom templates from database
+	// For now, return empty array
+	custom := []UserSessionTemplate{}
+
+	response := TemplateListResponse{
+		Presets: presets,
+		Custom:  custom,
+	}
+
+	utils.WriteSuccess(w, http.StatusOK, response)
+}
+
+// GenerateCustomSession generates a session from custom configuration
+func (h *handler) GenerateCustomSession(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+
+	var body GenerateCustomSessionBody
+	if err := utils.Read(r, &body); err != nil {
+		slog.Error("Failed to parse request body", "error", err)
+		utils.BadRequest(w, "Invalid request body", nil)
+		return
+	}
+
+	// TODO: Implement GenerateCustomSession in service
+	utils.BadRequest(w, "Custom session generation not yet implemented", nil)
+}

@@ -55,16 +55,22 @@ export default function SessionDetailPage() {
     }
   };
 
-  const getTemplateDisplay = (key: string) => {
+  const getTemplateDisplay = (key: string | undefined) => {
     const templates: Record<string, { icon: React.ReactNode; name: string }> = {
-      daily_revision: { icon: <Terminal className="h-6 w-6" />, name: "Daily Revision" },
-      daily_mixed: { icon: <GitBranch className="h-6 w-6" />, name: "Daily Mixed" },
-      weekend_comprehensive: { icon: <Cpu className="h-6 w-6" />, name: "Weekend Comprehensive" },
-      weekend_weak_patterns: { icon: <Target className="h-6 w-6" />, name: "Weekend Weak Patterns" },
+      morning_momentum: { icon: <Zap className="h-6 w-6" />, name: "Morning Momentum Builder" },
+      weakness_crusher: { icon: <Target className="h-6 w-6" />, name: "Weakness Crusher" },
+      daily_mixed: { icon: <GitBranch className="h-6 w-6" />, name: "Daily Mixed Grind" },
       pattern_deep_dive: { icon: <Search className="h-6 w-6" />, name: "Pattern Deep Dive" },
-      confidence_booster: { icon: <Zap className="h-6 w-6" />, name: "Confidence Booster" },
-      challenge_mode: { icon: <Flame className="h-6 w-6" />, name: "Challenge Mode" },
+      pattern_rotation: { icon: <Cpu className="h-6 w-6" />, name: "Pattern Rotation" },
+      pattern_combo: { icon: <Target className="h-6 w-6" />, name: "Pattern Combo Chains" },
+      pattern_graduation: { icon: <CheckCircle2 className="h-6 w-6" />, name: "Pattern Graduation" },
+      weekend_comprehensive: { icon: <Cpu className="h-6 w-6" />, name: "Weekend Comprehensive" },
+      weak_pattern_marathon: { icon: <Flame className="h-6 w-6" />, name: "Weak Pattern Marathon" },
+      challenge_gauntlet: { icon: <Flame className="h-6 w-6" />, name: "Challenge Gauntlet" },
     };
+    if (!key) {
+      return { icon: <Terminal className="h-6 w-6" />, name: "Custom Session" };
+    }
     return templates[key] || { icon: <Terminal className="h-6 w-6" />, name: key };
   };
 

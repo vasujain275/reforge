@@ -7,7 +7,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -15,84 +14,115 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
 import { api } from "@/lib/api";
-import type { SessionTemplate, UrgentProblem } from "@/types";
-import { ArrowLeft, Clock, Loader2, Play, Terminal, Zap } from "lucide-react";
+import type {
+  TemplateInfo,
+  GenerateSessionResponse,
+  Pattern,
+} from "@/types";
+import { ArrowLeft, Loader2, Play, Terminal, Activity } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
-
-const SESSION_TEMPLATES: SessionTemplate[] = [
-  {
-    key: "daily_revision",
-    display_name: "Daily Revision",
-    icon: "⚡",
-    duration_min: 35,
-    estimated_problems: "3-4 problems",
-    description: "Quick daily practice for consistent progress",
-    max_difficulty: "medium",
-  },
-  {
-    key: "daily_mixed",
-    display_name: "Daily Mixed",
-    icon: "📚",
-    duration_min: 55,
-    estimated_problems: "4-6 problems",
-    description: "Balanced mix of revision and new challenges",
-    max_difficulty: "hard",
-  },
-  {
-    key: "weekend_comprehensive",
-    display_name: "Weekend Deep Dive",
-    icon: "🏖️",
-    duration_min: 150,
-    estimated_problems: "10-12 problems",
-    description: "Comprehensive weekend practice session",
-    max_difficulty: "hard",
-  },
-];
+import { Link, useNavigate } from "react-router-dom";
+import { TemplateGallery } from "@/components/sessions/TemplateGallery";
+import { motion, AnimatePresence } from "framer-motion";
 
 export default function NewSessionPage() {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const [selectedTemplate, setSelectedTemplate] = useState<string>("");
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [generatedProblems, setGeneratedProblems] = useState<UrgentProblem[]>(
-    []
+  const [templates, setTemplates] = useState<TemplateInfo[]>([]);
+  const [patterns, setPatterns] = useState<Pattern[]>([]);
+  const [isLoadingTemplates, setIsLoadingTemplates] = useState(true);
+  const [selectedTemplateKey, setSelectedTemplateKey] = useState<string>("");
+  const [selectedPatternId, setSelectedPatternId] = useState<number | null>(
+    null
   );
-  const [customDuration, setCustomDuration] = useState("35");
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generatedSession, setGeneratedSession] =
+    useState<GenerateSessionResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Pre-select template from URL params
+  // Pattern-specific templates that need pattern selection
+  const PATTERN_TEMPLATES = [
+    "pattern_deep_dive",
+    "pattern_graduation",
+  ];
+
+  const selectedTemplate = templates.find(
+    (t) => t.key === selectedTemplateKey
+  );
+  const needsPatternSelection =
+    selectedTemplate && PATTERN_TEMPLATES.includes(selectedTemplate.key);
+
+  // Fetch templates on mount
   useEffect(() => {
-    const templateFromUrl = searchParams.get("template");
-    if (templateFromUrl) {
-      const template = SESSION_TEMPLATES.find((t) => t.key === templateFromUrl);
-      if (template) {
-        setSelectedTemplate(templateFromUrl);
-        setCustomDuration(template.duration_min.toString());
+    const fetchTemplates = async () => {
+      try {
+        const response = await api.get<{ data: { presets: TemplateInfo[] } }>(
+          "/sessions/templates"
+        );
+        setTemplates(response.data.data.presets);
+      } catch (err: any) {
+        console.error("Failed to fetch templates:", err);
+        setError("Failed to load templates. Please refresh the page.");
+      } finally {
+        setIsLoadingTemplates(false);
       }
+    };
+
+    fetchTemplates();
+  }, []);
+
+  // Fetch patterns when needed
+  useEffect(() => {
+    if (needsPatternSelection && patterns.length === 0) {
+      const fetchPatterns = async () => {
+        try {
+          const response = await api.get<{ data: Pattern[] }>("/patterns");
+          setPatterns(response.data.data);
+        } catch (err: any) {
+          console.error("Failed to fetch patterns:", err);
+        }
+      };
+      fetchPatterns();
     }
-  }, [searchParams]);
+  }, [needsPatternSelection, patterns.length]);
+
+  const handleTemplateSelect = (templateKey: string) => {
+    setSelectedTemplateKey(templateKey);
+    setSelectedPatternId(null);
+    setGeneratedSession(null);
+    setError(null);
+  };
 
   const handleGenerateSession = async () => {
-    if (!selectedTemplate) return;
+    if (!selectedTemplateKey) return;
+    if (needsPatternSelection && !selectedPatternId) {
+      setError("Please select a pattern for this template.");
+      return;
+    }
 
     setIsGenerating(true);
     setError(null);
     try {
-      const response = await api.post("/sessions/generate", {
-        template_key: selectedTemplate,
-        duration_min: parseInt(customDuration),
-      });
-      setGeneratedProblems(response.data.data?.problems || []);
+      const params: any = { template_key: selectedTemplateKey };
+      if (selectedPatternId) {
+        params.pattern_id = selectedPatternId;
+      }
+
+      const response = await api.post<{ data: GenerateSessionResponse }>(
+        "/sessions/generate",
+        params
+      );
+      setGeneratedSession(response.data.data);
     } catch (err: any) {
       console.error("Failed to generate session:", err);
-      
-      // Check if it's a validation error from backend with user-friendly message
+
       if (err.response?.data?.error?.message) {
         setError(err.response.data.error.message);
       } else if (err.response?.status === 400) {
-        setError("Unable to generate session with current problems. Try adding more problems or selecting a different template.");
+        setError(
+          "Unable to generate session with current problems. Try adding more problems or selecting a different template."
+        );
       } else {
         setError("Failed to generate session. Please ensure the backend is running.");
       }
@@ -102,17 +132,20 @@ export default function NewSessionPage() {
   };
 
   const handleStartSession = async () => {
+    if (!generatedSession) return;
+
     setError(null);
     try {
       await api.post("/sessions", {
-        template_key: selectedTemplate,
-        planned_duration_min: parseInt(customDuration),
-        problem_ids: generatedProblems.map((p) => p.id),
+        template_key: selectedTemplateKey,
+        session_name: generatedSession.template_name,
+        planned_duration_min: generatedSession.planned_duration_min,
+        problem_ids: generatedSession.problems.map((p) => p.id),
       });
       navigate("/dashboard/sessions");
     } catch (err: any) {
       console.error("Failed to start session:", err);
-      
+
       if (err.response?.data?.error?.message) {
         setError(err.response.data.error.message);
       } else {
@@ -120,10 +153,6 @@ export default function NewSessionPage() {
       }
     }
   };
-
-  const selectedTemplateData = SESSION_TEMPLATES.find(
-    (t) => t.key === selectedTemplate
-  );
 
   return (
     <div className="flex-1 p-6">
@@ -136,9 +165,14 @@ export default function NewSessionPage() {
           <ArrowLeft className="h-4 w-4" />
           Back to Sessions
         </Link>
-        <h2 className="text-3xl font-bold tracking-tight">Session Builder</h2>
-        <p className="text-muted-foreground mt-1">
-          Generate an optimized practice session based on your progress
+        <div className="flex items-center gap-3 mb-2">
+          <Activity className="h-8 w-8 text-primary" />
+          <h2 className="text-3xl font-bold tracking-tight">
+            Session Generator Online
+          </h2>
+        </div>
+        <p className="text-muted-foreground font-mono text-sm">
+          $ reforge session --generate --smart
         </p>
       </div>
 
@@ -146,215 +180,229 @@ export default function NewSessionPage() {
         <ApiError
           variant="inline"
           message={error}
-          onRetry={handleGenerateSession}
+          onRetry={generatedSession ? undefined : handleGenerateSession}
         />
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
-        {/* Left: Configuration */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 mt-6">
+        {/* Left: Template Selection */}
         <div className="space-y-6">
-          {/* Template Selection */}
-          <Card className="border-2">
-            <CardHeader>
-              <div className="flex items-center gap-2">
-                <Zap className="h-5 w-5 text-primary" />
-                <CardTitle>Choose Template</CardTitle>
-              </div>
-              <CardDescription>
-                Select a session template or customize your own
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 gap-3">
-                {SESSION_TEMPLATES.map((template) => (
-                  <button
-                    key={template.key}
-                    onClick={() => {
-                      setSelectedTemplate(template.key);
-                      setCustomDuration(template.duration_min.toString());
-                      setGeneratedProblems([]);
-                      setError(null);
-                    }}
-                    className={`p-4 border-2 rounded-lg text-left transition-all ${
-                      selectedTemplate === template.key
-                        ? "border-primary bg-primary/5"
-                        : "border-border hover:border-primary/50"
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="text-2xl">{template.icon}</div>
-                      <div className="flex-1">
-                        <div className="font-semibold">
-                          {template.display_name}
-                        </div>
-                        <div className="text-sm text-muted-foreground">
-                          {template.duration_min} min ·{" "}
-                          {template.estimated_problems}
-                        </div>
-                      </div>
-                      {selectedTemplate === template.key && (
-                        <div className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-                      )}
-                    </div>
-                  </button>
-                ))}
-              </div>
-
-              {/* Custom Duration */}
-              {selectedTemplate && (
-                <div className="space-y-2 pt-4 border-t">
-                  <Label>Duration (minutes)</Label>
-                  <Select
-                    value={customDuration}
-                    onValueChange={setCustomDuration}
-                  >
-                    <SelectTrigger className="font-mono">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="20">20 min</SelectItem>
-                      <SelectItem value="35">35 min</SelectItem>
-                      <SelectItem value="55">55 min</SelectItem>
-                      <SelectItem value="90">90 min</SelectItem>
-                      <SelectItem value="120">120 min</SelectItem>
-                      <SelectItem value="150">150 min</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-
-              {/* Generate Button */}
-              <Button
-                onClick={handleGenerateSession}
-                disabled={!selectedTemplate || isGenerating}
-                className="w-full"
-              >
-                {isGenerating ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Generating optimal session...
-                  </>
-                ) : (
-                  <>
-                    <Terminal className="h-4 w-4 mr-2" />
-                    Generate Session
-                  </>
-                )}
-              </Button>
-            </CardContent>
-          </Card>
-
-          {/* Template Info */}
-          {selectedTemplateData && (
-            <Card className="bg-muted/30 border-dashed">
-              <CardContent className="pt-6">
-                <div className="flex gap-4">
-                  <div className="text-3xl">{selectedTemplateData.icon}</div>
-                  <div>
-                    <h4 className="font-semibold">
-                      {selectedTemplateData.display_name}
-                    </h4>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      {selectedTemplateData.description}
-                    </p>
-                    <div className="flex gap-4 mt-3 text-xs font-mono text-muted-foreground">
-                      <span className="flex items-center gap-1">
-                        <Clock className="h-3 w-3" />
-                        {selectedTemplateData.duration_min} min
-                      </span>
-                      <span>Max: {selectedTemplateData.max_difficulty}</span>
-                    </div>
-                  </div>
+          {isLoadingTemplates ? (
+            <Card className="border">
+              <CardContent className="py-12">
+                <div className="flex flex-col items-center justify-center gap-3">
+                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                  <p className="text-sm text-muted-foreground font-mono">
+                    Loading templates...
+                  </p>
                 </div>
               </CardContent>
             </Card>
+          ) : (
+            <>
+              <TemplateGallery
+                templates={templates}
+                selectedKey={selectedTemplateKey}
+                onSelect={handleTemplateSelect}
+              />
+
+              {/* Pattern Selection for pattern-specific templates */}
+              <AnimatePresence>
+                {needsPatternSelection && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -20 }}
+                    transition={{ duration: 0.3 }}
+                  >
+                    <Card className="border-2 border-primary/50">
+                      <CardHeader>
+                        <CardTitle className="text-sm font-mono uppercase tracking-wider">
+                          Pattern Selection Required
+                        </CardTitle>
+                        <CardDescription>
+                          This template focuses on a specific pattern
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent>
+                        <Label>Select Pattern</Label>
+                        <Select
+                          value={selectedPatternId?.toString() || ""}
+                          onValueChange={(val) =>
+                            setSelectedPatternId(parseInt(val))
+                          }
+                        >
+                          <SelectTrigger className="font-mono mt-2">
+                            <SelectValue placeholder="Choose a pattern..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {patterns.map((pattern) => (
+                              <SelectItem
+                                key={pattern.id}
+                                value={pattern.id.toString()}
+                              >
+                                {pattern.title}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </CardContent>
+                    </Card>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* Generate Button */}
+              {selectedTemplate && (
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3, delay: 0.1 }}
+                >
+                  <Button
+                    onClick={handleGenerateSession}
+                    disabled={
+                      isGenerating ||
+                      (needsPatternSelection && !selectedPatternId)
+                    }
+                    className="w-full h-12"
+                    size="lg"
+                  >
+                    {isGenerating ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        <span className="font-mono">Generating...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Terminal className="h-4 w-4 mr-2" />
+                        <span className="font-mono">Generate Session</span>
+                      </>
+                    )}
+                  </Button>
+                </motion.div>
+              )}
+            </>
           )}
         </div>
 
-        {/* Right: Generated Problems */}
+        {/* Right: Generated Session Preview */}
         <div>
-          <Card className="border-2 h-full">
+          <Card className="border h-full">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
+              <CardTitle className="flex items-center gap-2 font-mono text-sm uppercase tracking-wider">
                 <Terminal className="h-5 w-5" />
-                Generated Problems
+                Session Preview
               </CardTitle>
               <CardDescription>
-                {generatedProblems.length > 0
-                  ? `${generatedProblems.length} problems selected for revision`
+                {generatedSession
+                  ? `${generatedSession.problems.length} problems selected`
                   : "Problems will appear here after generation"}
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {generatedProblems.length === 0 ? (
-                <div className="text-center py-12 text-muted-foreground">
-                  <Terminal className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              {!generatedSession ? (
+                <div className="text-center py-16 text-muted-foreground">
+                  <Terminal className="h-16 w-16 mx-auto mb-4 opacity-30" />
                   <p className="font-mono text-sm">
-                    $ reforge session --generate
+                    $ reforge session --preview
                   </p>
                   <p className="text-xs mt-2">
-                    Select a template and generate to see problems
+                    Generate a session to see problem selection
                   </p>
                 </div>
               ) : (
-                <div className="space-y-3">
-                  {generatedProblems.map((problem, index) => (
-                    <div
-                      key={problem.id}
-                      className="flex items-center gap-3 p-3 border rounded-lg"
-                    >
-                      <div className="flex items-center justify-center w-6 h-6 rounded-full bg-primary/10 text-primary font-bold font-mono text-xs">
-                        {index + 1}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium truncate">
-                            {problem.title}
-                          </span>
-                          <span
-                            className={`text-xs px-1.5 py-0.5 rounded font-mono ${
-                              problem.difficulty === "hard"
-                                ? "bg-red-500/10 text-red-500"
-                                : problem.difficulty === "medium"
-                                ? "bg-orange-500/10 text-orange-500"
-                                : "bg-green-500/10 text-green-500"
-                            }`}
-                          >
-                            {problem.difficulty}
-                          </span>
-                        </div>
-                        <p className="text-xs text-muted-foreground">
-                          {problem.reason}
-                        </p>
-                      </div>
-                      <div className="text-right font-mono text-sm text-primary">
-                        {problem.score.toFixed(2)}
-                      </div>
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 0.5 }}
+                  className="space-y-4"
+                >
+                  {/* Session Info */}
+                  <div className="p-4 bg-muted/30 border rounded-lg space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-muted-foreground">
+                        Template
+                      </span>
+                      <span className="font-mono text-sm font-semibold">
+                        {generatedSession.template_name}
+                      </span>
                     </div>
-                  ))}
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-muted-foreground">
+                        Duration
+                      </span>
+                      <span className="font-mono text-sm font-semibold">
+                        {generatedSession.planned_duration_min} min
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-muted-foreground">
+                        Problems
+                      </span>
+                      <span className="font-mono text-sm font-semibold">
+                        {generatedSession.problems.length}
+                      </span>
+                    </div>
+                  </div>
 
-                  {/* Total Estimate */}
-                  <div className="pt-4 border-t mt-4">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">
-                        Estimated Duration
-                      </span>
-                      <span className="font-mono font-semibold">
-                        {customDuration} min
-                      </span>
-                    </div>
+                  {/* Problem List */}
+                  <div className="space-y-2 max-h-[500px] overflow-y-auto">
+                    {generatedSession.problems.map((problem, index) => (
+                      <motion.div
+                        key={problem.id}
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ duration: 0.3, delay: index * 0.05 }}
+                        className="flex items-start gap-3 p-3 border rounded-lg hover:bg-muted/30 transition-colors"
+                      >
+                        <div className="flex items-center justify-center w-6 h-6 rounded-full bg-primary/10 text-primary font-bold font-mono text-xs flex-shrink-0">
+                          {index + 1}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-medium truncate">
+                              {problem.title}
+                            </span>
+                            <span
+                              className={`text-xs px-1.5 py-0.5 rounded-md font-mono uppercase tracking-wider ${
+                                problem.difficulty === "hard"
+                                  ? "bg-red-500/10 text-red-500"
+                                  : problem.difficulty === "medium"
+                                  ? "bg-orange-500/10 text-orange-500"
+                                  : "bg-green-500/10 text-green-500"
+                              }`}
+                            >
+                              {problem.difficulty}
+                            </span>
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {problem.reason}
+                          </p>
+                          <div className="flex gap-3 mt-2 text-xs font-mono text-muted-foreground">
+                            <span>Score: {problem.score.toFixed(2)}</span>
+                            <span>Confidence: {problem.confidence}%</span>
+                            {problem.days_since_last !== undefined && (
+                              <span>
+                                Last: {problem.days_since_last}d ago
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </motion.div>
+                    ))}
                   </div>
 
                   {/* Start Session Button */}
                   <Button
                     onClick={handleStartSession}
-                    className="w-full mt-4"
+                    className="w-full h-12"
                     size="lg"
                   >
                     <Play className="h-4 w-4 mr-2" />
-                    Start Session
+                    <span className="font-mono">Start Session</span>
                   </Button>
-                </div>
+                </motion.div>
               )}
             </CardContent>
           </Card>

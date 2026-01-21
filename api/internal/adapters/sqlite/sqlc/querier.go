@@ -6,6 +6,7 @@ package repo
 
 import (
 	"context"
+	"database/sql"
 )
 
 type Querier interface {
@@ -18,11 +19,13 @@ type Querier interface {
 	CreateSession(ctx context.Context, arg CreateSessionParams) (RevisionSession, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (CreateUserRow, error)
 	CreateUserProblemStats(ctx context.Context, arg CreateUserProblemStatsParams) (UserProblemStat, error)
+	CreateUserSessionTemplate(ctx context.Context, arg CreateUserSessionTemplateParams) (UserSessionTemplate, error)
 	DeleteExpiredTokens(ctx context.Context) error
 	DeletePattern(ctx context.Context, id int64) error
 	DeleteProblem(ctx context.Context, id int64) error
 	DeleteProblemPatterns(ctx context.Context, problemID int64) error
 	DeleteUser(ctx context.Context, id int64) error
+	DeleteUserSessionTemplate(ctx context.Context, arg DeleteUserSessionTemplateParams) error
 	GetAttempt(ctx context.Context, arg GetAttemptParams) (Attempt, error)
 	GetAverageConfidenceForUser(ctx context.Context, userID int64) (interface{}, error)
 	GetMasteredProblemsForUser(ctx context.Context, userID int64) (int64, error)
@@ -40,6 +43,7 @@ type Querier interface {
 	GetSession(ctx context.Context, arg GetSessionParams) (RevisionSession, error)
 	GetSessionCount(ctx context.Context, userID int64) (int64, error)
 	GetSystemSetting(ctx context.Context, key string) (SystemSetting, error)
+	GetTemplateUseCount(ctx context.Context, arg GetTemplateUseCountParams) (sql.NullInt64, error)
 	GetTotalProblemsForUser(ctx context.Context, userID int64) (int64, error)
 	GetUrgentProblems(ctx context.Context, arg GetUrgentProblemsParams) ([]GetUrgentProblemsRow, error)
 	// Used for Login: Fetch everything including the password_hash
@@ -49,17 +53,21 @@ type Querier interface {
 	GetUserPatternStats(ctx context.Context, arg GetUserPatternStatsParams) (UserPatternStat, error)
 	GetUserProblemStats(ctx context.Context, arg GetUserProblemStatsParams) (UserProblemStat, error)
 	GetUserProblemStatsWithProblem(ctx context.Context, userID int64) ([]GetUserProblemStatsWithProblemRow, error)
+	GetUserSessionTemplate(ctx context.Context, arg GetUserSessionTemplateParams) (UserSessionTemplate, error)
 	GetWeakestPattern(ctx context.Context, userID int64) (GetWeakestPatternRow, error)
+	IncrementTemplateUseCount(ctx context.Context, arg IncrementTemplateUseCountParams) error
 	LinkProblemToPattern(ctx context.Context, arg LinkProblemToPatternParams) error
 	ListAllProblems(ctx context.Context) ([]Problem, error)
 	ListAttemptsForProblem(ctx context.Context, arg ListAttemptsForProblemParams) ([]Attempt, error)
 	ListAttemptsForUser(ctx context.Context, arg ListAttemptsForUserParams) ([]ListAttemptsForUserRow, error)
+	ListFavoriteTemplates(ctx context.Context, userID int64) ([]UserSessionTemplate, error)
 	ListPatterns(ctx context.Context) ([]Pattern, error)
 	ListProblems(ctx context.Context, arg ListProblemsParams) ([]Problem, error)
 	ListSessionsForUser(ctx context.Context, arg ListSessionsForUserParams) ([]RevisionSession, error)
 	ListSystemSettings(ctx context.Context) ([]SystemSetting, error)
 	ListUserPatternStats(ctx context.Context, userID int64) ([]UserPatternStat, error)
 	ListUserProblemStats(ctx context.Context, userID int64) ([]UserProblemStat, error)
+	ListUserSessionTemplates(ctx context.Context, userID int64) ([]UserSessionTemplate, error)
 	RevokeRefreshToken(ctx context.Context, tokenHash string) error
 	UpdatePattern(ctx context.Context, arg UpdatePatternParams) (Pattern, error)
 	UpdateProblem(ctx context.Context, arg UpdateProblemParams) (Problem, error)
@@ -68,6 +76,7 @@ type Querier interface {
 	UpdateUserEmail(ctx context.Context, arg UpdateUserEmailParams) error
 	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error
 	UpdateUserProblemStats(ctx context.Context, arg UpdateUserProblemStatsParams) (UserProblemStat, error)
+	UpdateUserSessionTemplate(ctx context.Context, arg UpdateUserSessionTemplateParams) error
 	UpsertSystemSetting(ctx context.Context, arg UpsertSystemSettingParams) (SystemSetting, error)
 	UpsertUserPatternStats(ctx context.Context, arg UpsertUserPatternStatsParams) (UserPatternStat, error)
 	UpsertUserProblemStats(ctx context.Context, arg UpsertUserProblemStatsParams) (UserProblemStat, error)

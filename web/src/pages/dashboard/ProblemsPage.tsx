@@ -22,9 +22,10 @@ import {
   X,
 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 
 export default function ProblemsPage() {
+  const navigate = useNavigate();
   const [problems, setProblems] = useState<Problem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -268,17 +269,27 @@ export default function ProblemsPage() {
                     )}
                   </div>
                   <div className="flex gap-2">
-                    <Button variant="outline" size="sm">
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => navigate(`/dashboard/attempts/new?problem_id=${problem.id}`)}
+                    >
                       Practice
                     </Button>
-                    <Button variant="ghost" size="sm">
+                    <Button 
+                      variant="ghost" 
+                      size="sm"
+                      onClick={() => navigate(`/dashboard/attempts?problem_id=${problem.id}`)}
+                    >
                       View Stats
                     </Button>
-                    <Link to={`/dashboard/problems/${problem.id}/edit`}>
-                      <Button variant="ghost" size="sm">
-                        Edit
-                      </Button>
-                    </Link>
+                    <Button 
+                      variant="ghost" 
+                      size="sm"
+                      onClick={() => navigate(`/dashboard/problems/${problem.id}/edit`)}
+                    >
+                      Edit
+                    </Button>
                   </div>
                 </div>
               </CardContent>

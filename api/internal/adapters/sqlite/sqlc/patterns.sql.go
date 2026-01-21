@@ -29,6 +29,16 @@ func (q *Queries) CreatePattern(ctx context.Context, arg CreatePatternParams) (P
 	return i, err
 }
 
+const deletePattern = `-- name: DeletePattern :exec
+DELETE FROM patterns
+WHERE id = ?
+`
+
+func (q *Queries) DeletePattern(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, deletePattern, id)
+	return err
+}
+
 const getPattern = `-- name: GetPattern :one
 SELECT id, title, description FROM patterns
 WHERE id = ? LIMIT 1
@@ -39,6 +49,19 @@ func (q *Queries) GetPattern(ctx context.Context, id int64) (Pattern, error) {
 	var i Pattern
 	err := row.Scan(&i.ID, &i.Title, &i.Description)
 	return i, err
+}
+
+const getPatternProblemCount = `-- name: GetPatternProblemCount :one
+SELECT COUNT(*) as count
+FROM problem_patterns
+WHERE pattern_id = ?
+`
+
+func (q *Queries) GetPatternProblemCount(ctx context.Context, patternID int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, getPatternProblemCount, patternID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
 }
 
 const getPatternsByIDs = `-- name: GetPatternsByIDs :many
@@ -79,6 +102,42 @@ func (q *Queries) GetPatternsByIDs(ctx context.Context, ids []int64) ([]Pattern,
 	return items, nil
 }
 
+const getProblemsForPattern = `-- name: GetProblemsForPattern :many
+SELECT p.id, p.title, p.source, p.url, p.difficulty, p.created_at FROM problems p
+INNER JOIN problem_patterns pp ON p.id = pp.problem_id
+WHERE pp.pattern_id = ?
+`
+
+func (q *Queries) GetProblemsForPattern(ctx context.Context, patternID int64) ([]Problem, error) {
+	rows, err := q.db.QueryContext(ctx, getProblemsForPattern, patternID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Problem{}
+	for rows.Next() {
+		var i Problem
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Source,
+			&i.Url,
+			&i.Difficulty,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listPatterns = `-- name: ListPatterns :many
 SELECT id, title, description FROM patterns
 ORDER BY title
@@ -105,4 +164,24 @@ func (q *Queries) ListPatterns(ctx context.Context) ([]Pattern, error) {
 		return nil, err
 	}
 	return items, nil
+}
+
+const updatePattern = `-- name: UpdatePattern :one
+UPDATE patterns
+SET title = ?, description = ?
+WHERE id = ?
+RETURNING id, title, description
+`
+
+type UpdatePatternParams struct {
+	Title       string         `json:"title"`
+	Description sql.NullString `json:"description"`
+	ID          int64          `json:"id"`
+}
+
+func (q *Queries) UpdatePattern(ctx context.Context, arg UpdatePatternParams) (Pattern, error) {
+	row := q.db.QueryRowContext(ctx, updatePattern, arg.Title, arg.Description, arg.ID)
+	var i Pattern
+	err := row.Scan(&i.ID, &i.Title, &i.Description)
+	return i, err
 }

@@ -97,10 +97,18 @@ CREATE TABLE revision_sessions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,
     template_key TEXT,                -- e.g., 'daily_revision'
+    session_name TEXT,
+    is_custom BOOLEAN DEFAULT 0,
+    custom_config_json TEXT,          -- Store CustomSessionConfig if is_custom=1
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
     completed_at TEXT,                -- NULL if in-progress, timestamp when completed
     planned_duration_min INTEGER,
     items_ordered TEXT,               -- JSON Array of planned problems
+    
+    -- Timer fields
+    elapsed_time_seconds INTEGER DEFAULT 0,
+    timer_state TEXT CHECK (timer_state IN ('idle', 'running', 'paused')) DEFAULT 'idle',
+    timer_last_updated_at TEXT,
 
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
@@ -176,6 +184,41 @@ CREATE TABLE user_pattern_stats (
     FOREIGN KEY (pattern_id) REFERENCES patterns(id) ON DELETE CASCADE
 );
 
+-- 12. User Saved Session Templates
+CREATE TABLE user_session_templates (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    template_name TEXT NOT NULL,
+    template_key TEXT,                -- Optional: maps to preset template if forked
+    config_json TEXT NOT NULL,        -- Full CustomSessionConfig as JSON
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    last_used_at TEXT,
+    use_count INTEGER DEFAULT 0,
+    is_favorite BOOLEAN DEFAULT 0,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_user_templates ON user_session_templates(user_id, is_favorite);
+
+-- 13. Pattern Mastery Tracking (for graduation feature)
+CREATE TABLE user_pattern_milestones (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    pattern_id INTEGER NOT NULL,
+    milestone_type TEXT CHECK (milestone_type IN ('started', 'improved', 'graduated', 'mastered')),
+    confidence_before INTEGER,
+    confidence_after INTEGER,
+    notes TEXT,
+    achieved_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    session_id INTEGER,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    FOREIGN KEY (pattern_id) REFERENCES patterns(id) ON DELETE CASCADE,
+    FOREIGN KEY (session_id) REFERENCES revision_sessions(id) ON DELETE SET NULL
+);
+
+CREATE INDEX idx_pattern_milestones ON user_pattern_milestones(user_id, pattern_id, achieved_at);
+
 -- ============================================================================
 -- TRIGGERS
 -- ============================================================================
@@ -192,6 +235,8 @@ END;
 -- +goose Down
 -- +goose StatementBegin
 DROP TRIGGER IF EXISTS update_user_problem_stats_timestamp;
+DROP TABLE IF EXISTS user_pattern_milestones;
+DROP TABLE IF EXISTS user_session_templates;
 DROP TABLE IF EXISTS user_pattern_stats;
 DROP TABLE IF EXISTS user_problem_stats;
 DROP TABLE IF EXISTS attempts;

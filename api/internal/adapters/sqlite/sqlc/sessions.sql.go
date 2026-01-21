@@ -13,7 +13,7 @@ import (
 const createSession = `-- name: CreateSession :one
 INSERT INTO revision_sessions (user_id, template_key, planned_duration_min, items_ordered)
 VALUES (?, ?, ?, ?)
-RETURNING id, user_id, template_key, created_at, completed_at, planned_duration_min, items_ordered, session_name, is_custom, custom_config_json
+RETURNING id, user_id, template_key, session_name, is_custom, custom_config_json, created_at, completed_at, planned_duration_min, items_ordered, elapsed_time_seconds, timer_state, timer_last_updated_at
 `
 
 type CreateSessionParams struct {
@@ -35,13 +35,16 @@ func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) (R
 		&i.ID,
 		&i.UserID,
 		&i.TemplateKey,
+		&i.SessionName,
+		&i.IsCustom,
+		&i.CustomConfigJson,
 		&i.CreatedAt,
 		&i.CompletedAt,
 		&i.PlannedDurationMin,
 		&i.ItemsOrdered,
-		&i.SessionName,
-		&i.IsCustom,
-		&i.CustomConfigJson,
+		&i.ElapsedTimeSeconds,
+		&i.TimerState,
+		&i.TimerLastUpdatedAt,
 	)
 	return i, err
 }
@@ -62,7 +65,7 @@ func (q *Queries) DeleteSession(ctx context.Context, arg DeleteSessionParams) er
 }
 
 const getSession = `-- name: GetSession :one
-SELECT id, user_id, template_key, created_at, completed_at, planned_duration_min, items_ordered, session_name, is_custom, custom_config_json FROM revision_sessions
+SELECT id, user_id, template_key, session_name, is_custom, custom_config_json, created_at, completed_at, planned_duration_min, items_ordered, elapsed_time_seconds, timer_state, timer_last_updated_at FROM revision_sessions
 WHERE id = ? AND user_id = ?
 LIMIT 1
 `
@@ -79,13 +82,16 @@ func (q *Queries) GetSession(ctx context.Context, arg GetSessionParams) (Revisio
 		&i.ID,
 		&i.UserID,
 		&i.TemplateKey,
+		&i.SessionName,
+		&i.IsCustom,
+		&i.CustomConfigJson,
 		&i.CreatedAt,
 		&i.CompletedAt,
 		&i.PlannedDurationMin,
 		&i.ItemsOrdered,
-		&i.SessionName,
-		&i.IsCustom,
-		&i.CustomConfigJson,
+		&i.ElapsedTimeSeconds,
+		&i.TimerState,
+		&i.TimerLastUpdatedAt,
 	)
 	return i, err
 }
@@ -104,7 +110,7 @@ func (q *Queries) GetSessionCount(ctx context.Context, userID int64) (int64, err
 }
 
 const listSessionsForUser = `-- name: ListSessionsForUser :many
-SELECT id, user_id, template_key, created_at, completed_at, planned_duration_min, items_ordered, session_name, is_custom, custom_config_json FROM revision_sessions
+SELECT id, user_id, template_key, session_name, is_custom, custom_config_json, created_at, completed_at, planned_duration_min, items_ordered, elapsed_time_seconds, timer_state, timer_last_updated_at FROM revision_sessions
 WHERE user_id = ?
 ORDER BY created_at DESC
 LIMIT ? OFFSET ?
@@ -129,13 +135,16 @@ func (q *Queries) ListSessionsForUser(ctx context.Context, arg ListSessionsForUs
 			&i.ID,
 			&i.UserID,
 			&i.TemplateKey,
+			&i.SessionName,
+			&i.IsCustom,
+			&i.CustomConfigJson,
 			&i.CreatedAt,
 			&i.CompletedAt,
 			&i.PlannedDurationMin,
 			&i.ItemsOrdered,
-			&i.SessionName,
-			&i.IsCustom,
-			&i.CustomConfigJson,
+			&i.ElapsedTimeSeconds,
+			&i.TimerState,
+			&i.TimerLastUpdatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -164,5 +173,32 @@ type UpdateSessionCompletedParams struct {
 
 func (q *Queries) UpdateSessionCompleted(ctx context.Context, arg UpdateSessionCompletedParams) error {
 	_, err := q.db.ExecContext(ctx, updateSessionCompleted, arg.CompletedAt, arg.ID, arg.UserID)
+	return err
+}
+
+const updateSessionTimer = `-- name: UpdateSessionTimer :exec
+UPDATE revision_sessions
+SET elapsed_time_seconds = ?,
+    timer_state = ?,
+    timer_last_updated_at = ?
+WHERE id = ? AND user_id = ?
+`
+
+type UpdateSessionTimerParams struct {
+	ElapsedTimeSeconds sql.NullInt64  `json:"elapsed_time_seconds"`
+	TimerState         sql.NullString `json:"timer_state"`
+	TimerLastUpdatedAt sql.NullString `json:"timer_last_updated_at"`
+	ID                 int64          `json:"id"`
+	UserID             int64          `json:"user_id"`
+}
+
+func (q *Queries) UpdateSessionTimer(ctx context.Context, arg UpdateSessionTimerParams) error {
+	_, err := q.db.ExecContext(ctx, updateSessionTimer,
+		arg.ElapsedTimeSeconds,
+		arg.TimerState,
+		arg.TimerLastUpdatedAt,
+		arg.ID,
+		arg.UserID,
+	)
 	return err
 }

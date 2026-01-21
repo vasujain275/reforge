@@ -231,3 +231,38 @@ func (h *handler) DeleteSession(w http.ResponseWriter, r *http.Request) {
 		"message": "Session deleted successfully",
 	})
 }
+
+func (h *handler) UpdateSessionTimer(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+
+	userID, ok := r.Context().Value(auth.UserKey).(int64)
+	if !ok {
+		utils.InternalServerError(w, "User ID is missing from context")
+		return
+	}
+
+	sessionIDStr := chi.URLParam(r, "id")
+	sessionID, err := strconv.ParseInt(sessionIDStr, 10, 64)
+	if err != nil {
+		utils.BadRequest(w, "Invalid session ID", nil)
+		return
+	}
+
+	var body UpdateSessionTimerBody
+	if err := utils.Read(r, &body); err != nil {
+		slog.Error("Failed to parse request body", "error", err)
+		utils.BadRequest(w, "Invalid request body", nil)
+		return
+	}
+
+	err = h.service.UpdateSessionTimer(r.Context(), userID, sessionID, body)
+	if err != nil {
+		slog.Error("Failed to update timer", "error", err)
+		utils.InternalServerError(w, "Failed to update timer")
+		return
+	}
+
+	utils.WriteSuccess(w, http.StatusOK, map[string]interface{}{
+		"message": "Timer updated successfully",
+	})
+}

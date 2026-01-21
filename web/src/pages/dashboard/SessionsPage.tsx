@@ -93,9 +93,18 @@ export default function SessionsPage() {
     return templates[key] || { icon: Terminal, name: key.replace(/_/g, " ").toUpperCase() };
   };
 
-  const formatDate = (date: string) => {
-    const d = new Date(date);
-    return d.toLocaleString("en-US", {
+  const formatDate = (dateString: string) => {
+    // Handle both ISO8601 and SQLite timestamp formats
+    let date: Date;
+    
+    if (dateString.includes('T') || dateString.includes('Z')) {
+      date = new Date(dateString);
+    } else {
+      // SQLite format - treat as UTC
+      date = new Date(dateString + ' UTC');
+    }
+    
+    return date.toLocaleString("en-US", {
       year: "numeric",
       month: "2-digit",
       day: "2-digit",
@@ -107,7 +116,19 @@ export default function SessionsPage() {
 
   const getRelativeTime = (dateString: string) => {
     const now = new Date();
-    const date = new Date(dateString);
+    // SQLite returns timestamps in format "YYYY-MM-DD HH:MM:SS" (UTC)
+    // We need to ensure it's parsed as UTC
+    let date: Date;
+    
+    // Check if the date string has timezone info
+    if (dateString.includes('T') || dateString.includes('Z')) {
+      // ISO8601 format (e.g., "2024-01-22T10:30:00Z")
+      date = new Date(dateString);
+    } else {
+      // SQLite format (e.g., "2024-01-22 10:30:00") - treat as UTC
+      date = new Date(dateString + ' UTC');
+    }
+    
     const diffMs = now.getTime() - date.getTime();
     const diffMins = Math.floor(diffMs / 60000);
     const diffHours = Math.floor(diffMins / 60);

@@ -20,6 +20,11 @@ import {
   TrendingUp,
   Zap,
   Target,
+  Repeat,
+  Cpu,
+  Link2,
+  GraduationCap,
+  Search,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
@@ -29,34 +34,94 @@ interface SessionTemplateWithIcon {
   display_name: string;
   icon: typeof Zap;
   duration_min: number;
-  estimated_problems: string;
+  category: "daily" | "pattern" | "weekend";
   description: string;
 }
 
+// 10 Enhanced Smart Templates
 const SESSION_TEMPLATES: SessionTemplateWithIcon[] = [
+  // Daily Templates
   {
-    key: "daily_revision",
-    display_name: "Daily Revision",
+    key: "morning_momentum",
+    display_name: "Morning Momentum",
     icon: Zap,
     duration_min: 35,
-    estimated_problems: "3-4 problems",
-    description: "Quick daily practice for consistent progress",
+    category: "daily",
+    description: "Confidence wins to start your day",
   },
   {
-    key: "daily_mixed",
-    display_name: "Daily Mixed",
+    key: "weakness_crusher",
+    display_name: "Weakness Crusher",
+    icon: Target,
+    duration_min: 45,
+    category: "daily",
+    description: "Target low-confidence patterns",
+  },
+  {
+    key: "daily_mixed_grind",
+    display_name: "Daily Mixed Grind",
     icon: BookOpen,
     duration_min: 55,
-    estimated_problems: "4-6 problems",
-    description: "Balanced mix of revision and new challenges",
+    category: "daily",
+    description: "Adaptive difficulty practice",
+  },
+  // Pattern Templates
+  {
+    key: "pattern_deep_dive",
+    display_name: "Pattern Deep Dive",
+    icon: Search,
+    duration_min: 90,
+    category: "pattern",
+    description: "Master one pattern intensively",
   },
   {
+    key: "pattern_rotation",
+    display_name: "Pattern Rotation",
+    icon: Repeat,
+    duration_min: 60,
+    category: "pattern",
+    description: "Systematic 3-pattern exposure",
+  },
+  {
+    key: "pattern_combo_chains",
+    display_name: "Pattern Combos",
+    icon: Link2,
+    duration_min: 75,
+    category: "pattern",
+    description: "Multi-pattern hybrid problems",
+  },
+  {
+    key: "pattern_graduation",
+    display_name: "Pattern Graduation",
+    icon: GraduationCap,
+    duration_min: 50,
+    category: "pattern",
+    description: "Test mastery with 3 hard problems",
+  },
+  // Weekend Templates
+  {
     key: "weekend_comprehensive",
-    display_name: "Weekend Comprehensive",
-    icon: Target,
+    display_name: "Weekend Session",
+    icon: Cpu,
     duration_min: 150,
-    estimated_problems: "10-12 problems",
-    description: "Comprehensive weekend practice session",
+    category: "weekend",
+    description: "6-8 problems across all levels",
+  },
+  {
+    key: "weak_pattern_marathon",
+    display_name: "Weak Pattern Marathon",
+    icon: Target,
+    duration_min: 120,
+    category: "weekend",
+    description: "Intensive focus on 2 weakest",
+  },
+  {
+    key: "challenge_gauntlet",
+    display_name: "Challenge Gauntlet",
+    icon: Flame,
+    duration_min: 100,
+    category: "weekend",
+    description: "Interview pressure simulation",
   },
 ];
 
@@ -168,54 +233,51 @@ export default function DashboardHome() {
         </div>
       </div>
 
-      {/* Session Launcher */}
-      <Card className="border-2 border-primary/20 bg-gradient-to-br from-card to-card/50">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Zap className="h-5 w-5 text-primary" />
-            Start Revision Session
-          </CardTitle>
-          <CardDescription>
-            Choose a template to generate an optimized practice session
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-            {SESSION_TEMPLATES.map((template) => {
-              const Icon = template.icon;
-              return (
-                <button
-                  key={template.key}
-                  onClick={() => handleStartSession(template.key)}
-                  className="p-4 border rounded-md hover:border-primary hover:bg-accent/50 hover:shadow-[0_0_15px_-3px_var(--primary)] transition-all text-left group"
-                >
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="h-10 w-10 rounded-md border border-primary/20 bg-primary/5 flex items-center justify-center">
-                      <Icon className="h-5 w-5 text-primary" />
-                    </div>
-                    <div>
-                      <div className="font-semibold font-mono uppercase tracking-wider text-sm">
-                        {template.display_name}
-                      </div>
-                      <div className="text-xs font-mono text-muted-foreground">
-                        {template.duration_min} min · {template.estimated_problems}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    {template.description}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-          <div className="flex gap-2">
-            <Link to="/dashboard/sessions/new" className="flex-1">
-              <Button variant="outline" className="w-full font-mono">
-                <Terminal className="h-4 w-4 mr-2" />
-                Custom Session Builder
+      {/* Quick Session Launcher */}
+      <Card className="border border-primary/20">
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Zap className="h-4 w-4 text-primary" />
+              <CardTitle className="text-base font-mono uppercase tracking-wider">
+                Quick Start
+              </CardTitle>
+            </div>
+            <Link to="/dashboard/sessions/new">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-xs font-mono hover:text-primary"
+              >
+                View All Templates →
               </Button>
             </Link>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-3 gap-2">
+            {SESSION_TEMPLATES.filter((t) => t.category === "daily").map(
+              (template) => {
+                const Icon = template.icon;
+                return (
+                  <button
+                    key={template.key}
+                    onClick={() => handleStartSession(template.key)}
+                    className="p-3 border rounded-md hover:border-primary hover:bg-accent/50 hover:shadow-[0_0_15px_-3px_var(--primary)] transition-all text-left"
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      <Icon className="h-4 w-4 text-primary" />
+                      <div className="text-xs font-mono text-muted-foreground">
+                        {template.duration_min}m
+                      </div>
+                    </div>
+                    <div className="font-semibold text-sm">
+                      {template.display_name}
+                    </div>
+                  </button>
+                );
+              }
+            )}
           </div>
         </CardContent>
       </Card>
@@ -255,7 +317,7 @@ export default function DashboardHome() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold font-mono">
-              {stats?.avg_confidence ?? 0}%
+              {Math.round(stats?.avg_confidence ?? 0)}%
             </div>
             <p className="text-xs text-muted-foreground mt-1">
               <span

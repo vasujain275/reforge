@@ -127,6 +127,7 @@ func (app *application) mount() http.Handler {
 				r.Get("/templates", sessionHandler.ListTemplates)
 				r.Get("/{id}", sessionHandler.GetSession)
 				r.Put("/{id}/complete", sessionHandler.CompleteSession)
+				r.Put("/{id}/timer", sessionHandler.UpdateSessionTimer)
 				r.Delete("/{id}", sessionHandler.DeleteSession)
 			})
 

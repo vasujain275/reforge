@@ -27,3 +27,10 @@ WHERE id = ? AND user_id = ?;
 -- name: DeleteSession :exec
 DELETE FROM revision_sessions
 WHERE id = ? AND user_id = ?;
+
+-- name: UpdateSessionTimer :exec
+UPDATE revision_sessions
+SET elapsed_time_seconds = ?,
+    timer_state = ?,
+    timer_last_updated_at = ?
+WHERE id = ? AND user_id = ?;

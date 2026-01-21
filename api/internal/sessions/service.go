@@ -47,6 +47,7 @@ type Service interface {
 	GenerateSession(ctx context.Context, userID int64, body GenerateSessionBody) (*GenerateSessionResponse, error)
 	CompleteSession(ctx context.Context, userID int64, sessionID int64) error
 	DeleteSession(ctx context.Context, userID int64, sessionID int64) error
+	UpdateSessionTimer(ctx context.Context, userID int64, sessionID int64, body UpdateSessionTimerBody) error
 }
 
 type sessionService struct {
@@ -87,6 +88,9 @@ func (s *sessionService) CreateSession(ctx context.Context, userID int64, body C
 		CreatedAt:          session.CreatedAt.String,
 		PlannedDurationMin: nullInt64ToInt64(session.PlannedDurationMin, 0),
 		Completed:          session.CompletedAt.Valid,
+		ElapsedTimeSeconds: nullInt64ToInt64(session.ElapsedTimeSeconds, 0),
+		TimerState:         nullStringToStr(session.TimerState, "idle"),
+		TimerLastUpdatedAt: nullStringToPtr(session.TimerLastUpdatedAt),
 	}, nil
 }
 
@@ -190,6 +194,9 @@ func (s *sessionService) GetSession(ctx context.Context, userID int64, sessionID
 		CreatedAt:          session.CreatedAt.String,
 		PlannedDurationMin: nullInt64ToInt64(session.PlannedDurationMin, 0),
 		Completed:          session.CompletedAt.Valid,
+		ElapsedTimeSeconds: nullInt64ToInt64(session.ElapsedTimeSeconds, 0),
+		TimerState:         nullStringToStr(session.TimerState, "idle"),
+		TimerLastUpdatedAt: nullStringToPtr(session.TimerLastUpdatedAt),
 		Problems:           problems,
 	}, nil
 }
@@ -221,6 +228,9 @@ func (s *sessionService) ListSessionsForUser(ctx context.Context, userID int64, 
 			CreatedAt:          session.CreatedAt.String,
 			PlannedDurationMin: nullInt64ToInt64(session.PlannedDurationMin, 0),
 			Completed:          session.CompletedAt.Valid,
+			ElapsedTimeSeconds: nullInt64ToInt64(session.ElapsedTimeSeconds, 0),
+			TimerState:         nullStringToStr(session.TimerState, "idle"),
+			TimerLastUpdatedAt: nullStringToPtr(session.TimerLastUpdatedAt),
 		})
 	}
 
@@ -633,6 +643,32 @@ func (s *sessionService) DeleteSession(ctx context.Context, userID int64, sessio
 	})
 	if err != nil {
 		return fmt.Errorf("failed to delete session: %w", err)
+	}
+
+	return nil
+}
+
+func (s *sessionService) UpdateSessionTimer(ctx context.Context, userID int64, sessionID int64, body UpdateSessionTimerBody) error {
+	// Verify session belongs to user
+	_, err := s.repo.GetSession(ctx, repo.GetSessionParams{
+		ID:     sessionID,
+		UserID: userID,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to get session: %w", err)
+	}
+
+	// Update timer state
+	now := time.Now().Format(time.RFC3339)
+	err = s.repo.UpdateSessionTimer(ctx, repo.UpdateSessionTimerParams{
+		ElapsedTimeSeconds: sql.NullInt64{Int64: body.ElapsedTimeSeconds, Valid: true},
+		TimerState:         sql.NullString{String: body.TimerState, Valid: true},
+		TimerLastUpdatedAt: sql.NullString{String: now, Valid: true},
+		ID:                 sessionID,
+		UserID:             userID,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to update timer: %w", err)
 	}
 
 	return nil

@@ -37,6 +37,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import ApiError from "@/components/ApiError";
 import { AttemptRecordForm } from "@/components/sessions/AttemptRecordForm";
+import { SessionTimer } from "@/components/sessions/SessionTimer";
 import { api } from "@/lib/api";
 import type { RevisionSession, SessionProblem } from "@/types";
 
@@ -194,8 +195,18 @@ export default function SessionDetailPage() {
     );
   };
 
-  const formatDate = (date: string) => {
-    return new Date(date).toLocaleString("en-US", {
+  const formatDate = (dateString: string) => {
+    // Handle both ISO8601 and SQLite timestamp formats
+    let date: Date;
+    
+    if (dateString.includes('T') || dateString.includes('Z')) {
+      date = new Date(dateString);
+    } else {
+      // SQLite format - treat as UTC
+      date = new Date(dateString + ' UTC');
+    }
+    
+    return date.toLocaleString("en-US", {
       month: "short",
       day: "numeric",
       year: "numeric",
@@ -308,6 +319,23 @@ export default function SessionDetailPage() {
           </div>
         </div>
       </motion.div>
+
+      {/* Session Timer (Active Sessions Only) */}
+      {!session.completed && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, delay: 0.1 }}
+        >
+          <SessionTimer
+            sessionId={session.id}
+            plannedDurationMin={session.planned_duration_min}
+            initialElapsedSeconds={session.elapsed_time_seconds}
+            initialTimerState={session.timer_state}
+            isCompleted={session.completed || false}
+          />
+        </motion.div>
+      )}
 
       {/* Progress Card (Active Sessions Only) */}
       {!session.completed && (

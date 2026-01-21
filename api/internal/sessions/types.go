@@ -32,7 +32,15 @@ type SessionResponse struct {
 	CreatedAt          string           `json:"created_at"`
 	PlannedDurationMin int64            `json:"planned_duration_min"`
 	Completed          bool             `json:"completed"`
+	ElapsedTimeSeconds int64            `json:"elapsed_time_seconds"`
+	TimerState         string           `json:"timer_state"` // "idle", "running", "paused"
+	TimerLastUpdatedAt *string          `json:"timer_last_updated_at"`
 	Problems           []SessionProblem `json:"problems,omitempty"`
+}
+
+type UpdateSessionTimerBody struct {
+	ElapsedTimeSeconds int64  `json:"elapsed_time_seconds" validate:"required,gte=0"`
+	TimerState         string `json:"timer_state" validate:"required,oneof=idle running paused"`
 }
 
 type SessionProblem struct {

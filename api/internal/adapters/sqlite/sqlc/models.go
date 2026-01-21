@@ -54,13 +54,16 @@ type RevisionSession struct {
 	ID                 int64          `json:"id"`
 	UserID             int64          `json:"user_id"`
 	TemplateKey        sql.NullString `json:"template_key"`
+	SessionName        sql.NullString `json:"session_name"`
+	IsCustom           sql.NullBool   `json:"is_custom"`
+	CustomConfigJson   sql.NullString `json:"custom_config_json"`
 	CreatedAt          sql.NullString `json:"created_at"`
 	CompletedAt        sql.NullString `json:"completed_at"`
 	PlannedDurationMin sql.NullInt64  `json:"planned_duration_min"`
 	ItemsOrdered       sql.NullString `json:"items_ordered"`
-	SessionName        sql.NullString `json:"session_name"`
-	IsCustom           sql.NullBool   `json:"is_custom"`
-	CustomConfigJson   sql.NullString `json:"custom_config_json"`
+	ElapsedTimeSeconds sql.NullInt64  `json:"elapsed_time_seconds"`
+	TimerState         sql.NullString `json:"timer_state"`
+	TimerLastUpdatedAt sql.NullString `json:"timer_last_updated_at"`
 }
 
 type SystemSetting struct {

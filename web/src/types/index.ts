@@ -52,6 +52,9 @@ export interface RevisionSession {
   items_ordered?: string; // JSON array
   completed?: boolean;
   problems?: SessionProblem[];
+  elapsed_time_seconds: number;
+  timer_state: "idle" | "running" | "paused";
+  timer_last_updated_at?: string;
 }
 
 export interface SessionProblem {

@@ -116,3 +116,32 @@ export interface ScoreBreakdown {
     contribution: number;
   }[];
 }
+
+// Pattern types matching backend
+export interface PatternWithStats {
+  id: number;
+  title: string;
+  description?: string;
+  problemCount: number;
+  stats?: PatternUserStats;
+}
+
+export interface PatternUserStats {
+  id: number;
+  user_id: number;
+  pattern_id: number;
+  times_revised: number;
+  avg_confidence: number;
+  last_revised_at?: string;
+}
+
+// Settings types matching backend
+export interface ScoringWeights {
+  w_conf: number;
+  w_days: number;
+  w_attempts: number;
+  w_time: number;
+  w_difficulty: number;
+  w_failed: number;
+  w_pattern: number;
+}

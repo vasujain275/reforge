@@ -9,20 +9,15 @@ import {
 } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { api } from "@/lib/api";
-import type { Pattern, UserPatternStats } from "@/types";
+import type { PatternWithStats } from "@/types";
 import {
-  BarChart3,
+  Network,
   Plus,
   Terminal,
   TrendingDown,
   TrendingUp,
 } from "lucide-react";
 import { useEffect, useState } from "react";
-
-interface PatternWithStats extends Pattern {
-  stats?: UserPatternStats;
-  problemCount: number;
-}
 
 export default function PatternsPage() {
   const [patterns, setPatterns] = useState<PatternWithStats[]>([]);
@@ -85,32 +80,34 @@ export default function PatternsPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight">Pattern Mastery</h2>
-          <p className="text-muted-foreground mt-1">
-            Track your progress across different problem-solving patterns
+          <h2 className="text-3xl font-bold tracking-tight font-mono uppercase">
+            PATTERN REGISTRY
+          </h2>
+          <p className="text-muted-foreground mt-1 text-sm">
+            Track mastery across problem-solving patterns
           </p>
         </div>
-        <Button>
+        <Button className="rounded-md">
           <Plus className="h-4 w-4 mr-2" />
-          Add Pattern
+          Initialize Pattern
         </Button>
       </div>
 
       {/* Pattern Stats Overview */}
       {patterns.length > 0 && (
         <div className="grid gap-4 md:grid-cols-3">
-          <Card>
+          <Card className="rounded-md border border-border">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
+              <CardTitle className="text-xs font-mono uppercase tracking-wider text-muted-foreground">
                 Total Patterns
               </CardTitle>
-              <BarChart3 className="h-4 w-4 text-muted-foreground" />
+              <Network className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold font-mono">
-                {patterns.length}
+                {String(patterns.length).padStart(3, "0")}
               </div>
-              <p className="text-xs text-muted-foreground mt-1">
+              <p className="text-xs text-muted-foreground mt-1 font-mono">
                 Covering{" "}
                 {patterns.reduce((acc, p) => acc + (p.problemCount || 0), 0)}{" "}
                 problems
@@ -118,16 +115,18 @@ export default function PatternsPage() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="rounded-md border border-border">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Strongest</CardTitle>
+              <CardTitle className="text-xs font-mono uppercase tracking-wider text-muted-foreground">
+                Strongest
+              </CardTitle>
               <TrendingUp className="h-4 w-4 text-green-500" />
             </CardHeader>
             <CardContent>
-              <div className="text-lg font-bold">
+              <div className="text-lg font-bold font-mono">
                 {sortedPatterns[sortedPatterns.length - 1]?.title || "N/A"}
               </div>
-              <p className="text-xs text-muted-foreground mt-1">
+              <p className="text-xs text-muted-foreground mt-1 font-mono">
                 {sortedPatterns[sortedPatterns.length - 1]?.stats
                   ?.avg_confidence || 0}
                 % confidence
@@ -135,16 +134,18 @@ export default function PatternsPage() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="rounded-md border border-border">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Needs Work</CardTitle>
+              <CardTitle className="text-xs font-mono uppercase tracking-wider text-muted-foreground">
+                Needs Work
+              </CardTitle>
               <TrendingDown className="h-4 w-4 text-red-500" />
             </CardHeader>
             <CardContent>
-              <div className="text-lg font-bold">
+              <div className="text-lg font-bold font-mono">
                 {sortedPatterns[0]?.title || "N/A"}
               </div>
-              <p className="text-xs text-muted-foreground mt-1">
+              <p className="text-xs text-muted-foreground mt-1 font-mono">
                 {sortedPatterns[0]?.stats?.avg_confidence || 0}% confidence
               </p>
             </CardContent>
@@ -155,23 +156,29 @@ export default function PatternsPage() {
       {/* Patterns List */}
       <div className="space-y-3">
         {patterns.length === 0 ? (
-          <Card>
+          <Card className="rounded-md border border-border">
             <CardContent className="py-12 text-center">
-              <BarChart3 className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-              <p className="text-muted-foreground">No patterns yet</p>
-              <Button className="mt-4">Add Your First Pattern</Button>
+              <Network className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+              <p className="text-muted-foreground font-mono uppercase tracking-wider text-sm">
+                No Patterns Registered
+              </p>
+              <Button className="mt-4 rounded-md">
+                Initialize First Pattern
+              </Button>
             </CardContent>
           </Card>
         ) : (
           sortedPatterns.map((pattern) => (
             <Card
               key={pattern.id}
-              className="hover:border-primary/50 transition-colors"
+              className="rounded-md border border-border hover:border-primary/50 transition-colors"
             >
               <CardHeader>
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
-                    <CardTitle className="text-lg">{pattern.title}</CardTitle>
+                    <CardTitle className="text-lg font-mono">
+                      {pattern.title}
+                    </CardTitle>
                     {pattern.description && (
                       <CardDescription className="mt-1">
                         {pattern.description}
@@ -183,8 +190,8 @@ export default function PatternsPage() {
                       <div className="text-2xl font-bold font-mono text-primary">
                         {pattern.stats?.avg_confidence || 0}%
                       </div>
-                      <div className="text-xs text-muted-foreground">
-                        confidence
+                      <div className="text-xs text-muted-foreground font-mono uppercase tracking-wider">
+                        Confidence
                       </div>
                     </div>
                   </div>
@@ -199,14 +206,19 @@ export default function PatternsPage() {
                   <div className="flex items-center justify-between text-sm text-muted-foreground">
                     <div className="flex items-center gap-4">
                       <span className="font-mono">
-                        {pattern.problemCount || 0} problems
+                        {String(pattern.problemCount || 0).padStart(2, "0")}{" "}
+                        problems
                       </span>
                       <span className="font-mono">
-                        {pattern.stats?.times_revised || 0} revisions
+                        {String(pattern.stats?.times_revised || 0).padStart(
+                          2,
+                          "0"
+                        )}{" "}
+                        revisions
                       </span>
                     </div>
-                    <span>
-                      Last revised:{" "}
+                    <span className="font-mono text-xs">
+                      Last:{" "}
                       {getDaysSinceLastRevised(pattern.stats?.last_revised_at)}
                     </span>
                   </div>

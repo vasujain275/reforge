@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { api } from "@/lib/api";
-import type { DashboardStats, SessionTemplate, UrgentProblem } from "@/types";
+import type { DashboardStats, UrgentProblem } from "@/types";
 import {
   Activity,
   BarChart3,
@@ -19,15 +19,25 @@ import {
   Terminal,
   TrendingUp,
   Zap,
+  Target,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
-const SESSION_TEMPLATES: SessionTemplate[] = [
+interface SessionTemplateWithIcon {
+  key: string;
+  display_name: string;
+  icon: typeof Zap;
+  duration_min: number;
+  estimated_problems: string;
+  description: string;
+}
+
+const SESSION_TEMPLATES: SessionTemplateWithIcon[] = [
   {
     key: "daily_revision",
     display_name: "Daily Revision",
-    icon: "⚡",
+    icon: Zap,
     duration_min: 35,
     estimated_problems: "3-4 problems",
     description: "Quick daily practice for consistent progress",
@@ -35,15 +45,15 @@ const SESSION_TEMPLATES: SessionTemplate[] = [
   {
     key: "daily_mixed",
     display_name: "Daily Mixed",
-    icon: "📚",
+    icon: BookOpen,
     duration_min: 55,
     estimated_problems: "4-6 problems",
     description: "Balanced mix of revision and new challenges",
   },
   {
     key: "weekend_comprehensive",
-    display_name: "Weekend Deep Dive",
-    icon: "🏖️",
+    display_name: "Weekend Comprehensive",
+    icon: Target,
     duration_min: 150,
     estimated_problems: "10-12 problems",
     description: "Comprehensive weekend practice session",
@@ -171,28 +181,38 @@ export default function DashboardHome() {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-            {SESSION_TEMPLATES.map((template) => (
-              <button
-                key={template.key}
-                onClick={() => handleStartSession(template.key)}
-                className="p-4 border-2 rounded-lg hover:border-primary hover:bg-accent/50 transition-all text-left group"
-              >
-                <div className="text-2xl mb-2">{template.icon}</div>
-                <div className="font-semibold mb-1">
-                  {template.display_name}
-                </div>
-                <div className="text-sm text-muted-foreground mb-2">
-                  {template.duration_min} min · {template.estimated_problems}
-                </div>
-                <div className="text-xs text-muted-foreground/80">
-                  {template.description}
-                </div>
-              </button>
-            ))}
+            {SESSION_TEMPLATES.map((template) => {
+              const Icon = template.icon;
+              return (
+                <button
+                  key={template.key}
+                  onClick={() => handleStartSession(template.key)}
+                  className="p-4 border rounded-md hover:border-primary hover:bg-accent/50 hover:shadow-[0_0_15px_-3px_var(--primary)] transition-all text-left group"
+                >
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="h-10 w-10 rounded-md border border-primary/20 bg-primary/5 flex items-center justify-center">
+                      <Icon className="h-5 w-5 text-primary" />
+                    </div>
+                    <div>
+                      <div className="font-semibold font-mono uppercase tracking-wider text-sm">
+                        {template.display_name}
+                      </div>
+                      <div className="text-xs font-mono text-muted-foreground">
+                        {template.duration_min} min · {template.estimated_problems}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    {template.description}
+                  </div>
+                </button>
+              );
+            })}
           </div>
           <div className="flex gap-2">
             <Link to="/dashboard/sessions/new" className="flex-1">
-              <Button variant="outline" className="w-full">
+              <Button variant="outline" className="w-full font-mono">
+                <Terminal className="h-4 w-4 mr-2" />
                 Custom Session Builder
               </Button>
             </Link>

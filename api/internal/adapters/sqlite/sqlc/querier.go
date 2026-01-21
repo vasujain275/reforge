@@ -11,28 +11,64 @@ import (
 type Querier interface {
 	// Used for checking if the system has been initialized (seed logic)
 	CountUsers(ctx context.Context) (int64, error)
+	CreateAttempt(ctx context.Context, arg CreateAttemptParams) (Attempt, error)
 	CreatePattern(ctx context.Context, arg CreatePatternParams) (Pattern, error)
 	CreateProblem(ctx context.Context, arg CreateProblemParams) (Problem, error)
 	CreateRefreshToken(ctx context.Context, arg CreateRefreshTokenParams) (CreateRefreshTokenRow, error)
+	CreateSession(ctx context.Context, arg CreateSessionParams) (RevisionSession, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (CreateUserRow, error)
+	CreateUserProblemStats(ctx context.Context, arg CreateUserProblemStatsParams) (UserProblemStat, error)
 	DeleteExpiredTokens(ctx context.Context) error
+	DeletePattern(ctx context.Context, id int64) error
+	DeleteProblem(ctx context.Context, id int64) error
 	DeleteProblemPatterns(ctx context.Context, problemID int64) error
 	DeleteUser(ctx context.Context, id int64) error
+	GetAttempt(ctx context.Context, arg GetAttemptParams) (Attempt, error)
+	GetAverageConfidenceForUser(ctx context.Context, userID int64) (interface{}, error)
+	GetMasteredProblemsForUser(ctx context.Context, userID int64) (int64, error)
 	GetPattern(ctx context.Context, id int64) (Pattern, error)
+	GetPatternProblemCount(ctx context.Context, patternID int64) (int64, error)
 	GetPatternsByIDs(ctx context.Context, ids []int64) ([]Pattern, error)
 	GetPatternsForProblem(ctx context.Context, problemID int64) ([]Pattern, error)
+	GetPatternsWithStats(ctx context.Context, userID int64) ([]GetPatternsWithStatsRow, error)
 	GetProblem(ctx context.Context, id int64) (Problem, error)
+	GetProblemsForPattern(ctx context.Context, patternID int64) ([]Problem, error)
+	GetProblemsForUser(ctx context.Context, userID int64) ([]GetProblemsForUserRow, error)
+	GetRecentAttempts(ctx context.Context, arg GetRecentAttemptsParams) ([]GetRecentAttemptsRow, error)
 	GetRefreshTokenByHash(ctx context.Context, tokenHash string) (GetRefreshTokenByHashRow, error)
+	GetScoringWeights(ctx context.Context) ([]GetScoringWeightsRow, error)
+	GetSession(ctx context.Context, arg GetSessionParams) (RevisionSession, error)
+	GetSessionCount(ctx context.Context, userID int64) (int64, error)
+	GetSystemSetting(ctx context.Context, key string) (SystemSetting, error)
+	GetTotalProblemsForUser(ctx context.Context, userID int64) (int64, error)
+	GetUrgentProblems(ctx context.Context, arg GetUrgentProblemsParams) ([]GetUrgentProblemsRow, error)
 	// Used for Login: Fetch everything including the password_hash
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	// Used for Session/Context: Fetch user details without the sensitive hash
 	GetUserByID(ctx context.Context, id int64) (GetUserByIDRow, error)
+	GetUserPatternStats(ctx context.Context, arg GetUserPatternStatsParams) (UserPatternStat, error)
+	GetUserProblemStats(ctx context.Context, arg GetUserProblemStatsParams) (UserProblemStat, error)
+	GetUserProblemStatsWithProblem(ctx context.Context, userID int64) ([]GetUserProblemStatsWithProblemRow, error)
+	GetWeakestPattern(ctx context.Context, userID int64) (GetWeakestPatternRow, error)
 	LinkProblemToPattern(ctx context.Context, arg LinkProblemToPatternParams) error
+	ListAllProblems(ctx context.Context) ([]Problem, error)
+	ListAttemptsForProblem(ctx context.Context, arg ListAttemptsForProblemParams) ([]Attempt, error)
+	ListAttemptsForUser(ctx context.Context, arg ListAttemptsForUserParams) ([]ListAttemptsForUserRow, error)
 	ListPatterns(ctx context.Context) ([]Pattern, error)
 	ListProblems(ctx context.Context, arg ListProblemsParams) ([]Problem, error)
+	ListSessionsForUser(ctx context.Context, arg ListSessionsForUserParams) ([]RevisionSession, error)
+	ListSystemSettings(ctx context.Context) ([]SystemSetting, error)
+	ListUserPatternStats(ctx context.Context, userID int64) ([]UserPatternStat, error)
+	ListUserProblemStats(ctx context.Context, userID int64) ([]UserProblemStat, error)
 	RevokeRefreshToken(ctx context.Context, tokenHash string) error
+	UpdatePattern(ctx context.Context, arg UpdatePatternParams) (Pattern, error)
+	UpdateProblem(ctx context.Context, arg UpdateProblemParams) (Problem, error)
+	UpdateSystemSetting(ctx context.Context, arg UpdateSystemSettingParams) (SystemSetting, error)
 	UpdateUserEmail(ctx context.Context, arg UpdateUserEmailParams) error
 	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error
+	UpdateUserProblemStats(ctx context.Context, arg UpdateUserProblemStatsParams) (UserProblemStat, error)
+	UpsertUserPatternStats(ctx context.Context, arg UpsertUserPatternStatsParams) (UserPatternStat, error)
+	UpsertUserProblemStats(ctx context.Context, arg UpsertUserProblemStatsParams) (UserProblemStat, error)
 }
 
 var _ Querier = (*Queries)(nil)

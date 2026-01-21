@@ -74,6 +74,8 @@ export default function SettingsPage() {
     setError(null);
     try {
       await api.put("/settings/weights", weights);
+      // Refetch weights to ensure we have the latest from the server
+      await fetchWeights();
     } catch (err: unknown) {
       console.error("Failed to save settings:", err);
       setError("Failed to save settings. Please try again.");

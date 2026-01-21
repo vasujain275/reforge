@@ -18,3 +18,8 @@ LIMIT ? OFFSET ?;
 SELECT COUNT(*) as count
 FROM revision_sessions
 WHERE user_id = ?;
+
+-- name: UpdateSessionCompleted :exec
+UPDATE revision_sessions
+SET completed_at = ?
+WHERE id = ? AND user_id = ?;

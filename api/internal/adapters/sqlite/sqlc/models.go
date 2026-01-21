@@ -55,6 +55,7 @@ type RevisionSession struct {
 	UserID             int64          `json:"user_id"`
 	TemplateKey        sql.NullString `json:"template_key"`
 	CreatedAt          sql.NullString `json:"created_at"`
+	CompletedAt        sql.NullString `json:"completed_at"`
 	PlannedDurationMin sql.NullInt64  `json:"planned_duration_min"`
 	ItemsOrdered       sql.NullString `json:"items_ordered"`
 }

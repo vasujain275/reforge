@@ -13,7 +13,7 @@ import (
 const createSession = `-- name: CreateSession :one
 INSERT INTO revision_sessions (user_id, template_key, planned_duration_min, items_ordered)
 VALUES (?, ?, ?, ?)
-RETURNING id, user_id, template_key, created_at, planned_duration_min, items_ordered
+RETURNING id, user_id, template_key, created_at, completed_at, planned_duration_min, items_ordered
 `
 
 type CreateSessionParams struct {
@@ -36,6 +36,7 @@ func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) (R
 		&i.UserID,
 		&i.TemplateKey,
 		&i.CreatedAt,
+		&i.CompletedAt,
 		&i.PlannedDurationMin,
 		&i.ItemsOrdered,
 	)
@@ -43,7 +44,7 @@ func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) (R
 }
 
 const getSession = `-- name: GetSession :one
-SELECT id, user_id, template_key, created_at, planned_duration_min, items_ordered FROM revision_sessions
+SELECT id, user_id, template_key, created_at, completed_at, planned_duration_min, items_ordered FROM revision_sessions
 WHERE id = ? AND user_id = ?
 LIMIT 1
 `
@@ -61,6 +62,7 @@ func (q *Queries) GetSession(ctx context.Context, arg GetSessionParams) (Revisio
 		&i.UserID,
 		&i.TemplateKey,
 		&i.CreatedAt,
+		&i.CompletedAt,
 		&i.PlannedDurationMin,
 		&i.ItemsOrdered,
 	)
@@ -81,7 +83,7 @@ func (q *Queries) GetSessionCount(ctx context.Context, userID int64) (int64, err
 }
 
 const listSessionsForUser = `-- name: ListSessionsForUser :many
-SELECT id, user_id, template_key, created_at, planned_duration_min, items_ordered FROM revision_sessions
+SELECT id, user_id, template_key, created_at, completed_at, planned_duration_min, items_ordered FROM revision_sessions
 WHERE user_id = ?
 ORDER BY created_at DESC
 LIMIT ? OFFSET ?
@@ -107,6 +109,7 @@ func (q *Queries) ListSessionsForUser(ctx context.Context, arg ListSessionsForUs
 			&i.UserID,
 			&i.TemplateKey,
 			&i.CreatedAt,
+			&i.CompletedAt,
 			&i.PlannedDurationMin,
 			&i.ItemsOrdered,
 		); err != nil {
@@ -121,4 +124,21 @@ func (q *Queries) ListSessionsForUser(ctx context.Context, arg ListSessionsForUs
 		return nil, err
 	}
 	return items, nil
+}
+
+const updateSessionCompleted = `-- name: UpdateSessionCompleted :exec
+UPDATE revision_sessions
+SET completed_at = ?
+WHERE id = ? AND user_id = ?
+`
+
+type UpdateSessionCompletedParams struct {
+	CompletedAt sql.NullString `json:"completed_at"`
+	ID          int64          `json:"id"`
+	UserID      int64          `json:"user_id"`
+}
+
+func (q *Queries) UpdateSessionCompleted(ctx context.Context, arg UpdateSessionCompletedParams) error {
+	_, err := q.db.ExecContext(ctx, updateSessionCompleted, arg.CompletedAt, arg.ID, arg.UserID)
+	return err
 }

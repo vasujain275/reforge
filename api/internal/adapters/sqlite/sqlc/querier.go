@@ -63,6 +63,7 @@ type Querier interface {
 	RevokeRefreshToken(ctx context.Context, tokenHash string) error
 	UpdatePattern(ctx context.Context, arg UpdatePatternParams) (Pattern, error)
 	UpdateProblem(ctx context.Context, arg UpdateProblemParams) (Problem, error)
+	UpdateSessionCompleted(ctx context.Context, arg UpdateSessionCompletedParams) error
 	UpdateSystemSetting(ctx context.Context, arg UpdateSystemSettingParams) (SystemSetting, error)
 	UpdateUserEmail(ctx context.Context, arg UpdateUserEmailParams) error
 	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error

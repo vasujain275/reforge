@@ -98,6 +98,7 @@ CREATE TABLE revision_sessions (
     user_id INTEGER NOT NULL,
     template_key TEXT,                -- e.g., 'daily_revision'
     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    completed_at TEXT,                -- NULL if in-progress, timestamp when completed
     planned_duration_min INTEGER,
     items_ordered TEXT,               -- JSON Array of planned problems
 

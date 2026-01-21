@@ -46,7 +46,18 @@ func (app *application) mount() http.Handler {
 	sessionService := sessions.NewService(repoInstance, scoringService)
 	attemptService := attempts.NewService(repoInstance)
 	dashboardService := dashboard.NewService(repoInstance)
-	settingsService := settings.NewService(repoInstance)
+
+	// Create default weights from config
+	defaultWeights := &settings.ScoringWeightsResponse{
+		WConf:       app.config.defaultWeights.wConf,
+		WDays:       app.config.defaultWeights.wDays,
+		WAttempts:   app.config.defaultWeights.wAttempts,
+		WTime:       app.config.defaultWeights.wTime,
+		WDifficulty: app.config.defaultWeights.wDifficulty,
+		WFailed:     app.config.defaultWeights.wFailed,
+		WPattern:    app.config.defaultWeights.wPattern,
+	}
+	settingsService := settings.NewService(repoInstance, defaultWeights)
 
 	// Handlers
 	userHandler := users.NewHandler(userService)
@@ -124,6 +135,7 @@ func (app *application) mount() http.Handler {
 			// Settings
 			r.Route("/settings", func(r chi.Router) {
 				r.Get("/weights", settingsHandler.GetScoringWeights)
+				r.Get("/weights/defaults", settingsHandler.GetDefaultWeights)
 				r.Put("/weights", settingsHandler.UpdateScoringWeights)
 			})
 		})
@@ -154,10 +166,11 @@ type application struct {
 }
 
 type config struct {
-	addr string
-	env  string
-	db   dbConfig
-	auth authConfig
+	addr           string
+	env            string
+	db             dbConfig
+	auth           authConfig
+	defaultWeights scoringWeightsConfig
 }
 
 type dbConfig struct {
@@ -166,6 +179,16 @@ type dbConfig struct {
 
 type authConfig struct {
 	secret string
+}
+
+type scoringWeightsConfig struct {
+	wConf       float64
+	wDays       float64
+	wAttempts   float64
+	wTime       float64
+	wDifficulty float64
+	wFailed     float64
+	wPattern    float64
 }
 
 type healthResponse struct {

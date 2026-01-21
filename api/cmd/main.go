@@ -33,6 +33,15 @@ func main() {
 		auth: authConfig{
 			secret: secret,
 		},
+		defaultWeights: scoringWeightsConfig{
+			wConf:       env.GetFloat("DEFAULT_W_CONF", 0.30),
+			wDays:       env.GetFloat("DEFAULT_W_DAYS", 0.20),
+			wAttempts:   env.GetFloat("DEFAULT_W_ATTEMPTS", 0.10),
+			wTime:       env.GetFloat("DEFAULT_W_TIME", 0.05),
+			wDifficulty: env.GetFloat("DEFAULT_W_DIFFICULTY", 0.15),
+			wFailed:     env.GetFloat("DEFAULT_W_FAILED", 0.10),
+			wPattern:    env.GetFloat("DEFAULT_W_PATTERN", 0.10),
+		},
 	}
 
 	// Logger

@@ -9,17 +9,24 @@ import (
 
 type Service interface {
 	GetScoringWeights(ctx context.Context) (*ScoringWeightsResponse, error)
+	GetDefaultWeights() *ScoringWeightsResponse
 	UpdateScoringWeights(ctx context.Context, body UpdateScoringWeightsBody) (*ScoringWeightsResponse, error)
 }
 
 type settingsService struct {
-	repo repo.Querier
+	repo           repo.Querier
+	defaultWeights *ScoringWeightsResponse
 }
 
-func NewService(repo repo.Querier) Service {
+func NewService(repo repo.Querier, defaultWeights *ScoringWeightsResponse) Service {
 	return &settingsService{
-		repo: repo,
+		repo:           repo,
+		defaultWeights: defaultWeights,
 	}
+}
+
+func (s *settingsService) GetDefaultWeights() *ScoringWeightsResponse {
+	return s.defaultWeights
 }
 
 func (s *settingsService) GetScoringWeights(ctx context.Context) (*ScoringWeightsResponse, error) {
@@ -28,16 +35,18 @@ func (s *settingsService) GetScoringWeights(ctx context.Context) (*ScoringWeight
 		return nil, fmt.Errorf("failed to get scoring weights: %w", err)
 	}
 
+	// Start with default weights
 	weights := &ScoringWeightsResponse{
-		WConf:       0.30,
-		WDays:       0.20,
-		WAttempts:   0.10,
-		WTime:       0.05,
-		WDifficulty: 0.15,
-		WFailed:     0.10,
-		WPattern:    0.10,
+		WConf:       s.defaultWeights.WConf,
+		WDays:       s.defaultWeights.WDays,
+		WAttempts:   s.defaultWeights.WAttempts,
+		WTime:       s.defaultWeights.WTime,
+		WDifficulty: s.defaultWeights.WDifficulty,
+		WFailed:     s.defaultWeights.WFailed,
+		WPattern:    s.defaultWeights.WPattern,
 	}
 
+	// Override with stored values
 	for _, row := range rows {
 		val := parseFloat(row.Value)
 		switch row.Key {

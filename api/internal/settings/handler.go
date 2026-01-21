@@ -26,6 +26,11 @@ func (h *Handler) GetScoringWeights(w http.ResponseWriter, r *http.Request) {
 	utils.Write(w, http.StatusOK, weights)
 }
 
+func (h *Handler) GetDefaultWeights(w http.ResponseWriter, r *http.Request) {
+	weights := h.service.GetDefaultWeights()
+	utils.Write(w, http.StatusOK, weights)
+}
+
 func (h *Handler) UpdateScoringWeights(w http.ResponseWriter, r *http.Request) {
 	var body UpdateScoringWeightsBody
 	if err := utils.Read(r, &body); err != nil {

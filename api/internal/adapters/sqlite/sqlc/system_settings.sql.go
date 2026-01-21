@@ -116,3 +116,29 @@ func (q *Queries) UpdateSystemSetting(ctx context.Context, arg UpdateSystemSetti
 	)
 	return i, err
 }
+
+const upsertSystemSetting = `-- name: UpsertSystemSetting :one
+INSERT INTO system_settings (key, value)
+VALUES (?, ?)
+ON CONFLICT(key) DO UPDATE SET
+    value = excluded.value,
+    updated_at = CURRENT_TIMESTAMP
+RETURNING "key", value, description, updated_at
+`
+
+type UpsertSystemSettingParams struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
+}
+
+func (q *Queries) UpsertSystemSetting(ctx context.Context, arg UpsertSystemSettingParams) (SystemSetting, error) {
+	row := q.db.QueryRowContext(ctx, upsertSystemSetting, arg.Key, arg.Value)
+	var i SystemSetting
+	err := row.Scan(
+		&i.Key,
+		&i.Value,
+		&i.Description,
+		&i.UpdatedAt,
+	)
+	return i, err
+}

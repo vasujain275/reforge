@@ -84,7 +84,7 @@ func (s *settingsService) UpdateScoringWeights(ctx context.Context, body UpdateS
 
 	for key, value := range updates {
 		valueStr := fmt.Sprintf("%.2f", value)
-		_, err := s.repo.UpdateSystemSetting(ctx, repo.UpdateSystemSettingParams{
+		_, err := s.repo.UpsertSystemSetting(ctx, repo.UpsertSystemSettingParams{
 			Key:   key,
 			Value: valueStr,
 		})

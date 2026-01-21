@@ -68,6 +68,7 @@ type Querier interface {
 	UpdateUserEmail(ctx context.Context, arg UpdateUserEmailParams) error
 	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error
 	UpdateUserProblemStats(ctx context.Context, arg UpdateUserProblemStatsParams) (UserProblemStat, error)
+	UpsertSystemSetting(ctx context.Context, arg UpsertSystemSettingParams) (SystemSetting, error)
 	UpsertUserPatternStats(ctx context.Context, arg UpsertUserPatternStatsParams) (UserPatternStat, error)
 	UpsertUserProblemStats(ctx context.Context, arg UpsertUserProblemStatsParams) (UserProblemStat, error)
 }

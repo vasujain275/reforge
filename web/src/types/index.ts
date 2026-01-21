@@ -53,9 +53,16 @@ export interface RevisionSession {
 }
 
 export interface SessionProblem {
-  problem: Problem;
+  id: number;
+  title: string;
+  difficulty: "easy" | "medium" | "hard";
+  source?: string;
   planned_min: number;
+  score: number;
+  days_since_last?: number;
+  confidence: number;
   reason: string;
+  created_at: string;
   completed?: boolean;
   outcome?: "passed" | "failed";
 }

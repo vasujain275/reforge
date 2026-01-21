@@ -14,22 +14,18 @@ import { LayoutDashboard, LogOut, User as UserIcon } from "lucide-react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 
 export default function Layout() {
-  const user = useAuthStore((state) => state.user);
-  const logout = useAuthStore((state) => state.logout);
-  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const location = useLocation();
   const navigate = useNavigate();
+  const { user, isAuthenticated, logout } = useAuthStore();
 
-  // Debug logging
   console.log(
-    "Layout render - user:",
+    "Layout: location:",
+    location.pathname,
+    "user:",
     user,
     "isAuthenticated:",
     isAuthenticated
   );
-
-  // Helper to determine if we are on a "dashboard" route - can be used for active states
-  const isDashboard = location.pathname.startsWith("/dashboard");
 
   return (
     <div className="flex flex-col min-h-screen bg-background text-foreground transition-colors duration-300">

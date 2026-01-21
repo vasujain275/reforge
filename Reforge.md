@@ -235,7 +235,7 @@ All features are defined so that **higher → more urgent**.
 
 ## Weights (default, sum to 1.0)
 
-These are our recommended starting weights — exposed in the admin UI for tuning.
+These are our recommended starting weights — **configurable via Settings UI and stored in environment variables**.
 
 * `w_conf = 0.30`
 * `w_days = 0.20`
@@ -247,6 +247,13 @@ These are our recommended starting weights — exposed in the admin UI for tunin
 
 **(Sanity check)**
 0.30 + 0.20 + 0.10 + 0.05 + 0.15 + 0.10 + 0.10 = 1.00
+
+**Configuration:**
+- Default weights are loaded from environment variables (`DEFAULT_W_CONF`, `DEFAULT_W_DAYS`, etc.)
+- Users can customize weights via the Settings page (`/dashboard/settings`)
+- Weight changes are persisted to the database (`system_settings` table using UPSERT)
+- A "Reset to Defaults" button restores environment-configured values
+- The UI validates that weights sum to 1.00 for optimal scoring
 
 ## Final score
 
@@ -303,9 +310,14 @@ CREATE TABLE system_settings (
     updated_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
--- Default scoring weights (seeded on migration)
--- w_conf=0.30, w_days=0.20, w_attempts=0.10, w_time=0.05,
--- w_difficulty=0.15, w_failed=0.10, w_pattern=0.10
+-- Default scoring weights (loaded from environment variables)
+-- DEFAULT_W_CONF=0.30, DEFAULT_W_DAYS=0.20, DEFAULT_W_ATTEMPTS=0.10, 
+-- DEFAULT_W_TIME=0.05, DEFAULT_W_DIFFICULTY=0.15, DEFAULT_W_FAILED=0.10, 
+-- DEFAULT_W_PATTERN=0.10
+--
+-- Note: Weights are persisted to system_settings table when changed via Settings UI.
+-- The GetScoringWeights service method starts with defaults from env, then overrides
+-- with any values stored in the database (using UPSERT for updates).
 ```
 
 ## Authentication Tables
@@ -769,9 +781,10 @@ All endpoints are prefixed with `/api/v1`. Protected routes require a valid JWT 
 * `GET /api/v1/users/settings` *(protected)* — Get user preferences
 * `PUT /api/v1/users/settings` *(protected)* — Update user preferences
 
-### Admin / Weights
+### Admin / Weights ✅
 * `GET /api/v1/settings/weights` *(protected)* — Get current scoring weights
-* `PUT /api/v1/settings/weights` *(protected)* — Update scoring weights
+* `GET /api/v1/settings/weights/defaults` *(protected)* — Get default weights from environment config
+* `PUT /api/v1/settings/weights` *(protected)* — Update scoring weights (uses UPSERT to handle missing rows)
 
 ### Export
 * `GET /api/v1/export/markdown` *(protected)* — Export all problems/notes to markdown (Obsidian-style)
@@ -865,28 +878,43 @@ All endpoints are prefixed with `/api/v1`. Protected routes require a valid JWT 
 * [x] Dashboard layout with sidebar navigation
 * [x] All dashboard pages (Home, Problems, Sessions, Patterns, New Session, New Problem, Settings)
 * [x] API error handling components
+* [x] Settings page with scoring weights configuration
+* [x] Reset to defaults functionality with backend integration
+
+### Settings Management ✅
+* [x] Environment-based default weights configuration (`.env` file)
+* [x] `GetFloat()` helper in env package for parsing float environment variables
+* [x] Scoring weights config structure in main application config
+* [x] Settings service with injected default weights
+* [x] `GetScoringWeights` endpoint - returns DB weights or falls back to defaults
+* [x] `GetDefaultWeights` endpoint - returns environment-configured defaults
+* [x] `UpdateScoringWeights` endpoint - uses UPSERT to persist weight changes
+* [x] Settings page UI with sliders for all 7 weights
+* [x] Weight sum validation indicator (green when sum = 1.00)
+* [x] Reset to defaults button with confirmation dialog
 
 ## In Progress 🔧
 
 ### Backend API Endpoints
-* [ ] Dashboard stats endpoint (`GET /dashboard/stats`)
-* [ ] Problems CRUD endpoints
-* [ ] Patterns CRUD endpoints
-* [ ] Sessions endpoints (list, create, generate)
-* [ ] Attempts endpoint (`POST /attempts`)
-* [ ] User settings endpoints
+* [x] Dashboard stats endpoint (`GET /dashboard/stats`)
+* [x] Problems CRUD endpoints (list, get, create, update, delete)
+* [x] Patterns CRUD endpoints (list, get, create, update, delete)
+* [x] Sessions endpoints (list, get, create, generate)
+* [x] Attempts endpoint (`POST /attempts`, `GET /attempts`, `GET /problems/:id/attempts`)
+* [x] Settings/weights endpoints (get, get defaults, update)
+* [ ] User settings endpoints (preferences)
 
 ### Core Business Logic
-* [ ] Scoring formula implementation in Go
-* [ ] Session generation algorithm (greedy builder)
-* [ ] Stats aggregation on attempt recording
-* [ ] Score computation with explainability breakdown
+* [x] Scoring formula implementation in Go
+* [x] Session generation algorithm (greedy builder)
+* [x] Stats aggregation on attempt recording
+* [x] Score computation with explainability breakdown
 
 ## Remaining (MVP)
 
-* [ ] Admin/weights UI for tuning scoring parameters
-* [ ] `export/markdown` endpoint (Obsidian-compatible)
+* [ ] Export endpoints (`/export/markdown`, `/export/json`)
 * [ ] Docker file and single binary distribution
+* [ ] User preferences/settings (non-scoring related)
 
 ## Post-MVP (Quality of Life)
 

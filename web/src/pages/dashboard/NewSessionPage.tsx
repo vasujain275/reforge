@@ -85,11 +85,17 @@ export default function NewSessionPage() {
         duration_min: parseInt(customDuration),
       });
       setGeneratedProblems(response.data.data?.problems || []);
-    } catch (err: unknown) {
+    } catch (err: any) {
       console.error("Failed to generate session:", err);
-      setError(
-        "Failed to generate session. Please ensure the backend is running."
-      );
+      
+      // Check if it's a validation error from backend with user-friendly message
+      if (err.response?.data?.error?.message) {
+        setError(err.response.data.error.message);
+      } else if (err.response?.status === 400) {
+        setError("Unable to generate session with current problems. Try adding more problems or selecting a different template.");
+      } else {
+        setError("Failed to generate session. Please ensure the backend is running.");
+      }
     } finally {
       setIsGenerating(false);
     }
@@ -100,15 +106,18 @@ export default function NewSessionPage() {
     try {
       await api.post("/sessions", {
         template_key: selectedTemplate,
-        duration_min: parseInt(customDuration),
+        planned_duration_min: parseInt(customDuration),
         problem_ids: generatedProblems.map((p) => p.id),
       });
       navigate("/dashboard/sessions");
-    } catch (err: unknown) {
+    } catch (err: any) {
       console.error("Failed to start session:", err);
-      setError(
-        "Failed to start session. Please ensure the backend is running."
-      );
+      
+      if (err.response?.data?.error?.message) {
+        setError(err.response.data.error.message);
+      } else {
+        setError("Failed to start session. Please try again.");
+      }
     }
   };
 

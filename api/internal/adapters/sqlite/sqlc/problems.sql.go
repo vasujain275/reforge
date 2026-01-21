@@ -42,6 +42,16 @@ func (q *Queries) CreateProblem(ctx context.Context, arg CreateProblemParams) (P
 	return i, err
 }
 
+const deleteProblem = `-- name: DeleteProblem :exec
+DELETE FROM problems
+WHERE id = ?
+`
+
+func (q *Queries) DeleteProblem(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, deleteProblem, id)
+	return err
+}
+
 const deleteProblemPatterns = `-- name: DeleteProblemPatterns :exec
 DELETE FROM problem_patterns
 WHERE problem_id = ?
@@ -101,6 +111,67 @@ func (q *Queries) GetProblem(ctx context.Context, id int64) (Problem, error) {
 	return i, err
 }
 
+const getProblemsForUser = `-- name: GetProblemsForUser :many
+SELECT p.id, p.title, p.source, p.url, p.difficulty, p.created_at, ups.status, ups.confidence, ups.avg_confidence, 
+       ups.last_attempt_at, ups.total_attempts, ups.last_outcome, ups.updated_at
+FROM problems p
+LEFT JOIN user_problem_stats ups ON p.id = ups.problem_id AND ups.user_id = ?
+ORDER BY p.created_at DESC
+`
+
+type GetProblemsForUserRow struct {
+	ID            int64          `json:"id"`
+	Title         string         `json:"title"`
+	Source        sql.NullString `json:"source"`
+	Url           sql.NullString `json:"url"`
+	Difficulty    sql.NullString `json:"difficulty"`
+	CreatedAt     sql.NullString `json:"created_at"`
+	Status        sql.NullString `json:"status"`
+	Confidence    sql.NullInt64  `json:"confidence"`
+	AvgConfidence sql.NullInt64  `json:"avg_confidence"`
+	LastAttemptAt sql.NullString `json:"last_attempt_at"`
+	TotalAttempts sql.NullInt64  `json:"total_attempts"`
+	LastOutcome   sql.NullString `json:"last_outcome"`
+	UpdatedAt     sql.NullString `json:"updated_at"`
+}
+
+func (q *Queries) GetProblemsForUser(ctx context.Context, userID int64) ([]GetProblemsForUserRow, error) {
+	rows, err := q.db.QueryContext(ctx, getProblemsForUser, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetProblemsForUserRow{}
+	for rows.Next() {
+		var i GetProblemsForUserRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Source,
+			&i.Url,
+			&i.Difficulty,
+			&i.CreatedAt,
+			&i.Status,
+			&i.Confidence,
+			&i.AvgConfidence,
+			&i.LastAttemptAt,
+			&i.TotalAttempts,
+			&i.LastOutcome,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const linkProblemToPattern = `-- name: LinkProblemToPattern :exec
 INSERT INTO problem_patterns (problem_id, pattern_id)
 VALUES (?, ?)
@@ -114,6 +185,41 @@ type LinkProblemToPatternParams struct {
 func (q *Queries) LinkProblemToPattern(ctx context.Context, arg LinkProblemToPatternParams) error {
 	_, err := q.db.ExecContext(ctx, linkProblemToPattern, arg.ProblemID, arg.PatternID)
 	return err
+}
+
+const listAllProblems = `-- name: ListAllProblems :many
+SELECT id, title, source, url, difficulty, created_at FROM problems
+ORDER BY created_at DESC
+`
+
+func (q *Queries) ListAllProblems(ctx context.Context) ([]Problem, error) {
+	rows, err := q.db.QueryContext(ctx, listAllProblems)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Problem{}
+	for rows.Next() {
+		var i Problem
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Source,
+			&i.Url,
+			&i.Difficulty,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listProblems = `-- name: ListProblems :many
@@ -155,4 +261,39 @@ func (q *Queries) ListProblems(ctx context.Context, arg ListProblemsParams) ([]P
 		return nil, err
 	}
 	return items, nil
+}
+
+const updateProblem = `-- name: UpdateProblem :one
+UPDATE problems
+SET title = ?, source = ?, url = ?, difficulty = ?
+WHERE id = ?
+RETURNING id, title, source, url, difficulty, created_at
+`
+
+type UpdateProblemParams struct {
+	Title      string         `json:"title"`
+	Source     sql.NullString `json:"source"`
+	Url        sql.NullString `json:"url"`
+	Difficulty sql.NullString `json:"difficulty"`
+	ID         int64          `json:"id"`
+}
+
+func (q *Queries) UpdateProblem(ctx context.Context, arg UpdateProblemParams) (Problem, error) {
+	row := q.db.QueryRowContext(ctx, updateProblem,
+		arg.Title,
+		arg.Source,
+		arg.Url,
+		arg.Difficulty,
+		arg.ID,
+	)
+	var i Problem
+	err := row.Scan(
+		&i.ID,
+		&i.Title,
+		&i.Source,
+		&i.Url,
+		&i.Difficulty,
+		&i.CreatedAt,
+	)
+	return i, err
 }

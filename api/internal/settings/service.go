@@ -2,6 +2,7 @@ package settings
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 
 	repo "github.com/vasujain275/reforge/internal/adapters/sqlite/sqlc"
@@ -71,6 +72,17 @@ func (s *settingsService) GetScoringWeights(ctx context.Context) (*ScoringWeight
 }
 
 func (s *settingsService) UpdateScoringWeights(ctx context.Context, body UpdateScoringWeightsBody) (*ScoringWeightsResponse, error) {
+	// Weight descriptions for clarity
+	descriptions := map[string]string{
+		"w_conf":       "Confidence weight for scoring algorithm",
+		"w_days":       "Days since last attempt weight",
+		"w_attempts":   "Total attempts weight",
+		"w_time":       "Average time weight",
+		"w_difficulty": "Problem difficulty weight",
+		"w_failed":     "Failed streak weight",
+		"w_pattern":    "Pattern weakness weight",
+	}
+
 	// Update each weight
 	updates := map[string]float64{
 		"w_conf":       body.WConf,
@@ -87,6 +99,10 @@ func (s *settingsService) UpdateScoringWeights(ctx context.Context, body UpdateS
 		_, err := s.repo.UpsertSystemSetting(ctx, repo.UpsertSystemSettingParams{
 			Key:   key,
 			Value: valueStr,
+			Description: sql.NullString{
+				String: descriptions[key],
+				Valid:  true,
+			},
 		})
 		if err != nil {
 			return nil, fmt.Errorf("failed to update %s: %w", key, err)

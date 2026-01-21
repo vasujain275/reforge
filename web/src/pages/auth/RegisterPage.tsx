@@ -28,12 +28,14 @@ export default function RegisterPage() {
     const fetchSettings = async () => {
       try {
         const settings = await publicApi.getSignupSettings();
+        console.log("Signup settings:", settings);
         setSignupEnabled(settings.signup_enabled);
         setInviteCodesRequired(settings.invite_codes_enabled);
       } catch (err) {
         console.error("Failed to fetch signup settings:", err);
-        // If we can't fetch settings, default to allowing signup
+        // If we can't fetch settings, default to allowing signup without invite codes
         setSignupEnabled(true);
+        setInviteCodesRequired(false);
       } finally {
         setIsLoading(false);
       }

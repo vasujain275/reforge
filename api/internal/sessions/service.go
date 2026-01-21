@@ -4,12 +4,31 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
 	repo "github.com/vasujain275/reforge/internal/adapters/sqlite/sqlc"
 	"github.com/vasujain275/reforge/internal/scoring"
 )
+
+// Custom errors
+var (
+	ErrInsufficientProblems = errors.New("insufficient problems to generate session")
+	ErrConstraintNotMet     = errors.New("session constraints not met")
+)
+
+// SessionGenerationError provides detailed information about why session generation failed
+type SessionGenerationError struct {
+	Message        string
+	RequiredCount  int
+	AvailableCount int
+	Constraint     string
+}
+
+func (e *SessionGenerationError) Error() string {
+	return e.Message
+}
 
 // TemplateConfig defines the constraints for a session template
 type TemplateConfig struct {
@@ -135,7 +154,7 @@ func (s *sessionService) CreateSession(ctx context.Context, userID int64, body C
 		TemplateKey:        nullStringToStr(session.TemplateKey, ""),
 		CreatedAt:          session.CreatedAt.String,
 		PlannedDurationMin: nullInt64ToInt64(session.PlannedDurationMin, 0),
-		Completed:          false,
+		Completed:          session.CompletedAt.Valid,
 	}, nil
 }
 
@@ -179,7 +198,7 @@ func (s *sessionService) GetSession(ctx context.Context, userID int64, sessionID
 		TemplateKey:        nullStringToStr(session.TemplateKey, ""),
 		CreatedAt:          session.CreatedAt.String,
 		PlannedDurationMin: nullInt64ToInt64(session.PlannedDurationMin, 0),
-		Completed:          false,
+		Completed:          session.CompletedAt.Valid,
 		Problems:           problems,
 	}, nil
 }
@@ -208,7 +227,7 @@ func (s *sessionService) ListSessionsForUser(ctx context.Context, userID int64, 
 			TemplateKey:        nullStringToStr(session.TemplateKey, ""),
 			CreatedAt:          session.CreatedAt.String,
 			PlannedDurationMin: nullInt64ToInt64(session.PlannedDurationMin, 0),
-			Completed:          false,
+			Completed:          session.CompletedAt.Valid,
 		})
 	}
 
@@ -354,7 +373,21 @@ func (s *sessionService) buildSessionWithConstraints(
 
 	// Validate constraints
 	if template.MinQuickWins > 0 && quickWinCount < template.MinQuickWins {
-		return nil, fmt.Errorf("failed to meet min quick wins constraint: need %d, got %d", template.MinQuickWins, quickWinCount)
+		return nil, &SessionGenerationError{
+			Message:        fmt.Sprintf("Not enough easy problems available. Need at least %d problems that can be solved in ≤15 minutes, but only found %d. Please add more easy or medium difficulty problems to your library.", template.MinQuickWins, quickWinCount),
+			RequiredCount:  template.MinQuickWins,
+			AvailableCount: quickWinCount,
+			Constraint:     "min_quick_wins",
+		}
+	}
+
+	if len(problems) == 0 {
+		return nil, &SessionGenerationError{
+			Message:        "No problems available for this session template. Please add more problems to your library or try a different template.",
+			RequiredCount:  1,
+			AvailableCount: 0,
+			Constraint:     "minimum_problems",
+		}
 	}
 
 	return problems, nil

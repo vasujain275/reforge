@@ -1,6 +1,7 @@
 package sessions
 
 import (
+	"errors"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -125,6 +126,18 @@ func (h *handler) GenerateSession(w http.ResponseWriter, r *http.Request) {
 
 	session, err := h.service.GenerateSession(r.Context(), userID, body)
 	if err != nil {
+		// Check if it's a session generation error with user-friendly message
+		var genErr *SessionGenerationError
+		if errors.As(err, &genErr) {
+			slog.Warn("Session generation constraint not met", "error", genErr.Message, "constraint", genErr.Constraint)
+			utils.BadRequest(w, genErr.Message, map[string]interface{}{
+				"constraint":      genErr.Constraint,
+				"required_count":  genErr.RequiredCount,
+				"available_count": genErr.AvailableCount,
+			})
+			return
+		}
+
 		slog.Error("Failed to generate session", "error", err)
 		utils.InternalServerError(w, "Failed to generate session")
 		return

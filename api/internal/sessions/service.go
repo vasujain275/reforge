@@ -287,11 +287,79 @@ func (s *sessionService) buildSessionWithConstraints(
 	template TemplateConfig,
 	durationMin int64,
 ) ([]SessionProblem, error) {
-	// Step 1: Filter candidates based on template constraints
-	candidates := make([]candidateProblem, 0)
+	// Smart session generation: Use progressive relaxation strategy
+	// Try strict filters first, then progressively relax if insufficient problems
+
+	// Step 1: Build all candidates with full metadata (no filtering yet)
+	allCandidates := s.buildAllCandidates(ctx, userID, scores)
+
+	if len(allCandidates) == 0 {
+		return nil, &SessionGenerationError{
+			Message:        "No problems available. Add some problems to your library first.",
+			RequiredCount:  1,
+			AvailableCount: 0,
+			Constraint:     "minimum_problems",
+		}
+	}
+
+	// Step 2: Try to build session with progressively relaxed constraints
+	// Level 0: Full constraints
+	// Level 1: Relax confidence filters
+	// Level 2: Relax days-since-last filter
+	// Level 3: Relax pattern mode filter
+	// Level 4: Relax all filters (just difficulty)
+
+	for relaxLevel := 0; relaxLevel <= 4; relaxLevel++ {
+		candidates := s.filterCandidates(ctx, userID, allCandidates, template, relaxLevel)
+
+		if len(candidates) == 0 {
+			continue // Try next relaxation level
+		}
+
+		// Apply pattern mode filtering (with fallback at higher relax levels)
+		filteredCandidates, err := s.applyPatternModeFilterWithFallback(ctx, userID, candidates, template, relaxLevel)
+		if err != nil {
+			continue
+		}
+
+		if len(filteredCandidates) == 0 {
+			continue
+		}
+
+		// Apply difficulty distribution or progression mode
+		if template.DifficultyDist != nil {
+			filteredCandidates = s.applyDifficultyDistributionSmart(filteredCandidates, *template.DifficultyDist)
+		} else if template.ProgressionMode {
+			filteredCandidates = s.applyProgressionMode(filteredCandidates)
+		}
+
+		// Greedy selection
+		problems, quickWinCount := s.greedySelectProblems(filteredCandidates, template, durationMin)
+
+		if len(problems) == 0 {
+			continue
+		}
+
+		// At relaxation levels 0-1, enforce MinQuickWins strictly
+		// At higher levels, accept whatever we can get
+		if relaxLevel <= 1 && template.MinQuickWins > 0 && quickWinCount < template.MinQuickWins {
+			continue // Try next relaxation level
+		}
+
+		// Success! Return the problems
+		return problems, nil
+	}
+
+	// Final fallback: Just grab whatever problems we can fit in the time budget
+	// This ensures we ALWAYS generate a session if there's at least 1 problem
+	return s.buildFallbackSession(allCandidates, durationMin)
+}
+
+// buildAllCandidates creates candidate structs for all scored problems without filtering
+func (s *sessionService) buildAllCandidates(ctx context.Context, userID int64, scores []scoring.ProblemScore) []candidateProblem {
+	candidates := make([]candidateProblem, 0, len(scores))
 
 	for _, score := range scores {
-		// Get problem details
 		problem, err := s.repo.GetProblem(ctx, score.ProblemID)
 		if err != nil {
 			continue
@@ -300,7 +368,6 @@ func (s *sessionService) buildSessionWithConstraints(
 		difficulty := nullStringToStr(problem.Difficulty, "medium")
 		estimatedMin := getEstimatedTime(difficulty)
 
-		// Get user problem stats
 		stats, err := s.repo.GetUserProblemStats(ctx, repo.GetUserProblemStatsParams{
 			UserID:    userID,
 			ProblemID: score.ProblemID,
@@ -309,39 +376,15 @@ func (s *sessionService) buildSessionWithConstraints(
 			continue
 		}
 
-		confidence := int(stats.Confidence.Int64)
-
-		// Apply template filters
-
-		// 1. Difficulty filter (MaxDifficulty)
-		if !template.AllowDifficulty(difficulty) {
-			continue
-		}
-
-		// 2. Confidence range filter
-		if template.MinConfidence != nil && confidence < *template.MinConfidence {
-			continue
-		}
-		if template.MaxConfidence != nil && confidence > *template.MaxConfidence {
-			continue
-		}
-
-		// 3. Days since last attempt filter
 		var daysSinceLast *int
 		if stats.LastAttemptAt.Valid {
 			lastAttempt, err := time.Parse(time.RFC3339, stats.LastAttemptAt.String)
 			if err == nil {
 				days := int(time.Since(lastAttempt).Hours() / 24)
 				daysSinceLast = &days
-
-				// Filter by min days
-				if template.MinDaysSinceLast != nil && days < *template.MinDaysSinceLast {
-					continue
-				}
 			}
 		}
 
-		// Get patterns for this problem
 		patterns, err := s.repo.GetPatternsForProblem(ctx, score.ProblemID)
 		if err != nil {
 			patterns = []repo.Pattern{}
@@ -358,90 +401,253 @@ func (s *sessionService) buildSessionWithConstraints(
 		})
 	}
 
-	// Step 2: Apply pattern mode filtering
-	candidates, err := s.applyPatternModeFilter(ctx, userID, candidates, template)
+	return candidates
+}
+
+// filterCandidates applies template filters with progressive relaxation
+// relaxLevel: 0=strict, 1=relax confidence, 2=relax days, 3=relax pattern requirements, 4=minimal filters
+func (s *sessionService) filterCandidates(
+	ctx context.Context,
+	userID int64,
+	candidates []candidateProblem,
+	template TemplateConfig,
+	relaxLevel int,
+) []candidateProblem {
+	filtered := make([]candidateProblem, 0)
+
+	for _, candidate := range candidates {
+		// Always apply difficulty filter (never relaxed - it's fundamental)
+		if !template.AllowDifficulty(candidate.difficulty) {
+			continue
+		}
+
+		confidence := int(candidate.stats.Confidence.Int64)
+
+		// Confidence filters (relaxed at level 1+)
+		if relaxLevel < 1 {
+			if template.MinConfidence != nil && confidence < *template.MinConfidence {
+				continue
+			}
+			if template.MaxConfidence != nil && confidence > *template.MaxConfidence {
+				continue
+			}
+		}
+
+		// Days since last filter (relaxed at level 2+)
+		if relaxLevel < 2 {
+			if candidate.daysSinceLast != nil && template.MinDaysSinceLast != nil {
+				if *candidate.daysSinceLast < *template.MinDaysSinceLast {
+					continue
+				}
+			}
+		}
+
+		filtered = append(filtered, candidate)
+	}
+
+	return filtered
+}
+
+// applyPatternModeFilterWithFallback applies pattern filtering with fallback at higher relax levels
+func (s *sessionService) applyPatternModeFilterWithFallback(
+	ctx context.Context,
+	userID int64,
+	candidates []candidateProblem,
+	template TemplateConfig,
+	relaxLevel int,
+) ([]candidateProblem, error) {
+	// At relax level 3+, skip pattern mode filtering entirely
+	if relaxLevel >= 3 {
+		return candidates, nil
+	}
+
+	// Try normal pattern mode filtering
+	filtered, err := s.applyPatternModeFilter(ctx, userID, candidates, template)
 	if err != nil {
-		return nil, err
+		// If pattern mode fails (e.g., specific pattern not set), return all candidates
+		return candidates, nil
 	}
 
-	// Step 3: Apply difficulty distribution or progression mode
-	if template.DifficultyDist != nil {
-		candidates = s.applyDifficultyDistribution(candidates, *template.DifficultyDist)
-	} else if template.ProgressionMode {
-		candidates = s.applyProgressionMode(candidates)
+	// If pattern filtering returned too few results, fall back to all candidates
+	if len(filtered) == 0 {
+		return candidates, nil
 	}
 
-	// Step 4: Greedy selection with constraints
+	return filtered, nil
+}
+
+// applyDifficultyDistributionSmart is a smarter version that handles low problem counts
+func (s *sessionService) applyDifficultyDistributionSmart(
+	candidates []candidateProblem,
+	dist DifficultyDistribution,
+) []candidateProblem {
+	// Group by difficulty
+	byDifficulty := map[string][]candidateProblem{
+		"easy":   {},
+		"medium": {},
+		"hard":   {},
+	}
+
+	for _, candidate := range candidates {
+		byDifficulty[candidate.difficulty] = append(byDifficulty[candidate.difficulty], candidate)
+	}
+
+	totalAvailable := len(candidates)
+	if totalAvailable == 0 {
+		return candidates
+	}
+
+	// For small problem sets, just return all (ordering preserved from score sort)
+	if totalAvailable <= 5 {
+		return candidates
+	}
+
+	// Calculate target counts based on available problems
+	targetSize := min(20, totalAvailable)
+	easyTarget := int(float64(targetSize) * dist.EasyPercent / 100.0)
+	mediumTarget := int(float64(targetSize) * dist.MediumPercent / 100.0)
+	hardTarget := int(float64(targetSize) * dist.HardPercent / 100.0)
+
+	// Ensure we get at least 1 of each if available and percentage > 0
+	if dist.EasyPercent > 0 && easyTarget == 0 && len(byDifficulty["easy"]) > 0 {
+		easyTarget = 1
+	}
+	if dist.MediumPercent > 0 && mediumTarget == 0 && len(byDifficulty["medium"]) > 0 {
+		mediumTarget = 1
+	}
+	if dist.HardPercent > 0 && hardTarget == 0 && len(byDifficulty["hard"]) > 0 {
+		hardTarget = 1
+	}
+
+	// Sample from each bucket
+	result := make([]candidateProblem, 0)
+
+	for i := 0; i < easyTarget && i < len(byDifficulty["easy"]); i++ {
+		result = append(result, byDifficulty["easy"][i])
+	}
+	for i := 0; i < mediumTarget && i < len(byDifficulty["medium"]); i++ {
+		result = append(result, byDifficulty["medium"][i])
+	}
+	for i := 0; i < hardTarget && i < len(byDifficulty["hard"]); i++ {
+		result = append(result, byDifficulty["hard"][i])
+	}
+
+	// If we ended up with nothing, return original candidates
+	if len(result) == 0 {
+		return candidates
+	}
+
+	return result
+}
+
+// greedySelectProblems performs greedy selection with soft pattern constraints
+func (s *sessionService) greedySelectProblems(
+	candidates []candidateProblem,
+	template TemplateConfig,
+	durationMin int64,
+) ([]SessionProblem, int) {
 	problems := make([]SessionProblem, 0)
 	totalMinutes := int64(0)
 	patternCounts := make(map[int64]int)
 	quickWinCount := 0
 
+	// First pass: respect pattern constraints
 	for _, candidate := range candidates {
-		// Check time budget
 		if totalMinutes+int64(candidate.estimatedMin) > durationMin {
 			break
 		}
 
-		// Check pattern constraints
+		// Check pattern constraints (soft - skip if exceeded)
 		skipDueToPattern := false
-		for _, pattern := range candidate.patterns {
-			if patternCounts[pattern.ID] >= template.MaxSamePattern {
-				skipDueToPattern = true
-				break
+		if template.MaxSamePattern > 0 {
+			for _, pattern := range candidate.patterns {
+				if patternCounts[pattern.ID] >= template.MaxSamePattern {
+					skipDueToPattern = true
+					break
+				}
 			}
 		}
 		if skipDueToPattern {
 			continue
 		}
 
-		// Add problem
-		problems = append(problems, SessionProblem{
-			ID:            candidate.problem.ID,
-			Title:         candidate.problem.Title,
-			Difficulty:    candidate.difficulty,
-			Source:        nullStringToPtr(candidate.problem.Source),
-			URL:           nullStringToPtr(candidate.problem.Url),
-			PlannedMin:    candidate.estimatedMin,
-			Score:         candidate.score.Score,
-			DaysSinceLast: candidate.daysSinceLast,
-			Confidence:    candidate.stats.Confidence.Int64,
-			Reason:        candidate.score.Reason,
-			CreatedAt:     candidate.problem.CreatedAt.String,
-			Completed:     false, // Not completed yet (session is being generated)
-			Outcome:       nil,   // No outcome yet
-		})
-
+		problems = append(problems, s.candidateToSessionProblem(candidate))
 		totalMinutes += int64(candidate.estimatedMin)
 
-		// Track quick wins
 		if candidate.estimatedMin <= 15 {
 			quickWinCount++
 		}
 
-		// Update pattern counts
 		for _, pattern := range candidate.patterns {
 			patternCounts[pattern.ID]++
 		}
 	}
 
-	// Step 5: Validate constraints
-	if template.MinQuickWins > 0 && quickWinCount < template.MinQuickWins {
-		return nil, &SessionGenerationError{
-			Message:        fmt.Sprintf("Not enough quick wins available. Need at least %d problems ≤15 minutes, but only found %d. Try adding easier problems or choose a different template.", template.MinQuickWins, quickWinCount),
-			RequiredCount:  template.MinQuickWins,
-			AvailableCount: quickWinCount,
-			Constraint:     "min_quick_wins",
+	// If we got no problems due to pattern constraints, do a second pass ignoring them
+	if len(problems) == 0 {
+		totalMinutes = 0
+		for _, candidate := range candidates {
+			if totalMinutes+int64(candidate.estimatedMin) > durationMin {
+				break
+			}
+
+			problems = append(problems, s.candidateToSessionProblem(candidate))
+			totalMinutes += int64(candidate.estimatedMin)
+
+			if candidate.estimatedMin <= 15 {
+				quickWinCount++
+			}
 		}
 	}
 
-	if len(problems) == 0 {
+	return problems, quickWinCount
+}
+
+// candidateToSessionProblem converts a candidate to a SessionProblem
+func (s *sessionService) candidateToSessionProblem(candidate candidateProblem) SessionProblem {
+	return SessionProblem{
+		ID:            candidate.problem.ID,
+		Title:         candidate.problem.Title,
+		Difficulty:    candidate.difficulty,
+		Source:        nullStringToPtr(candidate.problem.Source),
+		URL:           nullStringToPtr(candidate.problem.Url),
+		PlannedMin:    candidate.estimatedMin,
+		Score:         candidate.score.Score,
+		DaysSinceLast: candidate.daysSinceLast,
+		Confidence:    candidate.stats.Confidence.Int64,
+		Reason:        candidate.score.Reason,
+		CreatedAt:     candidate.problem.CreatedAt.String,
+		Completed:     false,
+		Outcome:       nil,
+	}
+}
+
+// buildFallbackSession creates a session with minimal filtering - last resort
+func (s *sessionService) buildFallbackSession(candidates []candidateProblem, durationMin int64) ([]SessionProblem, error) {
+	if len(candidates) == 0 {
 		return nil, &SessionGenerationError{
-			Message:        "No problems available for this template. Try adjusting filters or adding more problems to your library.",
+			Message:        "No problems available for revision. Add some problems to your library first.",
 			RequiredCount:  1,
 			AvailableCount: 0,
 			Constraint:     "minimum_problems",
 		}
+	}
+
+	problems := make([]SessionProblem, 0)
+	totalMinutes := int64(0)
+
+	for _, candidate := range candidates {
+		if totalMinutes+int64(candidate.estimatedMin) > durationMin {
+			break
+		}
+
+		problems = append(problems, s.candidateToSessionProblem(candidate))
+		totalMinutes += int64(candidate.estimatedMin)
+	}
+
+	// If even one problem doesn't fit in time budget, still include at least 1
+	if len(problems) == 0 && len(candidates) > 0 {
+		problems = append(problems, s.candidateToSessionProblem(candidates[0]))
 	}
 
 	return problems, nil
@@ -546,44 +752,6 @@ func (s *sessionService) getWeakestPatterns(ctx context.Context, userID int64, c
 	}
 
 	return result, nil
-}
-
-// applyDifficultyDistribution samples problems to match target distribution
-func (s *sessionService) applyDifficultyDistribution(
-	candidates []candidateProblem,
-	dist DifficultyDistribution,
-) []candidateProblem {
-	// Group by difficulty
-	byDifficulty := map[string][]candidateProblem{
-		"easy":   {},
-		"medium": {},
-		"hard":   {},
-	}
-
-	for _, candidate := range candidates {
-		byDifficulty[candidate.difficulty] = append(byDifficulty[candidate.difficulty], candidate)
-	}
-
-	// Calculate target counts (rough estimate based on first 20 problems)
-	targetSize := 20
-	easyTarget := int(float64(targetSize) * dist.EasyPercent / 100.0)
-	mediumTarget := int(float64(targetSize) * dist.MediumPercent / 100.0)
-	hardTarget := int(float64(targetSize) * dist.HardPercent / 100.0)
-
-	// Sample from each bucket
-	result := make([]candidateProblem, 0)
-
-	for i := 0; i < easyTarget && i < len(byDifficulty["easy"]); i++ {
-		result = append(result, byDifficulty["easy"][i])
-	}
-	for i := 0; i < mediumTarget && i < len(byDifficulty["medium"]); i++ {
-		result = append(result, byDifficulty["medium"][i])
-	}
-	for i := 0; i < hardTarget && i < len(byDifficulty["hard"]); i++ {
-		result = append(result, byDifficulty["hard"][i])
-	}
-
-	return result
 }
 
 // applyProgressionMode orders problems Easy -> Medium -> Hard

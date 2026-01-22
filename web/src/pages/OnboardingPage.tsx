@@ -1,7 +1,9 @@
 import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Progress } from "@/components/ui/progress";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   AlertCircle,
@@ -9,15 +11,25 @@ import {
   Brain,
   Check,
   ChevronRight,
+  Database,
+  FileSpreadsheet,
   Loader2,
   Server,
   Shield,
+  SkipForward,
   Terminal,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { toast } from "sonner";
+import {
+  onboardingImportApi,
+  connectToImportStream,
+  type BundledDataset,
+  type ImportProgress as ImportProgressType,
+  type ImportResult,
+} from "@/api/import";
 
-type OnboardingStep = "welcome" | "features" | "setup";
+type OnboardingStep = "welcome" | "features" | "setup" | "data";
 
 export default function OnboardingPage() {
   const [step, setStep] = useState<OnboardingStep>("welcome");
@@ -61,13 +73,10 @@ export default function OnboardingPage() {
         password,
       });
 
-      toast.success("System initialized successfully!");
+      toast.success("Admin account created!");
       
-      // Force a full page reload to reset InitializationGuard state
-      // This ensures the guard re-checks and redirects properly to login
-      setTimeout(() => {
-        window.location.href = "/login";
-      }, 1500);
+      // Move to data import step instead of redirecting
+      setStep("data");
     } catch (err: any) {
       const errorMsg = err.response?.data?.message || "Failed to initialize system";
       setError(errorMsg);
@@ -80,6 +89,11 @@ export default function OnboardingPage() {
   const nextStep = () => {
     if (step === "welcome") setStep("features");
     else if (step === "features") setStep("setup");
+  };
+
+  const handleFinish = () => {
+    // Redirect to login
+    window.location.href = "/login";
   };
 
   return (
@@ -97,20 +111,27 @@ export default function OnboardingPage() {
             step={1} 
             label="Welcome" 
             isActive={step === "welcome"} 
-            isComplete={step === "features" || step === "setup"} 
+            isComplete={step === "features" || step === "setup" || step === "data"} 
           />
           <ChevronRight className="h-3 w-3 text-muted-foreground/50 shrink-0" />
           <StepIndicator 
             step={2} 
             label="Features" 
             isActive={step === "features"} 
-            isComplete={step === "setup"} 
+            isComplete={step === "setup" || step === "data"} 
           />
           <ChevronRight className="h-3 w-3 text-muted-foreground/50 shrink-0" />
           <StepIndicator 
             step={3} 
             label="Setup" 
             isActive={step === "setup"} 
+            isComplete={step === "data"} 
+          />
+          <ChevronRight className="h-3 w-3 text-muted-foreground/50 shrink-0" />
+          <StepIndicator 
+            step={4} 
+            label="Data" 
+            isActive={step === "data"} 
             isComplete={false} 
           />
         </div>
@@ -141,6 +162,9 @@ export default function OnboardingPage() {
                 isSubmitting={isSubmitting}
                 onSubmit={handleSubmit}
               />
+            )}
+            {step === "data" && (
+              <DataStep key="data" onFinish={handleFinish} />
             )}
           </AnimatePresence>
         </div>
@@ -565,6 +589,524 @@ function SetupStep({
           )}
         </Button>
       </motion.form>
+    </motion.div>
+  );
+}
+
+// ============= Data Import Step =============
+
+type DataStepPhase = "select" | "importing" | "complete";
+
+function DataStep({ onFinish }: { onFinish: () => void }) {
+  const [phase, setPhase] = useState<DataStepPhase>("select");
+  const [datasets, setDatasets] = useState<BundledDataset[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [selectedDataset, setSelectedDataset] = useState<BundledDataset | null>(null);
+  
+  // Import state
+  const [importProgress, setImportProgress] = useState<ImportProgressType | null>(null);
+  const [importResult, setImportResult] = useState<ImportResult | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
+  const eventSourceRef = useRef<EventSource | null>(null);
+
+  // Fetch datasets on mount
+  useEffect(() => {
+    const fetchDatasets = async () => {
+      try {
+        const data = await onboardingImportApi.getBundledDatasets();
+        setDatasets(data);
+      } catch (err) {
+        console.error("Failed to load datasets:", err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    fetchDatasets();
+  }, []);
+
+  const handleStartImport = (dataset: BundledDataset) => {
+    setSelectedDataset(dataset);
+    setPhase("importing");
+    setImportError(null);
+    setImportProgress(null);
+
+    const url = onboardingImportApi.getExecuteImportURL(dataset.id);
+    
+    eventSourceRef.current = connectToImportStream(url, {
+      onProgress: (progress) => {
+        setImportProgress(progress);
+      },
+      onComplete: (result) => {
+        setImportResult(result);
+        setPhase("complete");
+      },
+      onError: (error) => {
+        setImportError(error);
+        setPhase("select");
+      },
+    });
+  };
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -20 }}
+      transition={{ duration: 0.4 }}
+      className="w-full max-w-3xl space-y-6"
+    >
+      <AnimatePresence mode="wait">
+        {phase === "select" && (
+          <DataSelectPhase
+            key="select"
+            datasets={datasets}
+            isLoading={isLoading}
+            error={importError}
+            onSelect={handleStartImport}
+            onSkip={onFinish}
+          />
+        )}
+        {phase === "importing" && selectedDataset && (
+          <DataImportingPhase
+            key="importing"
+            dataset={selectedDataset}
+            progress={importProgress}
+          />
+        )}
+        {phase === "complete" && importResult && (
+          <DataCompletePhase
+            key="complete"
+            result={importResult}
+            onFinish={onFinish}
+          />
+        )}
+      </AnimatePresence>
+    </motion.div>
+  );
+}
+
+// Select Dataset Phase
+function DataSelectPhase({
+  datasets,
+  isLoading,
+  error,
+  onSelect,
+  onSkip,
+}: {
+  datasets: BundledDataset[];
+  isLoading: boolean;
+  error: string | null;
+  onSelect: (dataset: BundledDataset) => void;
+  onSkip: () => void;
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -20 }}
+      transition={{ duration: 0.3 }}
+      className="space-y-6"
+    >
+      {/* Header */}
+      <div className="text-center space-y-3">
+        <motion.div
+          initial={{ scale: 0.9, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ delay: 0.1 }}
+          className="relative inline-block"
+        >
+          <div className="inline-flex items-center justify-center w-14 h-14 sm:w-16 sm:h-16 rounded-xl bg-primary/10 border border-primary/20">
+            <Database className="h-7 w-7 sm:h-8 sm:w-8 text-primary" />
+          </div>
+          <div className="absolute inset-0 flex items-center justify-center -z-10">
+            <div className="w-20 h-20 sm:w-24 sm:h-24 bg-primary/20 rounded-full blur-2xl animate-pulse" />
+          </div>
+        </motion.div>
+        
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+        >
+          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
+            Load Problem Set
+          </h2>
+          <p className="text-sm sm:text-base text-muted-foreground mt-2 max-w-lg mx-auto">
+            Get started quickly with a curated dataset of LeetCode problems and patterns.
+            <span className="block mt-1 text-xs font-mono text-muted-foreground/70">
+              // Optional - you can always import later from Admin → Data
+            </span>
+          </p>
+        </motion.div>
+      </div>
+
+      {/* Status Badge */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.3 }}
+        className="flex justify-center"
+      >
+        <div className="inline-flex items-center gap-2 bg-green-500/10 border border-green-500/20 rounded-full px-3 py-1.5">
+          <Check className="h-3 w-3 text-green-500" />
+          <span className="text-xs font-mono text-green-500 uppercase tracking-wider">
+            Admin Account Created
+          </span>
+        </div>
+      </motion.div>
+
+      {/* Error Message */}
+      {error && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 flex items-start gap-2"
+        >
+          <AlertCircle className="h-4 w-4 text-red-500 shrink-0 mt-0.5" />
+          <span className="text-xs font-mono text-red-500">{error}</span>
+        </motion.div>
+      )}
+
+      {/* Dataset Cards */}
+      {isLoading ? (
+        <div className="flex items-center justify-center py-8">
+          <div className="flex flex-col items-center gap-3">
+            <Loader2 className="h-6 w-6 text-primary animate-spin" />
+            <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">
+              Loading datasets...
+            </span>
+          </div>
+        </div>
+      ) : datasets.length === 0 ? (
+        <div className="bg-muted/30 border border-border rounded-lg p-6 text-center">
+          <Database className="h-8 w-8 text-muted-foreground mx-auto mb-3" />
+          <h3 className="font-mono text-sm font-semibold uppercase tracking-wider">
+            No Datasets Available
+          </h3>
+          <p className="text-xs text-muted-foreground font-mono mt-1">
+            You can add problems manually from the dashboard
+          </p>
+        </div>
+      ) : (
+        <div className="grid gap-3">
+          {datasets.map((dataset, index) => (
+            <DatasetCard
+              key={dataset.id}
+              dataset={dataset}
+              index={index}
+              onSelect={() => onSelect(dataset)}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Skip Button */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.5 }}
+        className="flex justify-center pt-2"
+      >
+        <Button
+          variant="ghost"
+          onClick={onSkip}
+          className="font-mono text-xs text-muted-foreground hover:text-foreground"
+        >
+          <SkipForward className="h-3 w-3 mr-1.5" />
+          Skip for now
+        </Button>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+// Dataset Card
+function DatasetCard({
+  dataset,
+  index,
+  onSelect,
+}: {
+  dataset: BundledDataset;
+  index: number;
+  onSelect: () => void;
+}) {
+  const totalProblems =
+    dataset.difficulties.easy +
+    dataset.difficulties.medium +
+    dataset.difficulties.hard;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.3 + index * 0.1, duration: 0.3 }}
+    >
+      <Card 
+        className="border border-border bg-card/50 backdrop-blur-sm hover:border-primary/30 hover:shadow-[0_0_15px_-3px_var(--primary)] transition-all duration-300 cursor-pointer group"
+        onClick={onSelect}
+      >
+        <CardContent className="p-4">
+          <div className="flex items-start gap-4">
+            {/* Icon */}
+            <div className="p-3 rounded-lg bg-primary/10 border border-primary/20 group-hover:bg-primary/20 transition-colors">
+              <FileSpreadsheet className="h-5 w-5 text-primary" />
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="font-semibold text-foreground group-hover:text-primary transition-colors">
+                  {dataset.name}
+                </h3>
+                <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all" />
+              </div>
+              <p className="text-xs text-muted-foreground mt-1 line-clamp-1">
+                {dataset.description}
+              </p>
+
+              {/* Stats Row */}
+              <div className="flex items-center gap-4 mt-3 font-mono text-xs">
+                <span className="text-muted-foreground">
+                  <span className="text-foreground font-semibold">{totalProblems.toLocaleString()}</span> problems
+                </span>
+                <span className="text-muted-foreground/50">|</span>
+                <span className="text-muted-foreground">
+                  <span className="text-foreground font-semibold">{dataset.pattern_count}</span> patterns
+                </span>
+              </div>
+
+              {/* Difficulty Breakdown */}
+              <div className="flex items-center gap-3 mt-2 font-mono text-xs">
+                <span>
+                  <span className="text-green-500 font-semibold">{dataset.difficulties.easy}</span>
+                  <span className="text-muted-foreground ml-1">E</span>
+                </span>
+                <span>
+                  <span className="text-orange-400 font-semibold">{dataset.difficulties.medium}</span>
+                  <span className="text-muted-foreground ml-1">M</span>
+                </span>
+                <span>
+                  <span className="text-red-500 font-semibold">{dataset.difficulties.hard}</span>
+                  <span className="text-muted-foreground ml-1">H</span>
+                </span>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </motion.div>
+  );
+}
+
+// Importing Phase
+function DataImportingPhase({
+  dataset,
+  progress,
+}: {
+  dataset: BundledDataset;
+  progress: ImportProgressType | null;
+}) {
+  const percentage = progress?.percentage ?? 0;
+  const isPatternPhase = progress?.phase === "patterns";
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -20 }}
+      transition={{ duration: 0.3 }}
+      className="space-y-6"
+    >
+      {/* Header */}
+      <div className="text-center space-y-3">
+        <motion.div
+          initial={{ scale: 0.9, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          className="relative inline-block"
+        >
+          <div className="inline-flex items-center justify-center w-14 h-14 sm:w-16 sm:h-16 rounded-xl bg-primary/10 border border-primary/20">
+            <Loader2 className="h-7 w-7 sm:h-8 sm:w-8 text-primary animate-spin" />
+          </div>
+        </motion.div>
+        
+        <div>
+          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
+            Importing Data
+          </h2>
+          <p className="text-sm text-muted-foreground mt-1 font-mono">
+            {dataset.name}
+          </p>
+        </div>
+      </div>
+
+      {/* Progress Card */}
+      <Card className="border border-border bg-card/50 backdrop-blur-sm">
+        <CardContent className="p-6 space-y-4">
+          {/* Status */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="h-2 w-2 rounded-full bg-primary animate-pulse" />
+              <span className="font-mono text-xs uppercase tracking-wider text-muted-foreground">
+                {isPatternPhase ? "Creating Patterns" : "Importing Problems"}
+              </span>
+            </div>
+            <span className="font-mono text-sm text-primary font-bold">
+              {percentage.toFixed(1)}%
+            </span>
+          </div>
+
+          {/* Progress Bar */}
+          <Progress value={percentage} className="h-2" />
+
+          {/* Stats */}
+          {progress && (
+            <div className="flex items-center justify-center gap-6 pt-2 font-mono text-xs">
+              <div className="text-center">
+                <p className="text-lg font-bold text-green-500">{progress.problems_created}</p>
+                <p className="text-muted-foreground uppercase tracking-wider">Created</p>
+              </div>
+              <div className="w-px h-8 bg-border" />
+              <div className="text-center">
+                <p className="text-lg font-bold text-primary">{progress.patterns_created}</p>
+                <p className="text-muted-foreground uppercase tracking-wider">Patterns</p>
+              </div>
+              <div className="w-px h-8 bg-border" />
+              <div className="text-center">
+                <p className="text-lg font-bold text-muted-foreground">{progress.duplicates_skipped}</p>
+                <p className="text-muted-foreground uppercase tracking-wider">Skipped</p>
+              </div>
+            </div>
+          )}
+
+          {/* Current Item */}
+          {progress?.current_item && (
+            <div className="bg-muted/30 border border-border rounded-lg p-3 font-mono text-xs">
+              <span className="text-primary">$ </span>
+              <span className="text-muted-foreground">importing </span>
+              <span className="text-foreground">{progress.current_item}</span>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </motion.div>
+  );
+}
+
+// Complete Phase
+function DataCompletePhase({
+  result,
+  onFinish,
+}: {
+  result: ImportResult;
+  onFinish: () => void;
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -20 }}
+      transition={{ duration: 0.3 }}
+      className="space-y-6"
+    >
+      {/* Header */}
+      <div className="text-center space-y-3">
+        <motion.div
+          initial={{ scale: 0.9, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ delay: 0.1 }}
+          className="relative inline-block"
+        >
+          <div className="inline-flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 rounded-xl bg-green-500/10 border border-green-500/20">
+            <Check className="h-8 w-8 sm:h-10 sm:w-10 text-green-500" />
+          </div>
+          <div className="absolute inset-0 flex items-center justify-center -z-10">
+            <div className="w-24 h-24 sm:w-32 sm:h-32 bg-green-500/20 rounded-full blur-2xl animate-pulse" />
+          </div>
+        </motion.div>
+        
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+        >
+          <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-green-500">
+            System Ready
+          </h2>
+          <p className="text-sm sm:text-base text-muted-foreground mt-2">
+            Your Reforge instance is configured and loaded with data
+          </p>
+        </motion.div>
+      </div>
+
+      {/* Terminal Success Message */}
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.3 }}
+        className="bg-card/50 backdrop-blur-sm border border-border rounded-lg p-4 max-w-md mx-auto"
+      >
+        <div className="flex items-center gap-2 mb-3 pb-2 border-b border-border">
+          <div className="w-2.5 h-2.5 rounded-full bg-red-500/50" />
+          <div className="w-2.5 h-2.5 rounded-full bg-yellow-500/50" />
+          <div className="w-2.5 h-2.5 rounded-full bg-green-500/50" />
+          <span className="text-xs font-mono text-muted-foreground ml-2">terminal</span>
+        </div>
+        <div className="font-mono text-xs space-y-1">
+          <p className="text-muted-foreground">$ reforge status</p>
+          <p className="text-green-500">✔ Database initialized</p>
+          <p className="text-green-500">✔ Admin account created</p>
+          <p className="text-green-500">
+            ✔ Loaded {result.problems_created.toLocaleString()} problems, {result.patterns_created} patterns
+          </p>
+          <p className="text-primary">Ready to start revision</p>
+        </div>
+      </motion.div>
+
+      {/* Stats */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.4 }}
+        className="flex justify-center gap-6 sm:gap-8 py-2"
+      >
+        <div className="text-center">
+          <p className="text-2xl sm:text-3xl font-bold font-mono text-primary">
+            {result.problems_created.toLocaleString()}
+          </p>
+          <p className="text-xs text-muted-foreground uppercase tracking-wider">Problems</p>
+        </div>
+        <div className="w-px bg-border" />
+        <div className="text-center">
+          <p className="text-2xl sm:text-3xl font-bold font-mono text-primary">
+            {result.patterns_created}
+          </p>
+          <p className="text-xs text-muted-foreground uppercase tracking-wider">Patterns</p>
+        </div>
+        <div className="w-px bg-border" />
+        <div className="text-center">
+          <p className="text-2xl sm:text-3xl font-bold font-mono text-muted-foreground">
+            {result.duration}
+          </p>
+          <p className="text-xs text-muted-foreground uppercase tracking-wider">Duration</p>
+        </div>
+      </motion.div>
+
+      {/* CTA */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.5 }}
+        className="flex justify-center"
+      >
+        <Button
+          size="lg"
+          onClick={onFinish}
+          className="h-11 sm:h-12 px-6 sm:px-8 text-base font-medium rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground transition-all shadow-lg hover:shadow-primary/20"
+        >
+          <Terminal className="mr-2 h-4 w-4" />
+          Launch Console
+        </Button>
+      </motion.div>
     </motion.div>
   );
 }

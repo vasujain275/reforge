@@ -14,6 +14,7 @@ import (
 	"github.com/vasujain275/reforge/internal/attempts"
 	"github.com/vasujain275/reforge/internal/auth"
 	"github.com/vasujain275/reforge/internal/dashboard"
+	dataimport "github.com/vasujain275/reforge/internal/import"
 	"github.com/vasujain275/reforge/internal/onboarding"
 	"github.com/vasujain275/reforge/internal/patterns"
 	"github.com/vasujain275/reforge/internal/problems"
@@ -62,6 +63,7 @@ func (app *application) mount() http.Handler {
 	settingsService := settings.NewService(repoInstance, defaultWeights)
 	adminService := admin.NewService(repoInstance)
 	onboardingService := onboarding.NewService(repoInstance)
+	importService := dataimport.NewService(repoInstance, app.db, app.config.datasetPath)
 
 	// Handlers
 	userHandler := users.NewHandler(userService, adminService)
@@ -74,6 +76,7 @@ func (app *application) mount() http.Handler {
 	settingsHandler := settings.NewHandler(settingsService)
 	adminHandler := admin.NewHandler(adminService)
 	onboardingHandler := onboarding.NewHandler(onboardingService)
+	importHandler := dataimport.NewHandler(importService)
 
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -84,6 +87,10 @@ func (app *application) mount() http.Handler {
 		r.Route("/onboarding", func(r chi.Router) {
 			r.Get("/status", onboardingHandler.GetInitStatus)
 			r.Post("/setup", onboardingHandler.CreateFirstAdmin)
+			// Import endpoints for onboarding (no auth required during setup)
+			r.Get("/import/datasets", importHandler.GetBundledDatasets)
+			r.Post("/import/parse", importHandler.ParseBundledDataset)
+			r.Get("/import/execute", importHandler.ExecuteImport)
 		})
 
 		// Auth Endpoints
@@ -189,6 +196,17 @@ func (app *application) mount() http.Handler {
 					r.Put("/signup/enabled", adminHandler.UpdateSignupEnabled)
 					r.Put("/signup/invites", adminHandler.UpdateInviteCodesEnabled)
 				})
+
+				// Data Import (under /admin/data)
+				r.Route("/data", func(r chi.Router) {
+					r.Route("/import", func(r chi.Router) {
+						r.Get("/datasets", importHandler.GetBundledDatasets)
+						r.Post("/parse", importHandler.ParseBundledDataset)
+						r.Post("/parse-upload", importHandler.ParseUploadedCSV)
+						r.Get("/execute", importHandler.ExecuteImport)               // SSE endpoint
+						r.Post("/execute-upload", importHandler.ExecuteUploadImport) // SSE endpoint
+					})
+				})
 			})
 		})
 
@@ -223,6 +241,7 @@ type config struct {
 	db             dbConfig
 	auth           authConfig
 	defaultWeights scoringWeightsConfig
+	datasetPath    string
 }
 
 type dbConfig struct {

@@ -15,6 +15,10 @@ type Querier interface {
 	// Used for pagination and checking if admin exists
 	CountAllUsers(ctx context.Context) (int64, error)
 	CountInviteCodes(ctx context.Context) (int64, error)
+	// Get total pattern count
+	CountPatterns(ctx context.Context) (int64, error)
+	// Get total problem count
+	CountProblems(ctx context.Context) (int64, error)
 	CreateAttempt(ctx context.Context, arg CreateAttemptParams) (Attempt, error)
 	CreateInviteCode(ctx context.Context, arg CreateInviteCodeParams) (AdminInviteCode, error)
 	CreatePasswordResetToken(ctx context.Context, arg CreatePasswordResetTokenParams) (PasswordResetToken, error)
@@ -50,11 +54,18 @@ type Querier interface {
 	GetMasteredProblemsForUser(ctx context.Context, userID int64) (int64, error)
 	GetPasswordResetToken(ctx context.Context, tokenHash string) (PasswordResetToken, error)
 	GetPattern(ctx context.Context, id int64) (Pattern, error)
+	// Import-specific queries for bulk operations
+	// Case-insensitive pattern lookup
+	GetPatternByTitle(ctx context.Context, lower string) (Pattern, error)
 	GetPatternProblemCount(ctx context.Context, patternID int64) (int64, error)
 	GetPatternsByIDs(ctx context.Context, ids []int64) ([]Pattern, error)
 	GetPatternsForProblem(ctx context.Context, problemID int64) ([]Pattern, error)
 	GetPatternsWithStats(ctx context.Context, userID int64) ([]GetPatternsWithStatsRow, error)
 	GetProblem(ctx context.Context, id int64) (Problem, error)
+	// Check for duplicate problems
+	GetProblemByTitleAndSource(ctx context.Context, arg GetProblemByTitleAndSourceParams) (Problem, error)
+	// More precise duplicate check including URL
+	GetProblemByTitleSourceURL(ctx context.Context, arg GetProblemByTitleSourceURLParams) (Problem, error)
 	GetProblemsForPattern(ctx context.Context, patternID int64) ([]Problem, error)
 	GetProblemsForUser(ctx context.Context, userID int64) ([]GetProblemsForUserRow, error)
 	GetRecentAttempts(ctx context.Context, arg GetRecentAttemptsParams) ([]GetRecentAttemptsRow, error)
@@ -81,6 +92,8 @@ type Querier interface {
 	IncrementInviteCodeUses(ctx context.Context, id int64) error
 	IncrementTemplateUseCount(ctx context.Context, arg IncrementTemplateUseCountParams) error
 	LinkProblemToPattern(ctx context.Context, arg LinkProblemToPatternParams) error
+	// Idempotent pattern linking (ignore if already linked)
+	LinkProblemToPatternIfNotExists(ctx context.Context, arg LinkProblemToPatternIfNotExistsParams) error
 	ListAllProblems(ctx context.Context) ([]Problem, error)
 	ListAttemptsForProblem(ctx context.Context, arg ListAttemptsForProblemParams) ([]Attempt, error)
 	ListAttemptsForUser(ctx context.Context, arg ListAttemptsForUserParams) ([]ListAttemptsForUserRow, error)

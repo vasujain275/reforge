@@ -30,6 +30,7 @@ export function SessionTimer({
 
   const tickIntervalRef = useRef<number | null>(null);
   const saveIntervalRef = useRef<number | null>(null);
+  const pendingSaveRef = useRef(false);
 
   const totalSeconds = plannedDurationMin * 60;
   const remainingSeconds = Math.max(0, totalSeconds - elapsedSeconds);
@@ -49,7 +50,13 @@ export function SessionTimer({
     elapsed: number,
     state: "idle" | "running" | "paused"
   ) => {
+    // Prevent duplicate saves
+    if (pendingSaveRef.current) {
+      return;
+    }
+
     try {
+      pendingSaveRef.current = true;
       setIsSaving(true);
       await api.put(`/sessions/${sessionId}/timer`, {
         elapsed_time_seconds: elapsed,
@@ -61,6 +68,7 @@ export function SessionTimer({
       console.error("Failed to save timer state:", error);
     } finally {
       setIsSaving(false);
+      pendingSaveRef.current = false;
     }
   };
 
@@ -89,12 +97,12 @@ export function SessionTimer({
     };
   }, [timerState, remainingSeconds]);
 
-  // Auto-save effect - save every 30 seconds when running
+  // Auto-save effect - save every 10 seconds when running
   useEffect(() => {
     if (timerState === "running") {
       saveIntervalRef.current = window.setInterval(() => {
         saveTimerState(elapsedSeconds, "running");
-      }, 30000); // 30 seconds
+      }, 10000); // 10 seconds
     } else if (saveIntervalRef.current !== null) {
       window.clearInterval(saveIntervalRef.current);
       saveIntervalRef.current = null;
@@ -110,12 +118,44 @@ export function SessionTimer({
   // Sync on unmount - save current state before component unmounts
   useEffect(() => {
     return () => {
-      // Only save if there are unsaved changes
-      if (elapsedSeconds !== lastSavedSeconds) {
+      // Only save if there are unsaved changes and not already saving
+      if (elapsedSeconds !== lastSavedSeconds && !pendingSaveRef.current) {
         saveTimerState(elapsedSeconds, timerState);
       }
     };
-  }, []);
+  }, [elapsedSeconds, lastSavedSeconds, timerState]);
+
+  // Sync on visibility change - save when user switches tabs/windows
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      // Save when tab becomes hidden OR visible (covers both directions)
+      if (elapsedSeconds !== lastSavedSeconds && !pendingSaveRef.current) {
+        saveTimerState(elapsedSeconds, timerState);
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [elapsedSeconds, lastSavedSeconds, timerState]);
+
+  // Sync on beforeunload - save when user navigates away or closes page
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (elapsedSeconds !== lastSavedSeconds && !pendingSaveRef.current) {
+        // Best-effort save before page unload
+        saveTimerState(elapsedSeconds, timerState);
+      }
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, [elapsedSeconds, lastSavedSeconds, timerState]);
 
   // Auto-pause when time expires
   useEffect(() => {

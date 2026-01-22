@@ -1,9 +1,10 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Key, Settings, Users } from "lucide-react";
+import { Database, Key, Settings, Users } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import UsersPage from "./UsersPage";
 import InvitesPage from "./InvitesPage";
 import AdminSettingsPage from "./SettingsPage";
+import ImportPage from "./ImportPage";
 
 export default function AdminDashboard() {
   const location = useLocation();
@@ -13,6 +14,7 @@ export default function AdminDashboard() {
   const getActiveTab = () => {
     if (location.pathname.includes("/admin/invites")) return "invites";
     if (location.pathname.includes("/admin/settings")) return "settings";
+    if (location.pathname.includes("/admin/data")) return "data";
     return "users";
   };
 
@@ -26,6 +28,9 @@ export default function AdminDashboard() {
         break;
       case "settings":
         navigate("/dashboard/admin/settings");
+        break;
+      case "data":
+        navigate("/dashboard/admin/data");
         break;
     }
   };
@@ -43,6 +48,10 @@ export default function AdminDashboard() {
               <Key className="h-4 w-4" />
               Invites
             </TabsTrigger>
+            <TabsTrigger value="data" className="gap-2">
+              <Database className="h-4 w-4" />
+              Data
+            </TabsTrigger>
             <TabsTrigger value="settings" className="gap-2">
               <Settings className="h-4 w-4" />
               Settings
@@ -56,6 +65,9 @@ export default function AdminDashboard() {
           </TabsContent>
           <TabsContent value="invites" className="m-0 h-full">
             <InvitesPage />
+          </TabsContent>
+          <TabsContent value="data" className="m-0 h-full">
+            <ImportPage />
           </TabsContent>
           <TabsContent value="settings" className="m-0 h-full">
             <AdminSettingsPage />

@@ -22,7 +22,7 @@ COPY web/ ./
 RUN pnpm build
 
 # Stage 2: Build backend with embedded frontend
-FROM golang:1.23-alpine AS backend-builder
+FROM golang:1.25-alpine AS backend-builder
 
 # Install build dependencies
 RUN apk add --no-cache git

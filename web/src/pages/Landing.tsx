@@ -10,6 +10,7 @@ import {
   User,
 } from "lucide-react";
 import { Link } from "react-router-dom";
+import { getAppVersion } from "@/lib/version";
 
 export default function LandingPage() {
   const { isAuthenticated } = useAuthStore();
@@ -48,7 +49,7 @@ export default function LandingPage() {
                 </span>
                 <span className="text-xs text-muted-foreground/50 mx-1">|</span>
                 <span className="text-sm font-mono text-primary font-bold">
-                  v0.0.1-alpha
+                  {getAppVersion()}
                 </span>
               </div>
             )}
@@ -195,7 +196,7 @@ export default function LandingPage() {
               GitHub
             </Link>
           </div>
-          <div>Reforge v0.0.1-alpha</div>
+          <div>Reforge {getAppVersion()}</div>
         </div>
       </footer>
     </div>

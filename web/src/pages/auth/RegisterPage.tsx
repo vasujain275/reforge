@@ -10,6 +10,7 @@ import { useState, useEffect } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { getApiErrorMessage } from "@/types/api";
+import { getAppVersion } from "@/lib/version";
 
 export default function RegisterPage() {
   const { register } = useAuthStore();
@@ -153,7 +154,7 @@ export default function RegisterPage() {
             </div>
             <div>
               <h1 className="text-2xl font-bold text-foreground">Reforge</h1>
-              <p className="text-xs font-mono text-muted-foreground">v0.0.1-alpha</p>
+              <p className="text-xs font-mono text-muted-foreground">{getAppVersion()}</p>
             </div>
           </div>
 
@@ -204,7 +205,7 @@ export default function RegisterPage() {
               </div>
               <div>
                 <h1 className="text-xl font-bold text-foreground">Reforge</h1>
-                <p className="text-xs font-mono text-muted-foreground">v0.0.1-alpha</p>
+                <p className="text-xs font-mono text-muted-foreground">{getAppVersion()}</p>
               </div>
             </div>
 

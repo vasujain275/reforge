@@ -9,6 +9,7 @@ import {
   UserCog,
 } from "lucide-react";
 import { Link } from "react-router-dom";
+import { getAppVersion } from "@/lib/version";
 
 export default function ForgotPasswordPage() {
   return (
@@ -35,7 +36,7 @@ export default function ForgotPasswordPage() {
             <div>
               <h1 className="text-2xl font-bold text-foreground">Reforge</h1>
               <p className="text-xs font-mono text-muted-foreground">
-                v0.0.1-alpha
+                {getAppVersion()}
               </p>
             </div>
           </div>
@@ -91,7 +92,7 @@ export default function ForgotPasswordPage() {
               <div>
                 <h1 className="text-xl font-bold text-foreground">Reforge</h1>
                 <p className="text-xs font-mono text-muted-foreground">
-                  v0.0.1-alpha
+                  {getAppVersion()}
                 </p>
               </div>
             </div>

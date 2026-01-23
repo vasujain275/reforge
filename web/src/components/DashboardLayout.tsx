@@ -23,6 +23,7 @@ import {
   KeyRound,
 } from "lucide-react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { getAppVersion } from "@/lib/version";
 
 export default function DashboardLayout() {
   const location = useLocation();
@@ -64,7 +65,7 @@ export default function DashboardLayout() {
             <span className="font-bold tracking-tighter text-primary uppercase">
               Reforge
             </span>
-            <span className="text-xs text-muted-foreground">v0.0.1-alpha</span>
+            <span className="text-xs text-muted-foreground">{getAppVersion()}</span>
           </div>
         </div>
 

@@ -14,6 +14,7 @@ import {
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { getApiErrorMessage } from "@/types/api";
+import { getAppVersion } from "@/lib/version";
 
 export default function ResetPasswordPage() {
   const [searchParams] = useSearchParams();
@@ -164,7 +165,7 @@ export default function ResetPasswordPage() {
             <div>
               <h1 className="text-2xl font-bold text-foreground">Reforge</h1>
               <p className="text-xs font-mono text-muted-foreground">
-                v0.0.1-alpha
+                {getAppVersion()}
               </p>
             </div>
           </div>
@@ -220,7 +221,7 @@ export default function ResetPasswordPage() {
               <div>
                 <h1 className="text-xl font-bold text-foreground">Reforge</h1>
                 <p className="text-xs font-mono text-muted-foreground">
-                  v0.0.1-alpha
+                  {getAppVersion()}
                 </p>
               </div>
             </div>

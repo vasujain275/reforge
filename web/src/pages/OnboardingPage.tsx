@@ -27,6 +27,7 @@ import {
   type ImportResult,
 } from "@/api/import";
 import { useOnboardingStore } from "@/store/onboardingStore";
+import { getAppVersion } from "@/lib/version";
 
 export default function OnboardingPage() {
   // Use onboarding store for step and form state
@@ -118,7 +119,7 @@ export default function OnboardingPage() {
       {/* Footer - positioned inside the flow */}
       <div className="relative z-10 py-3 flex justify-center shrink-0">
         <p className="text-xs font-mono text-muted-foreground/60 bg-background/80 backdrop-blur-sm px-3 py-1 rounded-full">
-          Reforge v0.0.1-alpha
+          Reforge {getAppVersion()}
         </p>
       </div>
     </div>

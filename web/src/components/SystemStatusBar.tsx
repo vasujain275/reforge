@@ -1,3 +1,5 @@
+import { getAppVersion } from "@/lib/version";
+
 export default function SystemStatusBar() {
   return (
     <div className="h-16 border-b border-border bg-card/30 backdrop-blur-sm flex items-center px-6">
@@ -11,7 +13,7 @@ export default function SystemStatusBar() {
         <span className="text-muted-foreground/50">|</span>
         <span className="text-primary text-xs">DB: SQLite</span>
         <span className="text-muted-foreground/50">|</span>
-        <span className="text-muted-foreground text-xs">v0.0.1-alpha</span>
+        <span className="text-muted-foreground text-xs">{getAppVersion()}</span>
       </div>
     </div>
   );

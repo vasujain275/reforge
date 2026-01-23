@@ -49,3 +49,8 @@ SET elapsed_time_seconds = ?,
     timer_state = ?,
     timer_last_updated_at = ?
 WHERE id = ? AND user_id = ?;
+
+-- name: UpdateSessionOrder :exec
+UPDATE revision_sessions
+SET items_ordered = ?
+WHERE id = ? AND user_id = ?;

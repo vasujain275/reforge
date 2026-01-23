@@ -85,6 +85,45 @@ export interface Attempt {
   performed_at: string;
 }
 
+// ============================================================================
+// ATTEMPT TIMER TYPES (for stopwatch functionality)
+// ============================================================================
+
+// In-progress attempt with timer state (matches backend InProgressAttemptResponse)
+export interface InProgressAttempt {
+  id: number;
+  user_id: number;
+  problem_id: number;
+  session_id?: number;
+  status: "in_progress" | "completed" | "abandoned";
+  elapsed_time_seconds: number;
+  timer_state: "idle" | "running" | "paused";
+  timer_last_updated_at?: string;
+  started_at: string;
+  problem_title?: string;
+  problem_difficulty?: string;
+}
+
+// Request body for starting an attempt (matches backend StartAttemptBody)
+export interface StartAttemptBody {
+  problem_id: number;
+  session_id?: number;
+}
+
+// Request body for updating attempt timer (matches backend UpdateAttemptTimerBody)
+export interface UpdateAttemptTimerBody {
+  elapsed_time_seconds: number;
+  timer_state: "idle" | "running" | "paused";
+}
+
+// Request body for completing an attempt (matches backend CompleteAttemptBody)
+export interface CompleteAttemptBody {
+  confidence_score: number;
+  outcome: "passed" | "failed";
+  notes?: string;
+  duration_seconds?: number; // Optional: override elapsed time
+}
+
 // Enhanced template types matching new backend
 export interface TemplateInfo {
   key: string;

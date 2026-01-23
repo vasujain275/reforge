@@ -19,15 +19,20 @@ type AdminInviteCode struct {
 }
 
 type Attempt struct {
-	ID              int64          `json:"id"`
-	UserID          int64          `json:"user_id"`
-	ProblemID       int64          `json:"problem_id"`
-	SessionID       sql.NullInt64  `json:"session_id"`
-	ConfidenceScore sql.NullInt64  `json:"confidence_score"`
-	DurationSeconds sql.NullInt64  `json:"duration_seconds"`
-	Outcome         sql.NullString `json:"outcome"`
-	Notes           sql.NullString `json:"notes"`
-	PerformedAt     sql.NullString `json:"performed_at"`
+	ID                 int64          `json:"id"`
+	UserID             int64          `json:"user_id"`
+	ProblemID          int64          `json:"problem_id"`
+	SessionID          sql.NullInt64  `json:"session_id"`
+	ConfidenceScore    sql.NullInt64  `json:"confidence_score"`
+	DurationSeconds    sql.NullInt64  `json:"duration_seconds"`
+	Outcome            sql.NullString `json:"outcome"`
+	Notes              sql.NullString `json:"notes"`
+	PerformedAt        sql.NullString `json:"performed_at"`
+	Status             sql.NullString `json:"status"`
+	ElapsedTimeSeconds sql.NullInt64  `json:"elapsed_time_seconds"`
+	TimerState         sql.NullString `json:"timer_state"`
+	TimerLastUpdatedAt sql.NullString `json:"timer_last_updated_at"`
+	StartedAt          sql.NullString `json:"started_at"`
 }
 
 type PasswordResetToken struct {

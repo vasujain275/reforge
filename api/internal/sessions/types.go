@@ -43,6 +43,10 @@ type UpdateSessionTimerBody struct {
 	TimerState         string `json:"timer_state" validate:"required,oneof=idle running paused"`
 }
 
+type ReorderSessionBody struct {
+	ProblemIDs []int64 `json:"problem_ids" validate:"required,min=1,dive,gte=1"`
+}
+
 type SessionProblem struct {
 	ID            int64   `json:"id"`
 	Title         string  `json:"title"`

@@ -1,27 +1,27 @@
 import { useEffect, useRef, useState } from "react";
-import { Play, Pause, Timer } from "lucide-react";
+import { Play, Pause, Timer, CheckCircle2, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
 
-interface SessionTimerProps {
-  sessionId: number;
-  plannedDurationMin: number;
+interface AttemptTimerProps {
+  attemptId: number;
+  problemTitle: string;
+  problemDifficulty?: string;
   initialElapsedSeconds: number;
   initialTimerState: "idle" | "running" | "paused";
-  isCompleted: boolean;
-  autoStart?: boolean;
-  onTimerStateChange?: (state: "idle" | "running" | "paused") => void;
+  onComplete: (elapsedSeconds: number) => void;
+  onAbandon: () => void;
 }
 
-export function SessionTimer({
-  sessionId,
-  plannedDurationMin,
+export function AttemptTimer({
+  attemptId,
+  problemTitle,
+  problemDifficulty,
   initialElapsedSeconds,
   initialTimerState,
-  isCompleted,
-  autoStart = false,
-  onTimerStateChange,
-}: SessionTimerProps) {
+  onComplete,
+  onAbandon,
+}: AttemptTimerProps) {
   const [elapsedSeconds, setElapsedSeconds] = useState(initialElapsedSeconds);
   const [timerState, setTimerState] = useState<"idle" | "running" | "paused">(
     initialTimerState
@@ -31,23 +31,37 @@ export function SessionTimer({
   );
   const [isSaving, setIsSaving] = useState(false);
   const [lastSaveTime, setLastSaveTime] = useState<Date | null>(null);
+  const [isAbandoning, setIsAbandoning] = useState(false);
 
   const tickIntervalRef = useRef<number | null>(null);
   const saveIntervalRef = useRef<number | null>(null);
   const pendingSaveRef = useRef(false);
 
-  const totalSeconds = plannedDurationMin * 60;
-  const remainingSeconds = Math.max(0, totalSeconds - elapsedSeconds);
-
-  // Format time as MM:SS
+  // Format time as HH:MM:SS or MM:SS
   const formatTime = (seconds: number): string => {
-    const mins = Math.floor(seconds / 60);
+    const hours = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
     const secs = seconds % 60;
+
+    if (hours > 0) {
+      return `${hours.toString().padStart(2, "0")}:${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+    }
     return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
   };
 
-  // Calculate progress percentage
-  const progressPercent = Math.min(100, (elapsedSeconds / totalSeconds) * 100);
+  // Get difficulty badge color
+  const getDifficultyColor = (difficulty?: string) => {
+    switch (difficulty) {
+      case "easy":
+        return "text-green-500";
+      case "medium":
+        return "text-orange-400";
+      case "hard":
+        return "text-red-500";
+      default:
+        return "text-muted-foreground";
+    }
+  };
 
   // Save timer state to backend
   const saveTimerState = async (
@@ -62,7 +76,7 @@ export function SessionTimer({
     try {
       pendingSaveRef.current = true;
       setIsSaving(true);
-      await api.put(`/sessions/${sessionId}/timer`, {
+      await api.put(`/attempts/${attemptId}/timer`, {
         elapsed_time_seconds: elapsed,
         timer_state: state,
       });
@@ -80,24 +94,12 @@ export function SessionTimer({
   const toggleTimer = async () => {
     const newState = timerState === "running" ? "paused" : "running";
     setTimerState(newState);
-    onTimerStateChange?.(newState);
     await saveTimerState(elapsedSeconds, newState);
   };
 
-  // Auto-start effect - start timer automatically if autoStart is true and timer is idle
-  useEffect(() => {
-    if (autoStart && timerState === "idle" && remainingSeconds > 0) {
-      setTimerState("running");
-      onTimerStateChange?.("running");
-      saveTimerState(elapsedSeconds, "running");
-    }
-    // Only run once on mount when autoStart is true
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoStart]);
-
   // Tick effect - increment elapsed time every second when running
   useEffect(() => {
-    if (timerState === "running" && remainingSeconds > 0) {
+    if (timerState === "running") {
       tickIntervalRef.current = window.setInterval(() => {
         setElapsedSeconds((prev) => prev + 1);
       }, 1000);
@@ -111,7 +113,7 @@ export function SessionTimer({
         window.clearInterval(tickIntervalRef.current);
       }
     };
-  }, [timerState, remainingSeconds]);
+  }, [timerState]);
 
   // Auto-save effect - save every 10 seconds when running
   useEffect(() => {
@@ -173,18 +175,25 @@ export function SessionTimer({
     };
   }, [elapsedSeconds, lastSavedSeconds, timerState]);
 
-  // Auto-pause when time expires
-  useEffect(() => {
-    if (remainingSeconds === 0 && timerState === "running") {
-      setTimerState("paused");
-      saveTimerState(elapsedSeconds, "paused");
+  // Handle abandon with save
+  const handleAbandon = async () => {
+    setIsAbandoning(true);
+    try {
+      // Save current state first
+      await saveTimerState(elapsedSeconds, "paused");
+      onAbandon();
+    } catch {
+      setIsAbandoning(false);
     }
-  }, [remainingSeconds, timerState]);
+  };
 
-  // Don't render if session is completed
-  if (isCompleted) {
-    return null;
-  }
+  // Handle complete with save
+  const handleComplete = async () => {
+    // Pause timer and save before completing
+    setTimerState("paused");
+    await saveTimerState(elapsedSeconds, "paused");
+    onComplete(elapsedSeconds);
+  };
 
   // Calculate time since last save (for display)
   const getTimeSinceLastSave = (): string => {
@@ -196,81 +205,109 @@ export function SessionTimer({
   };
 
   return (
-    <div className="border border-border rounded-md bg-card p-6 mb-6">
+    <div className="border border-border rounded-md bg-card p-6">
       {/* Header */}
-      <div className="flex items-center gap-2 mb-4">
-        <Timer className="h-5 w-5 text-primary" />
-        <span className="text-sm font-mono uppercase tracking-wide text-muted-foreground">
-          {timerState === "running"
-            ? "Session Timer Active"
-            : timerState === "paused"
-              ? "Timer Paused"
-              : "Timer Idle"}
-        </span>
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <Timer className="h-5 w-5 text-primary" />
+          <span className="text-sm font-mono uppercase tracking-wide text-muted-foreground">
+            {timerState === "running"
+              ? "Timer Active"
+              : timerState === "paused"
+                ? "Timer Paused"
+                : "Timer Ready"}
+          </span>
+        </div>
+        {problemDifficulty && (
+          <span
+            className={`text-xs font-mono uppercase tracking-wider ${getDifficultyColor(problemDifficulty)}`}
+          >
+            {problemDifficulty}
+          </span>
+        )}
+      </div>
+
+      {/* Problem Title */}
+      <div className="text-center mb-6">
+        <h3 className="text-lg font-medium text-foreground mb-2 truncate">
+          {problemTitle}
+        </h3>
       </div>
 
       {/* Timer Display */}
-      <div className="text-center mb-6">
-        <div className="text-5xl font-mono font-bold text-foreground mb-2">
-          {formatTime(remainingSeconds)}
+      <div className="text-center mb-8">
+        <div className="text-6xl font-mono font-bold text-foreground mb-2 tabular-nums">
+          {formatTime(elapsedSeconds)}
         </div>
-        <div className="text-sm text-muted-foreground font-mono">
-          {remainingSeconds === 0 ? "Time Expired" : "Remaining"}
-        </div>
-      </div>
-
-      {/* Progress Bar */}
-      <div className="mb-6">
-        <div className="w-full h-2 bg-secondary rounded-full overflow-hidden">
-          <div
-            className="h-full bg-primary transition-all duration-1000"
-            style={{ width: `${progressPercent}%` }}
-          />
-        </div>
-        <div className="flex justify-between mt-2 text-xs font-mono text-muted-foreground">
-          <span>{formatTime(elapsedSeconds)} elapsed</span>
-          <span>{Math.round(progressPercent)}%</span>
+        <div className="text-sm text-muted-foreground font-mono uppercase tracking-wide">
+          Elapsed
         </div>
       </div>
 
-      {/* Controls */}
-      <div className="flex items-center justify-between">
+      {/* Primary Controls */}
+      <div className="flex items-center justify-center gap-4 mb-6">
         <Button
           onClick={toggleTimer}
-          disabled={remainingSeconds === 0}
           variant={timerState === "running" ? "outline" : "default"}
-          className="font-mono"
+          size="lg"
+          className="font-mono min-w-[140px]"
         >
           {timerState === "running" ? (
             <>
-              <Pause className="h-4 w-4 mr-2" />
+              <Pause className="h-5 w-5 mr-2" />
               Pause
             </>
           ) : (
             <>
-              <Play className="h-4 w-4 mr-2" />
+              <Play className="h-5 w-5 mr-2" />
               {timerState === "idle" ? "Start" : "Resume"}
             </>
           )}
         </Button>
+      </div>
 
+      {/* Save Status */}
+      <div className="text-center mb-6">
         <div className="text-xs font-mono text-muted-foreground">
           {isSaving ? (
-            <span className="text-orange-400">Saving...</span>
+            <span className="text-orange-400">Syncing...</span>
           ) : (
             <span>Last saved: {getTimeSinceLastSave()}</span>
           )}
         </div>
       </div>
 
-      {/* Time Expired Warning */}
-      {remainingSeconds === 0 && (
-        <div className="mt-4 p-3 bg-orange-500/10 border border-orange-500/20 rounded-md text-center">
-          <span className="text-sm font-mono text-orange-400 uppercase tracking-wide">
-            Planned time exceeded
-          </span>
-        </div>
-      )}
+      {/* Divider */}
+      <div className="border-t border-border my-6" />
+
+      {/* Action Buttons */}
+      <div className="flex items-center justify-between gap-4">
+        <Button
+          onClick={handleComplete}
+          variant="default"
+          className="flex-1 font-mono"
+        >
+          <CheckCircle2 className="h-4 w-4 mr-2" />
+          Complete Attempt
+        </Button>
+        <Button
+          onClick={handleAbandon}
+          variant="outline"
+          className="font-mono text-red-500 hover:text-red-400 hover:bg-red-500/10"
+          disabled={isAbandoning}
+        >
+          <XCircle className="h-4 w-4 mr-2" />
+          Abandon
+        </Button>
+      </div>
+
+      {/* System Info */}
+      <div className="mt-6 p-3 bg-muted/50 rounded-md">
+        <p className="text-xs font-mono text-muted-foreground text-center">
+          Timer syncs every 10 seconds. You can close this page and resume
+          later.
+        </p>
+      </div>
     </div>
   );
 }

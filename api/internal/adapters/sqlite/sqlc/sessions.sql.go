@@ -257,6 +257,23 @@ func (q *Queries) UpdateSessionCompleted(ctx context.Context, arg UpdateSessionC
 	return err
 }
 
+const updateSessionOrder = `-- name: UpdateSessionOrder :exec
+UPDATE revision_sessions
+SET items_ordered = ?
+WHERE id = ? AND user_id = ?
+`
+
+type UpdateSessionOrderParams struct {
+	ItemsOrdered sql.NullString `json:"items_ordered"`
+	ID           int64          `json:"id"`
+	UserID       int64          `json:"user_id"`
+}
+
+func (q *Queries) UpdateSessionOrder(ctx context.Context, arg UpdateSessionOrderParams) error {
+	_, err := q.db.ExecContext(ctx, updateSessionOrder, arg.ItemsOrdered, arg.ID, arg.UserID)
+	return err
+}
+
 const updateSessionTimer = `-- name: UpdateSessionTimer :exec
 UPDATE revision_sessions
 SET elapsed_time_seconds = ?,

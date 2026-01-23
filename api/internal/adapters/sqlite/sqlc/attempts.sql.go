@@ -10,10 +10,79 @@ import (
 	"database/sql"
 )
 
+const abandonAttempt = `-- name: AbandonAttempt :exec
+UPDATE attempts
+SET status = 'abandoned',
+    timer_state = 'idle',
+    timer_last_updated_at = CURRENT_TIMESTAMP
+WHERE id = ? AND user_id = ? AND status = 'in_progress'
+`
+
+type AbandonAttemptParams struct {
+	ID     int64 `json:"id"`
+	UserID int64 `json:"user_id"`
+}
+
+func (q *Queries) AbandonAttempt(ctx context.Context, arg AbandonAttemptParams) error {
+	_, err := q.db.ExecContext(ctx, abandonAttempt, arg.ID, arg.UserID)
+	return err
+}
+
+const completeAttempt = `-- name: CompleteAttempt :one
+UPDATE attempts
+SET status = 'completed',
+    timer_state = 'idle',
+    confidence_score = ?,
+    duration_seconds = ?,
+    outcome = ?,
+    notes = ?,
+    performed_at = CURRENT_TIMESTAMP
+WHERE id = ? AND user_id = ? AND status = 'in_progress'
+RETURNING id, user_id, problem_id, session_id, confidence_score, duration_seconds, outcome, notes, performed_at, status, elapsed_time_seconds, timer_state, timer_last_updated_at, started_at
+`
+
+type CompleteAttemptParams struct {
+	ConfidenceScore sql.NullInt64  `json:"confidence_score"`
+	DurationSeconds sql.NullInt64  `json:"duration_seconds"`
+	Outcome         sql.NullString `json:"outcome"`
+	Notes           sql.NullString `json:"notes"`
+	ID              int64          `json:"id"`
+	UserID          int64          `json:"user_id"`
+}
+
+func (q *Queries) CompleteAttempt(ctx context.Context, arg CompleteAttemptParams) (Attempt, error) {
+	row := q.db.QueryRowContext(ctx, completeAttempt,
+		arg.ConfidenceScore,
+		arg.DurationSeconds,
+		arg.Outcome,
+		arg.Notes,
+		arg.ID,
+		arg.UserID,
+	)
+	var i Attempt
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.ProblemID,
+		&i.SessionID,
+		&i.ConfidenceScore,
+		&i.DurationSeconds,
+		&i.Outcome,
+		&i.Notes,
+		&i.PerformedAt,
+		&i.Status,
+		&i.ElapsedTimeSeconds,
+		&i.TimerState,
+		&i.TimerLastUpdatedAt,
+		&i.StartedAt,
+	)
+	return i, err
+}
+
 const createAttempt = `-- name: CreateAttempt :one
 INSERT INTO attempts (user_id, problem_id, session_id, confidence_score, duration_seconds, outcome, notes, performed_at)
 VALUES (?, ?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP))
-RETURNING id, user_id, problem_id, session_id, confidence_score, duration_seconds, outcome, notes, performed_at
+RETURNING id, user_id, problem_id, session_id, confidence_score, duration_seconds, outcome, notes, performed_at, status, elapsed_time_seconds, timer_state, timer_last_updated_at, started_at
 `
 
 type CreateAttemptParams struct {
@@ -49,12 +118,79 @@ func (q *Queries) CreateAttempt(ctx context.Context, arg CreateAttemptParams) (A
 		&i.Outcome,
 		&i.Notes,
 		&i.PerformedAt,
+		&i.Status,
+		&i.ElapsedTimeSeconds,
+		&i.TimerState,
+		&i.TimerLastUpdatedAt,
+		&i.StartedAt,
 	)
 	return i, err
 }
 
+const createInProgressAttempt = `-- name: CreateInProgressAttempt :one
+
+INSERT INTO attempts (
+    user_id, 
+    problem_id, 
+    session_id, 
+    status, 
+    elapsed_time_seconds, 
+    timer_state, 
+    started_at,
+    timer_last_updated_at
+)
+VALUES (?, ?, ?, 'in_progress', 0, 'idle', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+RETURNING id, user_id, problem_id, session_id, confidence_score, duration_seconds, outcome, notes, performed_at, status, elapsed_time_seconds, timer_state, timer_last_updated_at, started_at
+`
+
+type CreateInProgressAttemptParams struct {
+	UserID    int64         `json:"user_id"`
+	ProblemID int64         `json:"problem_id"`
+	SessionID sql.NullInt64 `json:"session_id"`
+}
+
+// ============================================================================
+// ATTEMPT TIMER QUERIES (for stopwatch functionality)
+// ============================================================================
+func (q *Queries) CreateInProgressAttempt(ctx context.Context, arg CreateInProgressAttemptParams) (Attempt, error) {
+	row := q.db.QueryRowContext(ctx, createInProgressAttempt, arg.UserID, arg.ProblemID, arg.SessionID)
+	var i Attempt
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.ProblemID,
+		&i.SessionID,
+		&i.ConfidenceScore,
+		&i.DurationSeconds,
+		&i.Outcome,
+		&i.Notes,
+		&i.PerformedAt,
+		&i.Status,
+		&i.ElapsedTimeSeconds,
+		&i.TimerState,
+		&i.TimerLastUpdatedAt,
+		&i.StartedAt,
+	)
+	return i, err
+}
+
+const deleteAttempt = `-- name: DeleteAttempt :exec
+DELETE FROM attempts
+WHERE id = ? AND user_id = ?
+`
+
+type DeleteAttemptParams struct {
+	ID     int64 `json:"id"`
+	UserID int64 `json:"user_id"`
+}
+
+func (q *Queries) DeleteAttempt(ctx context.Context, arg DeleteAttemptParams) error {
+	_, err := q.db.ExecContext(ctx, deleteAttempt, arg.ID, arg.UserID)
+	return err
+}
+
 const getAttempt = `-- name: GetAttempt :one
-SELECT id, user_id, problem_id, session_id, confidence_score, duration_seconds, outcome, notes, performed_at FROM attempts
+SELECT id, user_id, problem_id, session_id, confidence_score, duration_seconds, outcome, notes, performed_at, status, elapsed_time_seconds, timer_state, timer_last_updated_at, started_at FROM attempts
 WHERE id = ? AND user_id = ?
 LIMIT 1
 `
@@ -77,12 +213,130 @@ func (q *Queries) GetAttempt(ctx context.Context, arg GetAttemptParams) (Attempt
 		&i.Outcome,
 		&i.Notes,
 		&i.PerformedAt,
+		&i.Status,
+		&i.ElapsedTimeSeconds,
+		&i.TimerState,
+		&i.TimerLastUpdatedAt,
+		&i.StartedAt,
+	)
+	return i, err
+}
+
+const getAttemptById = `-- name: GetAttemptById :one
+SELECT a.id, a.user_id, a.problem_id, a.session_id, a.confidence_score, a.duration_seconds, a.outcome, a.notes, a.performed_at, a.status, a.elapsed_time_seconds, a.timer_state, a.timer_last_updated_at, a.started_at, p.title as problem_title, p.difficulty as problem_difficulty
+FROM attempts a
+JOIN problems p ON a.problem_id = p.id
+WHERE a.id = ? AND a.user_id = ?
+LIMIT 1
+`
+
+type GetAttemptByIdParams struct {
+	ID     int64 `json:"id"`
+	UserID int64 `json:"user_id"`
+}
+
+type GetAttemptByIdRow struct {
+	ID                 int64          `json:"id"`
+	UserID             int64          `json:"user_id"`
+	ProblemID          int64          `json:"problem_id"`
+	SessionID          sql.NullInt64  `json:"session_id"`
+	ConfidenceScore    sql.NullInt64  `json:"confidence_score"`
+	DurationSeconds    sql.NullInt64  `json:"duration_seconds"`
+	Outcome            sql.NullString `json:"outcome"`
+	Notes              sql.NullString `json:"notes"`
+	PerformedAt        sql.NullString `json:"performed_at"`
+	Status             sql.NullString `json:"status"`
+	ElapsedTimeSeconds sql.NullInt64  `json:"elapsed_time_seconds"`
+	TimerState         sql.NullString `json:"timer_state"`
+	TimerLastUpdatedAt sql.NullString `json:"timer_last_updated_at"`
+	StartedAt          sql.NullString `json:"started_at"`
+	ProblemTitle       string         `json:"problem_title"`
+	ProblemDifficulty  sql.NullString `json:"problem_difficulty"`
+}
+
+func (q *Queries) GetAttemptById(ctx context.Context, arg GetAttemptByIdParams) (GetAttemptByIdRow, error) {
+	row := q.db.QueryRowContext(ctx, getAttemptById, arg.ID, arg.UserID)
+	var i GetAttemptByIdRow
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.ProblemID,
+		&i.SessionID,
+		&i.ConfidenceScore,
+		&i.DurationSeconds,
+		&i.Outcome,
+		&i.Notes,
+		&i.PerformedAt,
+		&i.Status,
+		&i.ElapsedTimeSeconds,
+		&i.TimerState,
+		&i.TimerLastUpdatedAt,
+		&i.StartedAt,
+		&i.ProblemTitle,
+		&i.ProblemDifficulty,
+	)
+	return i, err
+}
+
+const getInProgressAttemptForProblem = `-- name: GetInProgressAttemptForProblem :one
+SELECT a.id, a.user_id, a.problem_id, a.session_id, a.confidence_score, a.duration_seconds, a.outcome, a.notes, a.performed_at, a.status, a.elapsed_time_seconds, a.timer_state, a.timer_last_updated_at, a.started_at, p.title as problem_title, p.difficulty as problem_difficulty
+FROM attempts a
+JOIN problems p ON a.problem_id = p.id
+WHERE a.user_id = ? AND a.problem_id = ? AND a.status = 'in_progress'
+ORDER BY a.started_at DESC
+LIMIT 1
+`
+
+type GetInProgressAttemptForProblemParams struct {
+	UserID    int64 `json:"user_id"`
+	ProblemID int64 `json:"problem_id"`
+}
+
+type GetInProgressAttemptForProblemRow struct {
+	ID                 int64          `json:"id"`
+	UserID             int64          `json:"user_id"`
+	ProblemID          int64          `json:"problem_id"`
+	SessionID          sql.NullInt64  `json:"session_id"`
+	ConfidenceScore    sql.NullInt64  `json:"confidence_score"`
+	DurationSeconds    sql.NullInt64  `json:"duration_seconds"`
+	Outcome            sql.NullString `json:"outcome"`
+	Notes              sql.NullString `json:"notes"`
+	PerformedAt        sql.NullString `json:"performed_at"`
+	Status             sql.NullString `json:"status"`
+	ElapsedTimeSeconds sql.NullInt64  `json:"elapsed_time_seconds"`
+	TimerState         sql.NullString `json:"timer_state"`
+	TimerLastUpdatedAt sql.NullString `json:"timer_last_updated_at"`
+	StartedAt          sql.NullString `json:"started_at"`
+	ProblemTitle       string         `json:"problem_title"`
+	ProblemDifficulty  sql.NullString `json:"problem_difficulty"`
+}
+
+func (q *Queries) GetInProgressAttemptForProblem(ctx context.Context, arg GetInProgressAttemptForProblemParams) (GetInProgressAttemptForProblemRow, error) {
+	row := q.db.QueryRowContext(ctx, getInProgressAttemptForProblem, arg.UserID, arg.ProblemID)
+	var i GetInProgressAttemptForProblemRow
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.ProblemID,
+		&i.SessionID,
+		&i.ConfidenceScore,
+		&i.DurationSeconds,
+		&i.Outcome,
+		&i.Notes,
+		&i.PerformedAt,
+		&i.Status,
+		&i.ElapsedTimeSeconds,
+		&i.TimerState,
+		&i.TimerLastUpdatedAt,
+		&i.StartedAt,
+		&i.ProblemTitle,
+		&i.ProblemDifficulty,
 	)
 	return i, err
 }
 
 const getLatestAttemptForProblemInSession = `-- name: GetLatestAttemptForProblemInSession :one
-SELECT id, user_id, problem_id, session_id, confidence_score, duration_seconds, outcome, notes, performed_at FROM attempts
+SELECT id, user_id, problem_id, session_id, confidence_score, duration_seconds, outcome, notes, performed_at, status, elapsed_time_seconds, timer_state, timer_last_updated_at, started_at FROM attempts
 WHERE user_id = ? AND problem_id = ? AND session_id = ?
 ORDER BY performed_at DESC
 LIMIT 1
@@ -107,12 +361,17 @@ func (q *Queries) GetLatestAttemptForProblemInSession(ctx context.Context, arg G
 		&i.Outcome,
 		&i.Notes,
 		&i.PerformedAt,
+		&i.Status,
+		&i.ElapsedTimeSeconds,
+		&i.TimerState,
+		&i.TimerLastUpdatedAt,
+		&i.StartedAt,
 	)
 	return i, err
 }
 
 const getRecentAttempts = `-- name: GetRecentAttempts :many
-SELECT a.id, a.user_id, a.problem_id, a.session_id, a.confidence_score, a.duration_seconds, a.outcome, a.notes, a.performed_at, p.title as problem_title, p.difficulty as problem_difficulty
+SELECT a.id, a.user_id, a.problem_id, a.session_id, a.confidence_score, a.duration_seconds, a.outcome, a.notes, a.performed_at, a.status, a.elapsed_time_seconds, a.timer_state, a.timer_last_updated_at, a.started_at, p.title as problem_title, p.difficulty as problem_difficulty
 FROM attempts a
 JOIN problems p ON a.problem_id = p.id
 WHERE a.user_id = ?
@@ -126,17 +385,22 @@ type GetRecentAttemptsParams struct {
 }
 
 type GetRecentAttemptsRow struct {
-	ID                int64          `json:"id"`
-	UserID            int64          `json:"user_id"`
-	ProblemID         int64          `json:"problem_id"`
-	SessionID         sql.NullInt64  `json:"session_id"`
-	ConfidenceScore   sql.NullInt64  `json:"confidence_score"`
-	DurationSeconds   sql.NullInt64  `json:"duration_seconds"`
-	Outcome           sql.NullString `json:"outcome"`
-	Notes             sql.NullString `json:"notes"`
-	PerformedAt       sql.NullString `json:"performed_at"`
-	ProblemTitle      string         `json:"problem_title"`
-	ProblemDifficulty sql.NullString `json:"problem_difficulty"`
+	ID                 int64          `json:"id"`
+	UserID             int64          `json:"user_id"`
+	ProblemID          int64          `json:"problem_id"`
+	SessionID          sql.NullInt64  `json:"session_id"`
+	ConfidenceScore    sql.NullInt64  `json:"confidence_score"`
+	DurationSeconds    sql.NullInt64  `json:"duration_seconds"`
+	Outcome            sql.NullString `json:"outcome"`
+	Notes              sql.NullString `json:"notes"`
+	PerformedAt        sql.NullString `json:"performed_at"`
+	Status             sql.NullString `json:"status"`
+	ElapsedTimeSeconds sql.NullInt64  `json:"elapsed_time_seconds"`
+	TimerState         sql.NullString `json:"timer_state"`
+	TimerLastUpdatedAt sql.NullString `json:"timer_last_updated_at"`
+	StartedAt          sql.NullString `json:"started_at"`
+	ProblemTitle       string         `json:"problem_title"`
+	ProblemDifficulty  sql.NullString `json:"problem_difficulty"`
 }
 
 func (q *Queries) GetRecentAttempts(ctx context.Context, arg GetRecentAttemptsParams) ([]GetRecentAttemptsRow, error) {
@@ -158,6 +422,11 @@ func (q *Queries) GetRecentAttempts(ctx context.Context, arg GetRecentAttemptsPa
 			&i.Outcome,
 			&i.Notes,
 			&i.PerformedAt,
+			&i.Status,
+			&i.ElapsedTimeSeconds,
+			&i.TimerState,
+			&i.TimerLastUpdatedAt,
+			&i.StartedAt,
 			&i.ProblemTitle,
 			&i.ProblemDifficulty,
 		); err != nil {
@@ -175,7 +444,7 @@ func (q *Queries) GetRecentAttempts(ctx context.Context, arg GetRecentAttemptsPa
 }
 
 const listAttemptsForProblem = `-- name: ListAttemptsForProblem :many
-SELECT id, user_id, problem_id, session_id, confidence_score, duration_seconds, outcome, notes, performed_at FROM attempts
+SELECT id, user_id, problem_id, session_id, confidence_score, duration_seconds, outcome, notes, performed_at, status, elapsed_time_seconds, timer_state, timer_last_updated_at, started_at FROM attempts
 WHERE user_id = ? AND problem_id = ?
 ORDER BY performed_at DESC
 `
@@ -204,6 +473,11 @@ func (q *Queries) ListAttemptsForProblem(ctx context.Context, arg ListAttemptsFo
 			&i.Outcome,
 			&i.Notes,
 			&i.PerformedAt,
+			&i.Status,
+			&i.ElapsedTimeSeconds,
+			&i.TimerState,
+			&i.TimerLastUpdatedAt,
+			&i.StartedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -219,7 +493,7 @@ func (q *Queries) ListAttemptsForProblem(ctx context.Context, arg ListAttemptsFo
 }
 
 const listAttemptsForUser = `-- name: ListAttemptsForUser :many
-SELECT a.id, a.user_id, a.problem_id, a.session_id, a.confidence_score, a.duration_seconds, a.outcome, a.notes, a.performed_at, p.title as problem_title, p.difficulty as problem_difficulty
+SELECT a.id, a.user_id, a.problem_id, a.session_id, a.confidence_score, a.duration_seconds, a.outcome, a.notes, a.performed_at, a.status, a.elapsed_time_seconds, a.timer_state, a.timer_last_updated_at, a.started_at, p.title as problem_title, p.difficulty as problem_difficulty
 FROM attempts a
 JOIN problems p ON a.problem_id = p.id
 WHERE a.user_id = ?
@@ -234,17 +508,22 @@ type ListAttemptsForUserParams struct {
 }
 
 type ListAttemptsForUserRow struct {
-	ID                int64          `json:"id"`
-	UserID            int64          `json:"user_id"`
-	ProblemID         int64          `json:"problem_id"`
-	SessionID         sql.NullInt64  `json:"session_id"`
-	ConfidenceScore   sql.NullInt64  `json:"confidence_score"`
-	DurationSeconds   sql.NullInt64  `json:"duration_seconds"`
-	Outcome           sql.NullString `json:"outcome"`
-	Notes             sql.NullString `json:"notes"`
-	PerformedAt       sql.NullString `json:"performed_at"`
-	ProblemTitle      string         `json:"problem_title"`
-	ProblemDifficulty sql.NullString `json:"problem_difficulty"`
+	ID                 int64          `json:"id"`
+	UserID             int64          `json:"user_id"`
+	ProblemID          int64          `json:"problem_id"`
+	SessionID          sql.NullInt64  `json:"session_id"`
+	ConfidenceScore    sql.NullInt64  `json:"confidence_score"`
+	DurationSeconds    sql.NullInt64  `json:"duration_seconds"`
+	Outcome            sql.NullString `json:"outcome"`
+	Notes              sql.NullString `json:"notes"`
+	PerformedAt        sql.NullString `json:"performed_at"`
+	Status             sql.NullString `json:"status"`
+	ElapsedTimeSeconds sql.NullInt64  `json:"elapsed_time_seconds"`
+	TimerState         sql.NullString `json:"timer_state"`
+	TimerLastUpdatedAt sql.NullString `json:"timer_last_updated_at"`
+	StartedAt          sql.NullString `json:"started_at"`
+	ProblemTitle       string         `json:"problem_title"`
+	ProblemDifficulty  sql.NullString `json:"problem_difficulty"`
 }
 
 func (q *Queries) ListAttemptsForUser(ctx context.Context, arg ListAttemptsForUserParams) ([]ListAttemptsForUserRow, error) {
@@ -266,6 +545,11 @@ func (q *Queries) ListAttemptsForUser(ctx context.Context, arg ListAttemptsForUs
 			&i.Outcome,
 			&i.Notes,
 			&i.PerformedAt,
+			&i.Status,
+			&i.ElapsedTimeSeconds,
+			&i.TimerState,
+			&i.TimerLastUpdatedAt,
+			&i.StartedAt,
 			&i.ProblemTitle,
 			&i.ProblemDifficulty,
 		); err != nil {
@@ -280,4 +564,31 @@ func (q *Queries) ListAttemptsForUser(ctx context.Context, arg ListAttemptsForUs
 		return nil, err
 	}
 	return items, nil
+}
+
+const updateAttemptTimer = `-- name: UpdateAttemptTimer :exec
+UPDATE attempts
+SET elapsed_time_seconds = ?,
+    timer_state = ?,
+    timer_last_updated_at = ?
+WHERE id = ? AND user_id = ? AND status = 'in_progress'
+`
+
+type UpdateAttemptTimerParams struct {
+	ElapsedTimeSeconds sql.NullInt64  `json:"elapsed_time_seconds"`
+	TimerState         sql.NullString `json:"timer_state"`
+	TimerLastUpdatedAt sql.NullString `json:"timer_last_updated_at"`
+	ID                 int64          `json:"id"`
+	UserID             int64          `json:"user_id"`
+}
+
+func (q *Queries) UpdateAttemptTimer(ctx context.Context, arg UpdateAttemptTimerParams) error {
+	_, err := q.db.ExecContext(ctx, updateAttemptTimer,
+		arg.ElapsedTimeSeconds,
+		arg.TimerState,
+		arg.TimerLastUpdatedAt,
+		arg.ID,
+		arg.UserID,
+	)
+	return err
 }

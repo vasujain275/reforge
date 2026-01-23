@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	repo "github.com/vasujain275/reforge/internal/adapters/sqlite/sqlc"
 )
@@ -13,6 +14,14 @@ type Service interface {
 	CreateAttempt(ctx context.Context, userID int64, body CreateAttemptBody) (*AttemptResponse, error)
 	ListAttemptsForUser(ctx context.Context, userID int64, limit, offset int64) ([]AttemptResponse, error)
 	ListAttemptsForProblem(ctx context.Context, userID int64, problemID int64) ([]AttemptResponse, error)
+
+	// Timer-based attempt methods
+	StartAttempt(ctx context.Context, userID int64, body StartAttemptBody) (*InProgressAttemptResponse, error)
+	GetInProgressAttempt(ctx context.Context, userID int64, problemID int64) (*InProgressAttemptResponse, error)
+	GetAttemptByID(ctx context.Context, userID int64, attemptID int64) (*InProgressAttemptResponse, error)
+	UpdateAttemptTimer(ctx context.Context, userID int64, attemptID int64, body UpdateAttemptTimerBody) error
+	CompleteAttempt(ctx context.Context, userID int64, attemptID int64, body CompleteAttemptBody) (*AttemptResponse, error)
+	AbandonAttempt(ctx context.Context, userID int64, attemptID int64) error
 }
 
 type attemptService struct {
@@ -324,4 +333,197 @@ func min(a, b int) int {
 		return a
 	}
 	return b
+}
+
+// ============================================================================
+// ATTEMPT TIMER SERVICE METHODS (for stopwatch functionality)
+// ============================================================================
+
+// StartAttempt creates a new in-progress attempt with timer
+func (s *attemptService) StartAttempt(ctx context.Context, userID int64, body StartAttemptBody) (*InProgressAttemptResponse, error) {
+	attempt, err := s.repo.CreateInProgressAttempt(ctx, repo.CreateInProgressAttemptParams{
+		UserID:    userID,
+		ProblemID: body.ProblemID,
+		SessionID: sqlNullInt64(body.SessionID),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create in-progress attempt: %w", err)
+	}
+
+	// Get problem details for the response
+	problem, err := s.repo.GetProblem(ctx, body.ProblemID)
+	if err != nil {
+		// Return attempt without problem details if problem fetch fails
+		return &InProgressAttemptResponse{
+			ID:                 attempt.ID,
+			UserID:             attempt.UserID,
+			ProblemID:          attempt.ProblemID,
+			SessionID:          nullInt64ToPtr(attempt.SessionID),
+			Status:             nullStringToStr(attempt.Status, "in_progress"),
+			ElapsedTimeSeconds: nullInt64ToInt64(attempt.ElapsedTimeSeconds, 0),
+			TimerState:         nullStringToStr(attempt.TimerState, "idle"),
+			TimerLastUpdatedAt: nullStringToPtr(attempt.TimerLastUpdatedAt),
+			StartedAt:          nullStringToStr(attempt.StartedAt, ""),
+		}, nil
+	}
+
+	return &InProgressAttemptResponse{
+		ID:                 attempt.ID,
+		UserID:             attempt.UserID,
+		ProblemID:          attempt.ProblemID,
+		SessionID:          nullInt64ToPtr(attempt.SessionID),
+		Status:             nullStringToStr(attempt.Status, "in_progress"),
+		ElapsedTimeSeconds: nullInt64ToInt64(attempt.ElapsedTimeSeconds, 0),
+		TimerState:         nullStringToStr(attempt.TimerState, "idle"),
+		TimerLastUpdatedAt: nullStringToPtr(attempt.TimerLastUpdatedAt),
+		StartedAt:          nullStringToStr(attempt.StartedAt, ""),
+		ProblemTitle:       &problem.Title,
+		ProblemDifficulty:  nullStringToPtr(problem.Difficulty),
+	}, nil
+}
+
+// GetInProgressAttempt retrieves an existing in-progress attempt for a problem
+func (s *attemptService) GetInProgressAttempt(ctx context.Context, userID int64, problemID int64) (*InProgressAttemptResponse, error) {
+	row, err := s.repo.GetInProgressAttemptForProblem(ctx, repo.GetInProgressAttemptForProblemParams{
+		UserID:    userID,
+		ProblemID: problemID,
+	})
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil // No in-progress attempt found
+		}
+		return nil, fmt.Errorf("failed to get in-progress attempt: %w", err)
+	}
+
+	return &InProgressAttemptResponse{
+		ID:                 row.ID,
+		UserID:             row.UserID,
+		ProblemID:          row.ProblemID,
+		SessionID:          nullInt64ToPtr(row.SessionID),
+		Status:             nullStringToStr(row.Status, "in_progress"),
+		ElapsedTimeSeconds: nullInt64ToInt64(row.ElapsedTimeSeconds, 0),
+		TimerState:         nullStringToStr(row.TimerState, "idle"),
+		TimerLastUpdatedAt: nullStringToPtr(row.TimerLastUpdatedAt),
+		StartedAt:          nullStringToStr(row.StartedAt, ""),
+		ProblemTitle:       &row.ProblemTitle,
+		ProblemDifficulty:  nullStringToPtr(row.ProblemDifficulty),
+	}, nil
+}
+
+// GetAttemptByID retrieves an attempt by its ID
+func (s *attemptService) GetAttemptByID(ctx context.Context, userID int64, attemptID int64) (*InProgressAttemptResponse, error) {
+	row, err := s.repo.GetAttemptById(ctx, repo.GetAttemptByIdParams{
+		ID:     attemptID,
+		UserID: userID,
+	})
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("attempt not found")
+		}
+		return nil, fmt.Errorf("failed to get attempt: %w", err)
+	}
+
+	return &InProgressAttemptResponse{
+		ID:                 row.ID,
+		UserID:             row.UserID,
+		ProblemID:          row.ProblemID,
+		SessionID:          nullInt64ToPtr(row.SessionID),
+		Status:             nullStringToStr(row.Status, "in_progress"),
+		ElapsedTimeSeconds: nullInt64ToInt64(row.ElapsedTimeSeconds, 0),
+		TimerState:         nullStringToStr(row.TimerState, "idle"),
+		TimerLastUpdatedAt: nullStringToPtr(row.TimerLastUpdatedAt),
+		StartedAt:          nullStringToStr(row.StartedAt, ""),
+		ProblemTitle:       &row.ProblemTitle,
+		ProblemDifficulty:  nullStringToPtr(row.ProblemDifficulty),
+	}, nil
+}
+
+// UpdateAttemptTimer updates the timer state for an in-progress attempt
+func (s *attemptService) UpdateAttemptTimer(ctx context.Context, userID int64, attemptID int64, body UpdateAttemptTimerBody) error {
+	now := sql.NullString{String: currentTimestamp(), Valid: true}
+
+	err := s.repo.UpdateAttemptTimer(ctx, repo.UpdateAttemptTimerParams{
+		ElapsedTimeSeconds: sql.NullInt64{Int64: body.ElapsedTimeSeconds, Valid: true},
+		TimerState:         sql.NullString{String: body.TimerState, Valid: true},
+		TimerLastUpdatedAt: now,
+		ID:                 attemptID,
+		UserID:             userID,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to update attempt timer: %w", err)
+	}
+
+	return nil
+}
+
+// CompleteAttempt completes an in-progress attempt with final data
+func (s *attemptService) CompleteAttempt(ctx context.Context, userID int64, attemptID int64, body CompleteAttemptBody) (*AttemptResponse, error) {
+	// First get the attempt to get the elapsed time for duration
+	existingAttempt, err := s.repo.GetAttempt(ctx, repo.GetAttemptParams{
+		ID:     attemptID,
+		UserID: userID,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get attempt: %w", err)
+	}
+
+	// Use provided duration_seconds if set, otherwise use elapsed time from timer
+	var durationSeconds int64
+	if body.DurationSeconds != nil {
+		durationSeconds = *body.DurationSeconds
+	} else {
+		durationSeconds = nullInt64ToInt64(existingAttempt.ElapsedTimeSeconds, 0)
+	}
+
+	attempt, err := s.repo.CompleteAttempt(ctx, repo.CompleteAttemptParams{
+		ConfidenceScore: sql.NullInt64{Int64: body.ConfidenceScore, Valid: true},
+		DurationSeconds: sql.NullInt64{Int64: durationSeconds, Valid: true},
+		Outcome:         sql.NullString{String: body.Outcome, Valid: true},
+		Notes:           sqlNullString(body.Notes),
+		ID:              attemptID,
+		UserID:          userID,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to complete attempt: %w", err)
+	}
+
+	// Update user problem stats
+	if err := s.updateUserProblemStats(ctx, userID, attempt.ProblemID); err != nil {
+		fmt.Printf("Warning: failed to update user problem stats: %v\n", err)
+	}
+
+	// Update user pattern stats
+	if err := s.updateUserPatternStats(ctx, userID, attempt.ProblemID); err != nil {
+		fmt.Printf("Warning: failed to update user pattern stats: %v\n", err)
+	}
+
+	return &AttemptResponse{
+		ID:              attempt.ID,
+		UserID:          attempt.UserID,
+		ProblemID:       attempt.ProblemID,
+		SessionID:       nullInt64ToPtr(attempt.SessionID),
+		ConfidenceScore: nullInt64ToInt64(attempt.ConfidenceScore, 0),
+		DurationSeconds: nullInt64ToPtr(attempt.DurationSeconds),
+		Outcome:         nullStringToStr(attempt.Outcome, ""),
+		Notes:           nullStringToPtr(attempt.Notes),
+		PerformedAt:     nullStringToStr(attempt.PerformedAt, ""),
+	}, nil
+}
+
+// AbandonAttempt marks an in-progress attempt as abandoned
+func (s *attemptService) AbandonAttempt(ctx context.Context, userID int64, attemptID int64) error {
+	err := s.repo.AbandonAttempt(ctx, repo.AbandonAttemptParams{
+		ID:     attemptID,
+		UserID: userID,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to abandon attempt: %w", err)
+	}
+
+	return nil
+}
+
+// currentTimestamp returns the current time in RFC3339 format
+func currentTimestamp() string {
+	return time.Now().UTC().Format(time.RFC3339)
 }

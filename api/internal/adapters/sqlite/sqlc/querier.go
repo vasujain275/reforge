@@ -10,6 +10,8 @@ import (
 )
 
 type Querier interface {
+	AbandonAttempt(ctx context.Context, arg AbandonAttemptParams) error
+	CompleteAttempt(ctx context.Context, arg CompleteAttemptParams) (Attempt, error)
 	// Check if any admin exists (used for seeding)
 	CountAdmins(ctx context.Context) (int64, error)
 	// Used for pagination and checking if admin exists
@@ -24,6 +26,10 @@ type Querier interface {
 	CountSearchPatternsWithStats(ctx context.Context, searchQuery interface{}) (int64, error)
 	CountSearchSessionsForUser(ctx context.Context, arg CountSearchSessionsForUserParams) (int64, error)
 	CreateAttempt(ctx context.Context, arg CreateAttemptParams) (Attempt, error)
+	// ============================================================================
+	// ATTEMPT TIMER QUERIES (for stopwatch functionality)
+	// ============================================================================
+	CreateInProgressAttempt(ctx context.Context, arg CreateInProgressAttemptParams) (Attempt, error)
 	CreateInviteCode(ctx context.Context, arg CreateInviteCodeParams) (AdminInviteCode, error)
 	CreatePasswordResetToken(ctx context.Context, arg CreatePasswordResetTokenParams) (PasswordResetToken, error)
 	CreatePattern(ctx context.Context, arg CreatePatternParams) (Pattern, error)
@@ -33,6 +39,7 @@ type Querier interface {
 	CreateUser(ctx context.Context, arg CreateUserParams) (CreateUserRow, error)
 	CreateUserProblemStats(ctx context.Context, arg CreateUserProblemStatsParams) (UserProblemStat, error)
 	CreateUserSessionTemplate(ctx context.Context, arg CreateUserSessionTemplateParams) (UserSessionTemplate, error)
+	DeleteAttempt(ctx context.Context, arg DeleteAttemptParams) error
 	// Cleanup job: Remove expired codes
 	DeleteExpiredInviteCodes(ctx context.Context) error
 	// Cleanup job: Remove expired tokens
@@ -51,7 +58,9 @@ type Querier interface {
 	// Admin: List all users (supports pagination)
 	GetAllUsers(ctx context.Context, arg GetAllUsersParams) ([]GetAllUsersRow, error)
 	GetAttempt(ctx context.Context, arg GetAttemptParams) (Attempt, error)
+	GetAttemptById(ctx context.Context, arg GetAttemptByIdParams) (GetAttemptByIdRow, error)
 	GetAverageConfidenceForUser(ctx context.Context, userID int64) (interface{}, error)
+	GetInProgressAttemptForProblem(ctx context.Context, arg GetInProgressAttemptForProblemParams) (GetInProgressAttemptForProblemRow, error)
 	GetInviteCodeByCode(ctx context.Context, code string) (AdminInviteCode, error)
 	GetInviteCodeByID(ctx context.Context, id int64) (AdminInviteCode, error)
 	GetLatestAttemptForProblemInSession(ctx context.Context, arg GetLatestAttemptForProblemInSessionParams) (Attempt, error)
@@ -117,9 +126,11 @@ type Querier interface {
 	SearchPatternsWithStats(ctx context.Context, arg SearchPatternsWithStatsParams) ([]SearchPatternsWithStatsRow, error)
 	SearchProblemsForUser(ctx context.Context, arg SearchProblemsForUserParams) ([]SearchProblemsForUserRow, error)
 	SearchSessionsForUser(ctx context.Context, arg SearchSessionsForUserParams) ([]RevisionSession, error)
+	UpdateAttemptTimer(ctx context.Context, arg UpdateAttemptTimerParams) error
 	UpdatePattern(ctx context.Context, arg UpdatePatternParams) (Pattern, error)
 	UpdateProblem(ctx context.Context, arg UpdateProblemParams) (Problem, error)
 	UpdateSessionCompleted(ctx context.Context, arg UpdateSessionCompletedParams) error
+	UpdateSessionOrder(ctx context.Context, arg UpdateSessionOrderParams) error
 	UpdateSessionTimer(ctx context.Context, arg UpdateSessionTimerParams) error
 	UpdateSystemSetting(ctx context.Context, arg UpdateSystemSettingParams) (SystemSetting, error)
 	// Admin: Soft activate/deactivate users

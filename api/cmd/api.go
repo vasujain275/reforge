@@ -153,6 +153,7 @@ func (app *application) mount() http.Handler {
 				r.Get("/{id}", sessionHandler.GetSession)
 				r.Put("/{id}/complete", sessionHandler.CompleteSession)
 				r.Put("/{id}/timer", sessionHandler.UpdateSessionTimer)
+				r.Put("/{id}/reorder", sessionHandler.ReorderSession)
 				r.Delete("/{id}", sessionHandler.DeleteSession)
 			})
 
@@ -160,6 +161,13 @@ func (app *application) mount() http.Handler {
 			r.Route("/attempts", func(r chi.Router) {
 				r.Get("/", attemptHandler.ListAttemptsForUser)
 				r.Post("/", attemptHandler.CreateAttempt)
+				// Timer-based attempt endpoints
+				r.Post("/start", attemptHandler.StartAttempt)
+				r.Get("/in-progress", attemptHandler.GetInProgressAttempt)
+				r.Get("/{id}", attemptHandler.GetAttemptByID)
+				r.Put("/{id}/timer", attemptHandler.UpdateAttemptTimer)
+				r.Put("/{id}/complete", attemptHandler.CompleteAttempt)
+				r.Delete("/{id}", attemptHandler.AbandonAttempt)
 			})
 
 			// Settings

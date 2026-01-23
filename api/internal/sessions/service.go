@@ -49,6 +49,7 @@ type Service interface {
 	CompleteSession(ctx context.Context, userID int64, sessionID int64) error
 	DeleteSession(ctx context.Context, userID int64, sessionID int64) error
 	UpdateSessionTimer(ctx context.Context, userID int64, sessionID int64, body UpdateSessionTimerBody) error
+	ReorderSession(ctx context.Context, userID int64, sessionID int64, body ReorderSessionBody) error
 }
 
 type sessionService struct {
@@ -950,4 +951,58 @@ func getEstimatedTime(difficulty string) int {
 	default:
 		return 25
 	}
+}
+
+func (s *sessionService) ReorderSession(ctx context.Context, userID int64, sessionID int64, body ReorderSessionBody) error {
+	// Verify session belongs to user and get current session
+	session, err := s.repo.GetSession(ctx, repo.GetSessionParams{
+		ID:     sessionID,
+		UserID: userID,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to get session: %w", err)
+	}
+
+	// Get current problem IDs from session
+	var currentProblemIDs []int64
+	if session.ItemsOrdered.Valid && session.ItemsOrdered.String != "" {
+		if err := json.Unmarshal([]byte(session.ItemsOrdered.String), &currentProblemIDs); err != nil {
+			return fmt.Errorf("failed to parse current problem IDs: %w", err)
+		}
+	}
+
+	// Validate that the new order contains the same problem IDs
+	if len(body.ProblemIDs) != len(currentProblemIDs) {
+		return fmt.Errorf("problem count mismatch: expected %d, got %d", len(currentProblemIDs), len(body.ProblemIDs))
+	}
+
+	// Create a map to verify all IDs exist in current session
+	currentIDMap := make(map[int64]bool)
+	for _, id := range currentProblemIDs {
+		currentIDMap[id] = true
+	}
+
+	for _, id := range body.ProblemIDs {
+		if !currentIDMap[id] {
+			return fmt.Errorf("problem ID %d not found in session", id)
+		}
+	}
+
+	// Marshal new order to JSON
+	newOrderJSON, err := json.Marshal(body.ProblemIDs)
+	if err != nil {
+		return fmt.Errorf("failed to marshal new order: %w", err)
+	}
+
+	// Update session order
+	err = s.repo.UpdateSessionOrder(ctx, repo.UpdateSessionOrderParams{
+		ItemsOrdered: sql.NullString{String: string(newOrderJSON), Valid: true},
+		ID:           sessionID,
+		UserID:       userID,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to update session order: %w", err)
+	}
+
+	return nil
 }

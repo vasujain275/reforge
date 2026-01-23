@@ -50,7 +50,7 @@ jobs:
           fi
           echo "version=$VERSION" >> $GITHUB_OUTPUT
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.REPO_GITHUB_TOKEN }}
 
   build-frontend:
     name: Build Frontend
@@ -223,4 +223,4 @@ jobs:
 
             See the [deployment guide](https://github.com/vasujain275/reforge/tree/main/infra) for full documentation.
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.REPO_GITHUB_TOKEN }}

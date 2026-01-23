@@ -42,7 +42,7 @@ func main() {
 			wFailed:     env.GetFloat("DEFAULT_W_FAILED", 0.10),
 			wPattern:    env.GetFloat("DEFAULT_W_PATTERN", 0.10),
 		},
-		datasetPath: env.GetString("DATASET_PATH", "./data/sample-datasets"),
+		datasetPath: env.GetString("DATASET_PATH", "./sample-datasets"),
 	}
 
 	// Logger

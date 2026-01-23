@@ -66,7 +66,7 @@ func (s *importService) GetBundledDatasets(ctx context.Context) ([]BundledDatase
 			ID:           "leetcode",
 			Name:         "LeetCode Problems",
 			Description:  "2,160 free LeetCode problems with patterns (premium excluded)",
-			FileName:     "leetcode-cleaned.csv",
+			FileName:     "leetcode.csv",
 			ProblemCount: 2160,
 			PatternCount: 72,
 			Difficulties: map[string]int{
@@ -362,9 +362,9 @@ func (s *importService) getBundledDatasetReader(datasetID string) (io.ReadCloser
 	// Fallback to filesystem search (for development)
 	cwd, _ := os.Getwd()
 	possiblePaths := []string{
-		filepath.Join(cwd, "data", "sample-datasets", dataset.FileName),
-		filepath.Join(cwd, "api", "data", "sample-datasets", dataset.FileName),
-		filepath.Join(cwd, "..", "data", "sample-datasets", dataset.FileName),
+		filepath.Join(cwd, "sample-datasets", dataset.FileName),
+		filepath.Join(cwd, "api", "sample-datasets", dataset.FileName),
+		filepath.Join(cwd, "..", "sample-datasets", dataset.FileName),
 	}
 
 	for _, path := range possiblePaths {

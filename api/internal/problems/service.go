@@ -16,6 +16,7 @@ type Service interface {
 	UpdateProblem(ctx context.Context, problemID int64, body UpdateProblemBody) (*ProblemWithStats, error)
 	DeleteProblem(ctx context.Context, problemID int64) error
 	ListProblemsForUser(ctx context.Context, userID int64) ([]ProblemWithStats, error)
+	SearchProblemsForUser(ctx context.Context, userID int64, params SearchProblemsParams) (*PaginatedProblems, error)
 	GetUrgentProblems(ctx context.Context, userID int64, limit int64) ([]UrgentProblem, error)
 	LinkProblemToPatterns(ctx context.Context, problemID int64, patternIDs []int64) error
 }
@@ -203,6 +204,83 @@ func (s *problemService) ListProblemsForUser(ctx context.Context, userID int64) 
 	}
 
 	return problems, nil
+}
+
+func (s *problemService) SearchProblemsForUser(ctx context.Context, userID int64, params SearchProblemsParams) (*PaginatedProblems, error) {
+	// Get total count
+	countRow, err := s.repo.CountProblemsForUser(ctx, repo.CountProblemsForUserParams{
+		UserID:      userID,
+		SearchQuery: params.Query,
+		Difficulty:  params.Difficulty,
+		Status:      params.Status,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to count problems: %w", err)
+	}
+
+	// Get paginated results
+	rows, err := s.repo.SearchProblemsForUser(ctx, repo.SearchProblemsForUserParams{
+		UserID:      userID,
+		SearchQuery: params.Query,
+		Difficulty:  params.Difficulty,
+		Status:      params.Status,
+		LimitVal:    params.Limit,
+		OffsetVal:   params.Offset,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to search problems: %w", err)
+	}
+
+	problems := make([]ProblemWithStats, 0, len(rows))
+	for _, row := range rows {
+		// Fetch patterns for each problem
+		patterns, err := s.repo.GetPatternsForProblem(ctx, row.ID)
+		if err != nil {
+			patterns = []repo.Pattern{}
+		}
+
+		problem := ProblemWithStats{
+			ID:         row.ID,
+			Title:      row.Title,
+			Source:     nullStringToPtr(row.Source),
+			URL:        nullStringToPtr(row.Url),
+			Difficulty: nullStringToStr(row.Difficulty, "medium"),
+			CreatedAt:  row.CreatedAt.String,
+			Patterns:   convertPatternsFromRepo(patterns),
+		}
+
+		// Add stats if they exist
+		if row.Status.Valid {
+			problem.Stats = &Stats{
+				UserID:        userID,
+				ProblemID:     row.ID,
+				Status:        row.Status.String,
+				Confidence:    row.Confidence.Int64,
+				AvgConfidence: row.AvgConfidence.Int64,
+				LastAttemptAt: nullStringToPtr(row.LastAttemptAt),
+				TotalAttempts: row.TotalAttempts.Int64,
+				LastOutcome:   nullStringToPtr(row.LastOutcome),
+				UpdatedAt:     row.UpdatedAt.String,
+			}
+		}
+
+		problems = append(problems, problem)
+	}
+
+	// Calculate pagination info
+	page := params.Offset/params.Limit + 1
+	if params.Offset == 0 {
+		page = 1
+	}
+	totalPages := (countRow + params.Limit - 1) / params.Limit
+
+	return &PaginatedProblems{
+		Data:       problems,
+		Total:      countRow,
+		Page:       page,
+		PageSize:   params.Limit,
+		TotalPages: totalPages,
+	}, nil
 }
 
 func (s *problemService) GetUrgentProblems(ctx context.Context, userID int64, limit int64) ([]UrgentProblem, error) {

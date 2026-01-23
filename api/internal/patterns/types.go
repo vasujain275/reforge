@@ -26,3 +26,18 @@ type PatternUserStats struct {
 	AvgConfidence int64   `json:"avg_confidence"`
 	LastRevisedAt *string `json:"last_revised_at"`
 }
+
+type SearchPatternsParams struct {
+	Query  string
+	SortBy string
+	Limit  int64
+	Offset int64
+}
+
+type PaginatedPatterns struct {
+	Data       []PatternWithStats `json:"data"`
+	Total      int64              `json:"total"`
+	Page       int64              `json:"page"`
+	PageSize   int64              `json:"page_size"`
+	TotalPages int64              `json:"total_pages"`
+}

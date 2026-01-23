@@ -59,3 +59,19 @@ type UrgentProblem struct {
 	Reason        string  `json:"reason"`
 	CreatedAt     string  `json:"created_at"`
 }
+
+type SearchProblemsParams struct {
+	Query      string
+	Difficulty string
+	Status     string
+	Limit      int64
+	Offset     int64
+}
+
+type PaginatedProblems struct {
+	Data       []ProblemWithStats `json:"data"`
+	Total      int64              `json:"total"`
+	Page       int64              `json:"page"`
+	PageSize   int64              `json:"page_size"`
+	TotalPages int64              `json:"total_pages"`
+}

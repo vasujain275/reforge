@@ -1,30 +1,63 @@
 import ApiError from "@/components/ApiError";
+import { DataPagination } from "@/components/DataPagination";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { usePagination } from "@/hooks/usePagination";
+import { useDebounce } from "@/hooks/useDebounce";
 import { api } from "@/lib/api";
-import type { RevisionSession } from "@/types";
-import { Calendar, Check, Clock, Play, Terminal, Zap, BookOpen, Target, Loader2 } from "lucide-react";
+import type { PaginatedSessions } from "@/types";
+import { Calendar, Check, Clock, Play, Terminal, Zap, BookOpen, Target, Loader2, Search, Filter } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 export default function SessionsPage() {
   const navigate = useNavigate();
-  const [sessions, setSessions] = useState<RevisionSession[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<PaginatedSessions | null>(null);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [filter, setFilter] = useState<"all" | "active" | "completed">("all");
   const [repeatingSessionId, setRepeatingSessionId] = useState<number | null>(null);
+
+  const {
+    page,
+    pageSize,
+    searchQuery,
+    setPage,
+    setSearchQuery,
+    setFilter,
+    getFilter,
+  } = usePagination(20);
+
+  // Debounce search query to avoid triggering API calls on every keystroke
+  const debouncedSearchQuery = useDebounce(searchQuery, 300);
+
+  const statusFilter = getFilter("status");
 
   useEffect(() => {
     fetchSessions();
-  }, []);
+  }, [page, pageSize, debouncedSearchQuery, statusFilter]);
 
   const fetchSessions = async () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await api.get("/sessions");
-      setSessions(response.data.data || []);
+      const params = new URLSearchParams({
+        page: String(page),
+        page_size: String(pageSize),
+      });
+      if (debouncedSearchQuery) params.append("q", debouncedSearchQuery);
+      if (statusFilter !== "all") params.append("status", statusFilter);
+
+      const response = await api.get(`/sessions?${params.toString()}`);
+      setData(response.data.data);
     } catch (err: unknown) {
       console.error("Failed to fetch sessions:", err);
       setError(
@@ -32,38 +65,30 @@ export default function SessionsPage() {
       );
     } finally {
       setLoading(false);
+      setInitialLoading(false);
     }
   };
 
   const handleRepeatSession = async (sessionId: number) => {
     setRepeatingSessionId(sessionId);
     try {
-      // Fetch the session details to get problem IDs and template
-      const sessionResponse = await api.get<{ data: RevisionSession }>(
-        `/sessions/${sessionId}`
-      );
+      const sessionResponse = await api.get(`/sessions/${sessionId}`);
       const sessionData = sessionResponse.data.data;
 
-      // Extract problem IDs from the session
-      const problemIds = sessionData.problems?.map((p) => p.id) || [];
+      const problemIds = sessionData.problems?.map((p: any) => p.id) || [];
 
       if (problemIds.length === 0) {
         alert("Cannot repeat session: No problems found in the original session.");
         return;
       }
 
-      // Create a new session with the same problems and template
-      const createResponse = await api.post<{ data: { id: number } }>(
-        "/sessions",
-        {
-          template_key: sessionData.template_key,
-          session_name: sessionData.session_name,
-          planned_duration_min: sessionData.planned_duration_min,
-          problem_ids: problemIds,
-        }
-      );
+      const createResponse = await api.post("/sessions", {
+        template_key: sessionData.template_key,
+        session_name: sessionData.session_name,
+        planned_duration_min: sessionData.planned_duration_min,
+        problem_ids: problemIds,
+      });
 
-      // Navigate to the newly created session
       const newSessionId = createResponse.data.data.id;
       navigate(`/dashboard/sessions/${newSessionId}`);
     } catch (err: unknown) {
@@ -94,13 +119,11 @@ export default function SessionsPage() {
   };
 
   const formatDate = (dateString: string) => {
-    // Handle both ISO8601 and SQLite timestamp formats
     let date: Date;
     
     if (dateString.includes('T') || dateString.includes('Z')) {
       date = new Date(dateString);
     } else {
-      // SQLite format - treat as UTC
       date = new Date(dateString + ' UTC');
     }
     
@@ -116,16 +139,11 @@ export default function SessionsPage() {
 
   const getRelativeTime = (dateString: string) => {
     const now = new Date();
-    // SQLite returns timestamps in format "YYYY-MM-DD HH:MM:SS" (UTC)
-    // We need to ensure it's parsed as UTC
     let date: Date;
     
-    // Check if the date string has timezone info
     if (dateString.includes('T') || dateString.includes('Z')) {
-      // ISO8601 format (e.g., "2024-01-22T10:30:00Z")
       date = new Date(dateString);
     } else {
-      // SQLite format (e.g., "2024-01-22 10:30:00") - treat as UTC
       date = new Date(dateString + ' UTC');
     }
     
@@ -139,29 +157,26 @@ export default function SessionsPage() {
     return `${diffDays}d ago`;
   };
 
-  const filteredSessions = sessions.filter((session) => {
-    if (filter === "all") return true;
-    if (filter === "active") return !session.completed;
-    if (filter === "completed") return session.completed;
-    return true;
-  });
-
-  if (loading) {
+  // Show full-page loading only on initial load
+  if (initialLoading) {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="flex flex-col items-center gap-4">
-          <Terminal className="h-8 w-8 text-primary animate-pulse" />
-          <p className="text-sm font-mono text-muted-foreground">
-            Loading session registry...
+          <Loader2 className="h-8 w-8 text-primary animate-spin" />
+          <p className="text-sm font-mono text-muted-foreground uppercase tracking-wider">
+            Loading Session Registry...
           </p>
         </div>
       </div>
     );
   }
 
-  if (error) {
+  if (error && !data) {
     return <ApiError message={error} onRetry={fetchSessions} />;
   }
+
+  const sessions = data?.data || [];
+  const totalPages = data?.total_pages || 0;
 
   return (
     <div className="flex-1 space-y-6 p-6">
@@ -176,45 +191,61 @@ export default function SessionsPage() {
           </div>
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Clock className="h-3 w-3" />
-            <span className="font-mono">{sessions.length} total sessions</span>
+            <span className="font-mono">{data?.total || 0} total sessions</span>
           </div>
         </div>
         <Link to="/dashboard/sessions/new">
-          <Button className="font-mono">
+          <Button className="font-mono rounded-md shadow-[0_0_15px_-3px_var(--primary)]">
             <Play className="h-4 w-4 mr-2" />
             + Initialize Session
           </Button>
         </Link>
       </div>
 
-      {/* Filter Tabs - Technical Style */}
-      <div className="flex gap-2">
-        {[
-          { key: "all", label: "ALL", count: sessions.length },
-          { key: "active", label: "ACTIVE", count: sessions.filter(s => !s.completed).length },
-          { key: "completed", label: "COMPLETED", count: sessions.filter(s => s.completed).length },
-        ].map((tab) => (
-          <button
-            key={tab.key}
-            onClick={() => setFilter(tab.key as typeof filter)}
-            className={`px-4 py-2 text-xs font-mono uppercase tracking-wider transition-all border rounded-md ${
-              filter === tab.key
-                ? "border-primary/50 bg-primary/10 text-primary shadow-[0_0_10px_-3px_var(--primary)]"
-                : "border-border text-muted-foreground hover:text-foreground hover:border-primary/30"
-            }`}
-          >
-            {tab.label}
-            <span className="ml-2 px-1.5 py-0.5 rounded bg-background/50 text-[10px]">
-              {String(tab.count).padStart(2, '0')}
-            </span>
-          </button>
-        ))}
-      </div>
+      {/* Filters */}
+      <Card className="rounded-md border border-border">
+        <CardContent className="pt-6">
+          <div className="grid gap-4 md:grid-cols-3">
+            <div className="md:col-span-2 relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search sessions by template or name..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9 pr-10 rounded-md font-mono"
+              />
+              {loading && (
+                <Loader2 className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground animate-spin" />
+              )}
+            </div>
+            <Select value={statusFilter} onValueChange={(v) => setFilter("status", v)}>
+              <SelectTrigger className="rounded-md">
+                <Filter className="h-4 w-4 mr-2" />
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent className="rounded-md">
+                <SelectItem value="all" className="font-mono">ALL SESSIONS</SelectItem>
+                <SelectItem value="active" className="font-mono">ACTIVE</SelectItem>
+                <SelectItem value="completed" className="font-mono">COMPLETED</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Results Summary */}
+      {data && (
+        <div className="flex items-center justify-between text-sm font-mono text-muted-foreground">
+          <span>
+            Showing {sessions.length > 0 ? ((page - 1) * pageSize) + 1 : 0} - {Math.min(page * pageSize, data.total)} of {data.total} sessions
+          </span>
+        </div>
+      )}
 
       {/* Sessions List - HUD Cards */}
-      <div className="space-y-3">
-        {filteredSessions.length === 0 ? (
-          <Card className="border border-dashed">
+      <div className={`space-y-3 transition-opacity duration-200 ${loading ? 'opacity-50' : 'opacity-100'}`}>
+        {sessions.length === 0 ? (
+          <Card className="border border-dashed rounded-md">
             <CardContent className="py-12">
               <div className="text-center space-y-4">
                 <div className="mx-auto h-12 w-12 rounded-md border border-border flex items-center justify-center">
@@ -225,30 +256,32 @@ export default function SessionsPage() {
                     No Sessions Found
                   </p>
                   <p className="text-xs text-muted-foreground font-mono">
-                    Initialize first session to begin tracking
+                    {searchQuery || statusFilter !== "all"
+                      ? "Try adjusting your search filters"
+                      : "Initialize first session to begin tracking"}
                   </p>
                 </div>
                 <Link to="/dashboard/sessions/new" className="inline-block">
-                  <Button className="font-mono">+ Initialize Session</Button>
+                  <Button className="font-mono rounded-md">+ Initialize Session</Button>
                 </Link>
               </div>
             </CardContent>
           </Card>
         ) : (
-          filteredSessions.map((session, index) => {
+          sessions.map((session) => {
             const template = getTemplateDisplay(session.template_key);
             const Icon = template.icon;
             return (
               <Card
                 key={session.id}
-                className="border border-border hover:border-primary/50 hover:shadow-[0_0_15px_-3px_var(--primary)] transition-all"
+                className="border border-border hover:border-primary/50 hover:shadow-[0_0_15px_-3px_var(--primary)] transition-all rounded-md"
               >
                 <CardContent className="p-4">
                   <div className="flex items-start gap-4">
-                    {/* Left: Index & Icon */}
+                    {/* Left: Icon */}
                     <div className="flex flex-col items-center gap-2 pt-1">
                       <div className="text-xs font-mono text-muted-foreground">
-                        #{String(sessions.length - index).padStart(3, '0')}
+                        #{String(session.id).padStart(3, '0')}
                       </div>
                       <div className="h-10 w-10 rounded-md border border-primary/20 bg-primary/5 flex items-center justify-center">
                         <Icon className="h-5 w-5 text-primary" />
@@ -332,7 +365,7 @@ export default function SessionsPage() {
                       {/* Actions */}
                       <div className="flex gap-2 pt-2 border-t border-border">
                         <Link to={`/dashboard/sessions/${session.id}`}>
-                          <Button variant="outline" size="sm" className="font-mono text-xs">
+                          <Button variant="outline" size="sm" className="font-mono text-xs rounded-md">
                             <Terminal className="h-3 w-3 mr-1.5" />
                             View Details
                           </Button>
@@ -341,7 +374,7 @@ export default function SessionsPage() {
                           <Button 
                             variant="ghost" 
                             size="sm" 
-                            className="font-mono text-xs"
+                            className="font-mono text-xs rounded-md"
                             onClick={() => handleRepeatSession(session.id)}
                             disabled={repeatingSessionId === session.id}
                           >
@@ -367,6 +400,17 @@ export default function SessionsPage() {
           })
         )}
       </div>
+
+      {/* Pagination */}
+      {data && totalPages > 0 && (
+        <div className="flex items-center justify-center pt-4">
+          <DataPagination
+            currentPage={page}
+            totalPages={totalPages}
+            onPageChange={setPage}
+          />
+        </div>
+      )}
     </div>
   );
 }

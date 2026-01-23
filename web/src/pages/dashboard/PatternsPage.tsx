@@ -19,8 +19,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { api } from "@/lib/api";
-import type { PatternWithStats } from "@/types";
+import type { PatternWithStats, PaginatedPatterns } from "@/types";
 import {
   Network,
   Plus,
@@ -30,13 +37,23 @@ import {
   Edit,
   Trash2,
   Save,
+  Loader2,
+  Search,
+  ArrowUpDown,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { usePagination } from "@/hooks/usePagination";
+import { useDebounce } from "@/hooks/useDebounce";
+import { DataPagination } from "@/components/DataPagination";
 
 export default function PatternsPage() {
-  const [patterns, setPatterns] = useState<PatternWithStats[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { page, pageSize, setPage } = usePagination();
+  const [data, setData] = useState<PaginatedPatterns | null>(null);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [sortBy, setSortBy] = useState("confidence_asc");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingPattern, setEditingPattern] = useState<PatternWithStats | null>(
     null
@@ -47,16 +64,27 @@ export default function PatternsPage() {
     description: "",
   });
 
+  // Debounce search query to avoid triggering API calls on every keystroke
+  const debouncedSearchQuery = useDebounce(searchQuery, 300);
+
   useEffect(() => {
     fetchPatterns();
-  }, []);
+  }, [page, pageSize, debouncedSearchQuery, sortBy]);
 
   const fetchPatterns = async () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await api.get("/patterns");
-      setPatterns(response.data.data || []);
+      const params = new URLSearchParams({
+        page: page.toString(),
+        page_size: pageSize.toString(),
+        sort_by: sortBy,
+      });
+      if (debouncedSearchQuery) {
+        params.append("q", debouncedSearchQuery);
+      }
+      const response = await api.get(`/patterns?${params.toString()}`);
+      setData(response.data.data);
     } catch (err: unknown) {
       console.error("Failed to fetch patterns:", err);
       setError(
@@ -64,6 +92,7 @@ export default function PatternsPage() {
       );
     } finally {
       setLoading(false);
+      setInitialLoading(false);
     }
   };
 
@@ -126,9 +155,7 @@ export default function PatternsPage() {
     }
   };
 
-  const sortedPatterns = [...patterns].sort(
-    (a, b) => (a.stats?.avg_confidence || 0) - (b.stats?.avg_confidence || 0)
-  );
+  const patterns = data?.data || [];
 
   const getDaysSinceLastRevised = (date?: string) => {
     if (!date) return "Never";
@@ -140,12 +167,13 @@ export default function PatternsPage() {
     return `${days} days ago`;
   };
 
-  if (loading) {
+  // Show full-page loader only on initial load
+  if (initialLoading) {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="flex flex-col items-center gap-4">
-          <Terminal className="h-8 w-8 text-primary animate-pulse" />
-          <p className="text-sm font-mono text-muted-foreground">
+          <Loader2 className="h-8 w-8 text-primary animate-spin" />
+          <p className="text-sm font-mono text-muted-foreground uppercase tracking-wider">
             Loading patterns...
           </p>
         </div>
@@ -155,6 +183,19 @@ export default function PatternsPage() {
 
   if (error) {
     return <ApiError message={error} onRetry={fetchPatterns} />;
+  }
+
+  if (!data) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="h-8 w-8 text-primary animate-spin" />
+          <p className="text-sm font-mono text-muted-foreground uppercase tracking-wider">
+            Loading patterns...
+          </p>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -175,9 +216,83 @@ export default function PatternsPage() {
         </Button>
       </div>
 
+      {/* Search and Sort Bar */}
+      <Card className="rounded-md border border-border">
+        <CardContent className="pt-6">
+          <div className="flex gap-4">
+            <div className="flex-1 relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search patterns by title..."
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setPage(1);
+                }}
+                className="pl-10 pr-10 rounded-md font-mono"
+              />
+              {loading && (
+                <Loader2 className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground animate-spin" />
+              )}
+            </div>
+            <div className="w-64">
+              <Select value={sortBy} onValueChange={setSortBy}>
+                <SelectTrigger className="rounded-md font-mono">
+                  <ArrowUpDown className="h-4 w-4 mr-2" />
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="rounded-md">
+                  <SelectItem value="confidence_asc" className="font-mono">
+                    Confidence: Low to High
+                  </SelectItem>
+                  <SelectItem value="confidence_desc" className="font-mono">
+                    Confidence: High to Low
+                  </SelectItem>
+                  <SelectItem value="times_revised_asc" className="font-mono">
+                    Revisions: Low to High
+                  </SelectItem>
+                  <SelectItem value="times_revised_desc" className="font-mono">
+                    Revisions: High to Low
+                  </SelectItem>
+                  <SelectItem value="problem_count_asc" className="font-mono">
+                    Problems: Low to High
+                  </SelectItem>
+                  <SelectItem value="problem_count_desc" className="font-mono">
+                    Problems: High to Low
+                  </SelectItem>
+                  <SelectItem value="last_revised_asc" className="font-mono">
+                    Last Revised: Oldest First
+                  </SelectItem>
+                  <SelectItem value="last_revised_desc" className="font-mono">
+                    Last Revised: Newest First
+                  </SelectItem>
+                  <SelectItem value="title_asc" className="font-mono">
+                    Title: A to Z
+                  </SelectItem>
+                  <SelectItem value="title_desc" className="font-mono">
+                    Title: Z to A
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Results Summary */}
+      {data && data.total > 0 && (
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-muted-foreground font-mono">
+            Showing {data.page_size * (data.page - 1) + 1}-
+            {Math.min(data.page_size * data.page, data.total)} of {data.total}{" "}
+            patterns
+          </p>
+        </div>
+      )}
+
       {/* Pattern Stats Overview */}
       {patterns.length > 0 && (
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className={`grid gap-4 md:grid-cols-3 transition-opacity duration-200 ${loading ? 'opacity-50' : 'opacity-100'}`}>
           <Card className="rounded-md border border-border">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-xs font-mono uppercase tracking-wider text-muted-foreground">
@@ -206,11 +321,18 @@ export default function PatternsPage() {
             </CardHeader>
             <CardContent>
               <div className="text-lg font-bold font-mono">
-                {sortedPatterns[sortedPatterns.length - 1]?.title || "N/A"}
+                {patterns.length > 0
+                  ? patterns.reduce((max, p) => 
+                      (p.stats?.avg_confidence || 0) > (max.stats?.avg_confidence || 0) ? p : max
+                    ).title
+                  : "N/A"}
               </div>
               <p className="text-xs text-muted-foreground mt-1 font-mono">
-                {sortedPatterns[sortedPatterns.length - 1]?.stats
-                  ?.avg_confidence || 0}
+                {patterns.length > 0
+                  ? patterns.reduce((max, p) => 
+                      (p.stats?.avg_confidence || 0) > (max.stats?.avg_confidence || 0) ? p : max
+                    ).stats?.avg_confidence || 0
+                  : 0}
                 % confidence
               </p>
             </CardContent>
@@ -225,10 +347,18 @@ export default function PatternsPage() {
             </CardHeader>
             <CardContent>
               <div className="text-lg font-bold font-mono">
-                {sortedPatterns[0]?.title || "N/A"}
+                {patterns.length > 0
+                  ? patterns.reduce((min, p) => 
+                      (p.stats?.avg_confidence || 0) < (min.stats?.avg_confidence || 0) ? p : min
+                    ).title
+                  : "N/A"}
               </div>
               <p className="text-xs text-muted-foreground mt-1 font-mono">
-                {sortedPatterns[0]?.stats?.avg_confidence || 0}% confidence
+                {patterns.length > 0
+                  ? patterns.reduce((min, p) => 
+                      (p.stats?.avg_confidence || 0) < (min.stats?.avg_confidence || 0) ? p : min
+                    ).stats?.avg_confidence || 0
+                  : 0}% confidence
               </p>
             </CardContent>
           </Card>
@@ -236,21 +366,25 @@ export default function PatternsPage() {
       )}
 
       {/* Patterns List */}
-      <div className="space-y-3">
-        {patterns.length === 0 ? (
+      <div className={`space-y-3 transition-opacity duration-200 ${loading ? 'opacity-50' : 'opacity-100'}`}>
+        {!patterns || patterns.length === 0 ? (
           <Card className="rounded-md border border-border">
             <CardContent className="py-12 text-center">
-              <Network className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+              <Terminal className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
               <p className="text-muted-foreground font-mono uppercase tracking-wider text-sm">
-                No Patterns Registered
+                {searchQuery
+                  ? "No Patterns Match Your Search"
+                  : "No Patterns Registered"}
               </p>
-              <Button className="mt-4 rounded-md" onClick={openCreateDialog}>
-                Initialize First Pattern
-              </Button>
+              {!searchQuery && (
+                <Button className="mt-4 rounded-md" onClick={openCreateDialog}>
+                  Initialize First Pattern
+                </Button>
+              )}
             </CardContent>
           </Card>
         ) : (
-          sortedPatterns.map((pattern) => (
+          patterns.map((pattern) => (
             <Card
               key={pattern.id}
               className="rounded-md border border-border hover:border-primary/50 transition-colors"
@@ -328,6 +462,15 @@ export default function PatternsPage() {
           ))
         )}
       </div>
+
+      {/* Pagination */}
+      {data && data.total > 0 && (
+        <DataPagination
+          currentPage={data.page}
+          totalPages={data.total_pages}
+          onPageChange={setPage}
+        />
+      )}
 
       {/* Create/Edit Pattern Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>

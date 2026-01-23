@@ -46,3 +46,22 @@ SELECT p.*, ups.status, ups.confidence, ups.avg_confidence,
 FROM problems p
 LEFT JOIN user_problem_stats ups ON p.id = ups.problem_id AND ups.user_id = ?
 ORDER BY p.created_at DESC;
+
+-- name: SearchProblemsForUser :many
+SELECT p.*, ups.status, ups.confidence, ups.avg_confidence, 
+       ups.last_attempt_at, ups.total_attempts, ups.last_outcome, ups.updated_at
+FROM problems p
+LEFT JOIN user_problem_stats ups ON p.id = ups.problem_id AND ups.user_id = sqlc.arg(user_id)
+WHERE (sqlc.arg(search_query) = '' OR p.title LIKE '%' || sqlc.arg(search_query) || '%' OR p.source LIKE '%' || sqlc.arg(search_query) || '%')
+  AND (sqlc.arg(difficulty) = '' OR p.difficulty = sqlc.arg(difficulty))
+  AND (sqlc.arg(status) = '' OR ups.status = sqlc.arg(status) OR (ups.status IS NULL AND sqlc.arg(status) = 'unsolved'))
+ORDER BY p.created_at DESC
+LIMIT sqlc.arg(limit_val) OFFSET sqlc.arg(offset_val);
+
+-- name: CountProblemsForUser :one
+SELECT COUNT(DISTINCT p.id) as count
+FROM problems p
+LEFT JOIN user_problem_stats ups ON p.id = ups.problem_id AND ups.user_id = sqlc.arg(user_id)
+WHERE (sqlc.arg(search_query) = '' OR p.title LIKE '%' || sqlc.arg(search_query) || '%' OR p.source LIKE '%' || sqlc.arg(search_query) || '%')
+  AND (sqlc.arg(difficulty) = '' OR p.difficulty = sqlc.arg(difficulty))
+  AND (sqlc.arg(status) = '' OR ups.status = sqlc.arg(status) OR (ups.status IS NULL AND sqlc.arg(status) = 'unsolved'));

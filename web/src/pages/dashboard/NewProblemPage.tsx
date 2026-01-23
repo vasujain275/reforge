@@ -50,6 +50,7 @@ export default function NewProblemPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [patterns, setPatterns] = useState<Pattern[]>([]);
+  const [patternsLoading, setPatternsLoading] = useState(true);
   const [selectedPatterns, setSelectedPatterns] = useState<number[]>([]);
   const [open, setOpen] = useState(false);
   
@@ -65,11 +66,14 @@ export default function NewProblemPage() {
   }, []);
 
   const fetchPatterns = async () => {
+    setPatternsLoading(true);
     try {
       const response = await api.get("/patterns");
       setPatterns(response.data.data || []);
     } catch (err: unknown) {
       console.error("Failed to fetch patterns:", err);
+    } finally {
+      setPatternsLoading(false);
     }
   };
 
@@ -278,35 +282,43 @@ export default function NewProblemPage() {
                     <Command>
                       <CommandInput placeholder="Search patterns..." className="font-mono" />
                       <CommandList>
-                        <CommandEmpty className="font-mono text-xs">No patterns found</CommandEmpty>
-                        <CommandGroup>
-                          {patterns.map((pattern) => (
-                            <CommandItem
-                              key={pattern.id}
-                              value={pattern.title}
-                              onSelect={() => {
-                                togglePattern(pattern.id);
-                              }}
-                              className="font-mono"
-                            >
-                              <Checkbox
-                                checked={selectedPatterns.includes(pattern.id)}
-                                className="mr-2"
-                              />
-                              <div className="flex-1">
-                                <div className="font-medium font-mono text-xs">{pattern.title}</div>
-                                {pattern.description && (
-                                  <div className="text-xs text-muted-foreground font-mono">
-                                    {pattern.description}
+                        {patternsLoading ? (
+                          <div className="flex items-center justify-center py-6">
+                            <Loader2 className="h-4 w-4 text-muted-foreground animate-spin" />
+                          </div>
+                        ) : (
+                          <>
+                            <CommandEmpty className="font-mono text-xs">No patterns found</CommandEmpty>
+                            <CommandGroup>
+                              {patterns.map((pattern) => (
+                                <CommandItem
+                                  key={pattern.id}
+                                  value={pattern.title}
+                                  onSelect={() => {
+                                    togglePattern(pattern.id);
+                                  }}
+                                  className="font-mono"
+                                >
+                                  <Checkbox
+                                    checked={selectedPatterns.includes(pattern.id)}
+                                    className="mr-2"
+                                  />
+                                  <div className="flex-1">
+                                    <div className="font-medium font-mono text-xs">{pattern.title}</div>
+                                    {pattern.description && (
+                                      <div className="text-xs text-muted-foreground font-mono">
+                                        {pattern.description}
+                                      </div>
+                                    )}
                                   </div>
-                                )}
-                              </div>
-                              {selectedPatterns.includes(pattern.id) && (
-                                <Check className="h-4 w-4 text-primary" />
-                              )}
-                            </CommandItem>
-                          ))}
-                        </CommandGroup>
+                                  {selectedPatterns.includes(pattern.id) && (
+                                    <Check className="h-4 w-4 text-primary" />
+                                  )}
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </>
+                        )}
                       </CommandList>
                     </Command>
                   </PopoverContent>

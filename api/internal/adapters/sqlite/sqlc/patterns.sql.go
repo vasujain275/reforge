@@ -11,6 +11,32 @@ import (
 	"strings"
 )
 
+const countSearchPatterns = `-- name: CountSearchPatterns :one
+SELECT COUNT(*) as count
+FROM patterns
+WHERE (?1 = '' OR title LIKE '%' || ?1 || '%' OR description LIKE '%' || ?1 || '%')
+`
+
+func (q *Queries) CountSearchPatterns(ctx context.Context, searchQuery interface{}) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countSearchPatterns, searchQuery)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countSearchPatternsWithStats = `-- name: CountSearchPatternsWithStats :one
+SELECT COUNT(DISTINCT p.id) as count
+FROM patterns p
+WHERE (?1 = '' OR p.title LIKE '%' || ?1 || '%' OR p.description LIKE '%' || ?1 || '%')
+`
+
+func (q *Queries) CountSearchPatternsWithStats(ctx context.Context, searchQuery interface{}) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countSearchPatternsWithStats, searchQuery)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createPattern = `-- name: CreatePattern :one
 INSERT INTO patterns (title, description)
 VALUES (?, ?)
@@ -153,6 +179,116 @@ func (q *Queries) ListPatterns(ctx context.Context) ([]Pattern, error) {
 	for rows.Next() {
 		var i Pattern
 		if err := rows.Scan(&i.ID, &i.Title, &i.Description); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const searchPatterns = `-- name: SearchPatterns :many
+SELECT id, title, description FROM patterns
+WHERE (?1 = '' OR title LIKE '%' || ?1 || '%' OR description LIKE '%' || ?1 || '%')
+ORDER BY title
+LIMIT ?3 OFFSET ?2
+`
+
+type SearchPatternsParams struct {
+	SearchQuery interface{} `json:"search_query"`
+	OffsetVal   int64       `json:"offset_val"`
+	LimitVal    int64       `json:"limit_val"`
+}
+
+func (q *Queries) SearchPatterns(ctx context.Context, arg SearchPatternsParams) ([]Pattern, error) {
+	rows, err := q.db.QueryContext(ctx, searchPatterns, arg.SearchQuery, arg.OffsetVal, arg.LimitVal)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Pattern{}
+	for rows.Next() {
+		var i Pattern
+		if err := rows.Scan(&i.ID, &i.Title, &i.Description); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const searchPatternsWithStats = `-- name: SearchPatternsWithStats :many
+SELECT 
+    p.id,
+    p.title,
+    p.description,
+    COALESCE(ups.times_revised, 0) as times_revised,
+    COALESCE(ups.avg_confidence, 0) as avg_confidence,
+    ups.last_revised_at,
+    COALESCE(pc.problem_count, 0) as problem_count
+FROM patterns p
+LEFT JOIN user_pattern_stats ups ON p.id = ups.pattern_id AND ups.user_id = ?1
+LEFT JOIN (
+    SELECT pattern_id, COUNT(*) as problem_count
+    FROM problem_patterns
+    GROUP BY pattern_id
+) pc ON p.id = pc.pattern_id
+WHERE (?2 = '' OR p.title LIKE '%' || ?2 || '%' OR p.description LIKE '%' || ?2 || '%')
+ORDER BY p.title ASC
+LIMIT ?4 OFFSET ?3
+`
+
+type SearchPatternsWithStatsParams struct {
+	UserID      int64       `json:"user_id"`
+	SearchQuery interface{} `json:"search_query"`
+	OffsetVal   int64       `json:"offset_val"`
+	LimitVal    int64       `json:"limit_val"`
+}
+
+type SearchPatternsWithStatsRow struct {
+	ID            int64          `json:"id"`
+	Title         string         `json:"title"`
+	Description   sql.NullString `json:"description"`
+	TimesRevised  int64          `json:"times_revised"`
+	AvgConfidence int64          `json:"avg_confidence"`
+	LastRevisedAt sql.NullString `json:"last_revised_at"`
+	ProblemCount  int64          `json:"problem_count"`
+}
+
+func (q *Queries) SearchPatternsWithStats(ctx context.Context, arg SearchPatternsWithStatsParams) ([]SearchPatternsWithStatsRow, error) {
+	rows, err := q.db.QueryContext(ctx, searchPatternsWithStats,
+		arg.UserID,
+		arg.SearchQuery,
+		arg.OffsetVal,
+		arg.LimitVal,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SearchPatternsWithStatsRow{}
+	for rows.Next() {
+		var i SearchPatternsWithStatsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Description,
+			&i.TimesRevised,
+			&i.AvgConfidence,
+			&i.LastRevisedAt,
+			&i.ProblemCount,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

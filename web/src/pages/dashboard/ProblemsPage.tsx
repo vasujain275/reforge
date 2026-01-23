@@ -1,4 +1,5 @@
 import ApiError from "@/components/ApiError";
+import { DataPagination } from "@/components/DataPagination";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -10,8 +11,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { usePagination } from "@/hooks/usePagination";
+import { useDebounce } from "@/hooks/useDebounce";
 import { api } from "@/lib/api";
-import type { Problem } from "@/types";
+import type { PaginatedProblems } from "@/types";
 import {
   CheckCircle2,
   ExternalLink,
@@ -23,29 +26,52 @@ import {
   Edit,
   Play,
   BarChart3,
+  Loader2,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 export default function ProblemsPage() {
   const navigate = useNavigate();
-  const [problems, setProblems] = useState<Problem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<PaginatedProblems | null>(null);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [difficultyFilter, setDifficultyFilter] = useState("all");
+  
+  const {
+    page,
+    pageSize,
+    searchQuery,
+    setPage,
+    setSearchQuery,
+    setFilter,
+    getFilter,
+  } = usePagination(20);
+
+  // Debounce search query to avoid triggering API calls on every keystroke
+  const debouncedSearchQuery = useDebounce(searchQuery, 300);
+
+  const difficultyFilter = getFilter("difficulty");
+  const statusFilter = getFilter("status");
 
   useEffect(() => {
     fetchProblems();
-  }, []);
+  }, [page, pageSize, debouncedSearchQuery, difficultyFilter, statusFilter]);
 
   const fetchProblems = async () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await api.get("/problems");
-      setProblems(response.data.data || []);
+      const params = new URLSearchParams({
+        page: String(page),
+        page_size: String(pageSize),
+      });
+      if (debouncedSearchQuery) params.append("q", debouncedSearchQuery);
+      if (difficultyFilter !== "all") params.append("difficulty", difficultyFilter);
+      if (statusFilter !== "all") params.append("status", statusFilter);
+
+      const response = await api.get(`/problems?${params.toString()}`);
+      setData(response.data.data);
     } catch (err: unknown) {
       console.error("Failed to fetch problems:", err);
       setError(
@@ -53,19 +79,9 @@ export default function ProblemsPage() {
       );
     } finally {
       setLoading(false);
+      setInitialLoading(false);
     }
   };
-
-  const filteredProblems = problems.filter((problem) => {
-    const matchesSearch = problem.title
-      .toLowerCase()
-      .includes(searchQuery.toLowerCase());
-    const matchesStatus =
-      statusFilter === "all" || problem.stats?.status === statusFilter;
-    const matchesDifficulty =
-      difficultyFilter === "all" || problem.difficulty === difficultyFilter;
-    return matchesSearch && matchesStatus && matchesDifficulty;
-  });
 
   const getDaysSinceLastAttempt = (date?: string) => {
     if (!date) return "NEVER";
@@ -77,11 +93,12 @@ export default function ProblemsPage() {
     return `${days}d AGO`;
   };
 
-  if (loading) {
+  // Show full-page loading only on initial load
+  if (initialLoading) {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="flex flex-col items-center gap-4">
-          <Terminal className="h-8 w-8 text-primary animate-pulse" />
+          <Loader2 className="h-8 w-8 text-primary animate-spin" />
           <p className="text-sm font-mono text-muted-foreground uppercase tracking-wider">
             Loading Problem Set...
           </p>
@@ -90,9 +107,12 @@ export default function ProblemsPage() {
     );
   }
 
-  if (error) {
+  if (error && !data) {
     return <ApiError message={error} onRetry={fetchProblems} />;
   }
+
+  const problems = data?.data || [];
+  const totalPages = data?.total_pages || 0;
 
   return (
     <div className="flex-1 space-y-6 p-6">
@@ -126,10 +146,13 @@ export default function ProblemsPage() {
                 placeholder="Search problem registry..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9 rounded-md font-mono"
+                className="pl-9 pr-10 rounded-md font-mono"
               />
+              {loading && (
+                <Loader2 className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground animate-spin" />
+              )}
             </div>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <Select value={statusFilter} onValueChange={(v) => setFilter("status", v)}>
               <SelectTrigger className="rounded-md">
                 <Filter className="h-4 w-4 mr-2" />
                 <SelectValue placeholder="Status" />
@@ -143,7 +166,7 @@ export default function ProblemsPage() {
             </Select>
             <Select
               value={difficultyFilter}
-              onValueChange={setDifficultyFilter}
+              onValueChange={(v) => setFilter("difficulty", v)}
             >
               <SelectTrigger className="rounded-md">
                 <Filter className="h-4 w-4 mr-2" />
@@ -160,17 +183,28 @@ export default function ProblemsPage() {
         </CardContent>
       </Card>
 
+      {/* Results Summary */}
+      {data && (
+        <div className="flex items-center justify-between text-sm font-mono text-muted-foreground">
+          <span>
+            Showing {problems.length > 0 ? ((page - 1) * pageSize) + 1 : 0} - {Math.min(page * pageSize, data.total)} of {data.total} problems
+          </span>
+        </div>
+      )}
+
       {/* Problems List */}
-      <div className="space-y-3">
-        {filteredProblems.length === 0 ? (
+      <div className={`space-y-3 transition-opacity duration-200 ${loading ? 'opacity-50' : 'opacity-100'}`}>
+        {problems.length === 0 ? (
           <Card className="rounded-md border border-border">
             <CardContent className="py-12 text-center">
               <Terminal className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
               <p className="text-muted-foreground font-mono uppercase tracking-wider text-sm">
-                No Problems Registered
+                No Problems Found
               </p>
               <p className="text-xs text-muted-foreground mt-1">
-                Initialize your first problem to begin tracking
+                {searchQuery || difficultyFilter !== "all" || statusFilter !== "all"
+                  ? "Try adjusting your search filters"
+                  : "Initialize your first problem to begin tracking"}
               </p>
               <Link to="/dashboard/problems/new" className="inline-block mt-4">
                 <Button className="rounded-md">
@@ -183,7 +217,7 @@ export default function ProblemsPage() {
             </CardContent>
           </Card>
         ) : (
-          filteredProblems.map((problem, index) => (
+          problems.map((problem, index) => (
             <Card
               key={problem.id}
               className="rounded-md border border-border hover:border-primary/50 hover:shadow-[0_0_15px_-3px_var(--primary)] transition-all"
@@ -193,7 +227,7 @@ export default function ProblemsPage() {
                   {/* Index Number */}
                   <div className="flex items-center justify-center w-12 h-12 rounded-md border border-border bg-muted/20">
                     <span className="text-lg font-bold font-mono text-primary">
-                      #{String(index + 1).padStart(3, "0")}
+                      #{String(((page - 1) * pageSize) + index + 1).padStart(3, "0")}
                     </span>
                   </div>
 
@@ -338,6 +372,17 @@ export default function ProblemsPage() {
           ))
         )}
       </div>
+
+      {/* Pagination */}
+      {data && totalPages > 0 && (
+        <div className="flex items-center justify-center pt-4">
+          <DataPagination
+            currentPage={page}
+            totalPages={totalPages}
+            onPageChange={setPage}
+          />
+        </div>
+      )}
     </div>
   );
 }

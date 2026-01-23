@@ -117,6 +117,20 @@ func (h *handler) ListProblemsForUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Check if we should use search/pagination
+	query := r.URL.Query().Get("q")
+	difficulty := r.URL.Query().Get("difficulty")
+	status := r.URL.Query().Get("status")
+	pageStr := r.URL.Query().Get("page")
+	pageSizeStr := r.URL.Query().Get("page_size")
+
+	// If any search/pagination params are present, use the search endpoint
+	if query != "" || difficulty != "" || status != "" || pageStr != "" || pageSizeStr != "" {
+		h.searchProblemsForUser(w, r, userID, query, difficulty, status, pageStr, pageSizeStr)
+		return
+	}
+
+	// Otherwise, return all problems (backward compatibility)
 	problems, err := h.service.ListProblemsForUser(r.Context(), userID)
 	if err != nil {
 		slog.Error("Failed to list problems", "error", err)
@@ -125,6 +139,43 @@ func (h *handler) ListProblemsForUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	utils.WriteSuccess(w, http.StatusOK, problems)
+}
+
+func (h *handler) searchProblemsForUser(w http.ResponseWriter, r *http.Request, userID int64, query, difficulty, status, pageStr, pageSizeStr string) {
+	// Parse pagination params
+	page := int64(1)
+	pageSize := int64(20)
+
+	if pageStr != "" {
+		if parsedPage, err := strconv.ParseInt(pageStr, 10, 64); err == nil && parsedPage > 0 {
+			page = parsedPage
+		}
+	}
+
+	if pageSizeStr != "" {
+		if parsedSize, err := strconv.ParseInt(pageSizeStr, 10, 64); err == nil && parsedSize > 0 && parsedSize <= 100 {
+			pageSize = parsedSize
+		}
+	}
+
+	offset := (page - 1) * pageSize
+
+	params := SearchProblemsParams{
+		Query:      query,
+		Difficulty: difficulty,
+		Status:     status,
+		Limit:      pageSize,
+		Offset:     offset,
+	}
+
+	result, err := h.service.SearchProblemsForUser(r.Context(), userID, params)
+	if err != nil {
+		slog.Error("Failed to search problems", "error", err)
+		utils.InternalServerError(w, "Failed to search problems")
+		return
+	}
+
+	utils.WriteSuccess(w, http.StatusOK, result)
 }
 
 func (h *handler) GetUrgentProblems(w http.ResponseWriter, r *http.Request) {

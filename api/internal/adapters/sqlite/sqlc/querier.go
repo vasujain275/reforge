@@ -19,6 +19,10 @@ type Querier interface {
 	CountPatterns(ctx context.Context) (int64, error)
 	// Get total problem count
 	CountProblems(ctx context.Context) (int64, error)
+	CountProblemsForUser(ctx context.Context, arg CountProblemsForUserParams) (int64, error)
+	CountSearchPatterns(ctx context.Context, searchQuery interface{}) (int64, error)
+	CountSearchPatternsWithStats(ctx context.Context, searchQuery interface{}) (int64, error)
+	CountSearchSessionsForUser(ctx context.Context, arg CountSearchSessionsForUserParams) (int64, error)
 	CreateAttempt(ctx context.Context, arg CreateAttemptParams) (Attempt, error)
 	CreateInviteCode(ctx context.Context, arg CreateInviteCodeParams) (AdminInviteCode, error)
 	CreatePasswordResetToken(ctx context.Context, arg CreatePasswordResetTokenParams) (PasswordResetToken, error)
@@ -109,6 +113,10 @@ type Querier interface {
 	ListUserSessionTemplates(ctx context.Context, userID int64) ([]UserSessionTemplate, error)
 	MarkPasswordResetTokenUsed(ctx context.Context, id int64) error
 	RevokeRefreshToken(ctx context.Context, tokenHash string) error
+	SearchPatterns(ctx context.Context, arg SearchPatternsParams) ([]Pattern, error)
+	SearchPatternsWithStats(ctx context.Context, arg SearchPatternsWithStatsParams) ([]SearchPatternsWithStatsRow, error)
+	SearchProblemsForUser(ctx context.Context, arg SearchProblemsForUserParams) ([]SearchProblemsForUserRow, error)
+	SearchSessionsForUser(ctx context.Context, arg SearchSessionsForUserParams) ([]RevisionSession, error)
 	UpdatePattern(ctx context.Context, arg UpdatePatternParams) (Pattern, error)
 	UpdateProblem(ctx context.Context, arg UpdateProblemParams) (Problem, error)
 	UpdateSessionCompleted(ctx context.Context, arg UpdateSessionCompletedParams) error

@@ -10,6 +10,34 @@ import (
 	"database/sql"
 )
 
+const countProblemsForUser = `-- name: CountProblemsForUser :one
+SELECT COUNT(DISTINCT p.id) as count
+FROM problems p
+LEFT JOIN user_problem_stats ups ON p.id = ups.problem_id AND ups.user_id = ?1
+WHERE (?2 = '' OR p.title LIKE '%' || ?2 || '%' OR p.source LIKE '%' || ?2 || '%')
+  AND (?3 = '' OR p.difficulty = ?3)
+  AND (?4 = '' OR ups.status = ?4 OR (ups.status IS NULL AND ?4 = 'unsolved'))
+`
+
+type CountProblemsForUserParams struct {
+	UserID      int64       `json:"user_id"`
+	SearchQuery interface{} `json:"search_query"`
+	Difficulty  interface{} `json:"difficulty"`
+	Status      interface{} `json:"status"`
+}
+
+func (q *Queries) CountProblemsForUser(ctx context.Context, arg CountProblemsForUserParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countProblemsForUser,
+		arg.UserID,
+		arg.SearchQuery,
+		arg.Difficulty,
+		arg.Status,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createProblem = `-- name: CreateProblem :one
 INSERT INTO problems (title, source, url, difficulty)
 VALUES (?, ?, ?, ?)
@@ -249,6 +277,87 @@ func (q *Queries) ListProblems(ctx context.Context, arg ListProblemsParams) ([]P
 			&i.Url,
 			&i.Difficulty,
 			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const searchProblemsForUser = `-- name: SearchProblemsForUser :many
+SELECT p.id, p.title, p.source, p.url, p.difficulty, p.created_at, ups.status, ups.confidence, ups.avg_confidence, 
+       ups.last_attempt_at, ups.total_attempts, ups.last_outcome, ups.updated_at
+FROM problems p
+LEFT JOIN user_problem_stats ups ON p.id = ups.problem_id AND ups.user_id = ?1
+WHERE (?2 = '' OR p.title LIKE '%' || ?2 || '%' OR p.source LIKE '%' || ?2 || '%')
+  AND (?3 = '' OR p.difficulty = ?3)
+  AND (?4 = '' OR ups.status = ?4 OR (ups.status IS NULL AND ?4 = 'unsolved'))
+ORDER BY p.created_at DESC
+LIMIT ?6 OFFSET ?5
+`
+
+type SearchProblemsForUserParams struct {
+	UserID      int64       `json:"user_id"`
+	SearchQuery interface{} `json:"search_query"`
+	Difficulty  interface{} `json:"difficulty"`
+	Status      interface{} `json:"status"`
+	OffsetVal   int64       `json:"offset_val"`
+	LimitVal    int64       `json:"limit_val"`
+}
+
+type SearchProblemsForUserRow struct {
+	ID            int64          `json:"id"`
+	Title         string         `json:"title"`
+	Source        sql.NullString `json:"source"`
+	Url           sql.NullString `json:"url"`
+	Difficulty    sql.NullString `json:"difficulty"`
+	CreatedAt     sql.NullString `json:"created_at"`
+	Status        sql.NullString `json:"status"`
+	Confidence    sql.NullInt64  `json:"confidence"`
+	AvgConfidence sql.NullInt64  `json:"avg_confidence"`
+	LastAttemptAt sql.NullString `json:"last_attempt_at"`
+	TotalAttempts sql.NullInt64  `json:"total_attempts"`
+	LastOutcome   sql.NullString `json:"last_outcome"`
+	UpdatedAt     sql.NullString `json:"updated_at"`
+}
+
+func (q *Queries) SearchProblemsForUser(ctx context.Context, arg SearchProblemsForUserParams) ([]SearchProblemsForUserRow, error) {
+	rows, err := q.db.QueryContext(ctx, searchProblemsForUser,
+		arg.UserID,
+		arg.SearchQuery,
+		arg.Difficulty,
+		arg.Status,
+		arg.OffsetVal,
+		arg.LimitVal,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SearchProblemsForUserRow{}
+	for rows.Next() {
+		var i SearchProblemsForUserRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Source,
+			&i.Url,
+			&i.Difficulty,
+			&i.CreatedAt,
+			&i.Status,
+			&i.Confidence,
+			&i.AvgConfidence,
+			&i.LastAttemptAt,
+			&i.TotalAttempts,
+			&i.LastOutcome,
+			&i.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}

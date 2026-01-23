@@ -81,7 +81,19 @@ func (h *handler) ListSessionsForUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Parse pagination params
+	// Check if we should use search/pagination
+	query := r.URL.Query().Get("q")
+	statusFilter := r.URL.Query().Get("status")
+	pageStr := r.URL.Query().Get("page")
+	pageSizeStr := r.URL.Query().Get("page_size")
+
+	// If any search/pagination params are present, use the search endpoint
+	if query != "" || statusFilter != "" || pageStr != "" || pageSizeStr != "" {
+		h.searchSessionsForUser(w, r, userID, query, statusFilter, pageStr, pageSizeStr)
+		return
+	}
+
+	// Parse pagination params (backward compatibility)
 	limit := int64(20)
 	offset := int64(0)
 
@@ -105,6 +117,42 @@ func (h *handler) ListSessionsForUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	utils.WriteSuccess(w, http.StatusOK, sessions)
+}
+
+func (h *handler) searchSessionsForUser(w http.ResponseWriter, r *http.Request, userID int64, query, statusFilter, pageStr, pageSizeStr string) {
+	// Parse pagination params
+	page := int64(1)
+	pageSize := int64(20)
+
+	if pageStr != "" {
+		if parsedPage, err := strconv.ParseInt(pageStr, 10, 64); err == nil && parsedPage > 0 {
+			page = parsedPage
+		}
+	}
+
+	if pageSizeStr != "" {
+		if parsedSize, err := strconv.ParseInt(pageSizeStr, 10, 64); err == nil && parsedSize > 0 && parsedSize <= 100 {
+			pageSize = parsedSize
+		}
+	}
+
+	offset := (page - 1) * pageSize
+
+	params := SearchSessionsParams{
+		Query:        query,
+		StatusFilter: statusFilter,
+		Limit:        pageSize,
+		Offset:       offset,
+	}
+
+	result, err := h.service.SearchSessionsForUser(r.Context(), userID, params)
+	if err != nil {
+		slog.Error("Failed to search sessions", "error", err)
+		utils.InternalServerError(w, "Failed to search sessions")
+		return
+	}
+
+	utils.WriteSuccess(w, http.StatusOK, result)
 }
 
 func (h *handler) GenerateSession(w http.ResponseWriter, r *http.Request) {

@@ -213,3 +213,17 @@ export interface ScoringWeights {
   w_failed: number;
   w_pattern: number;
 }
+
+// Pagination types
+export interface PaginatedResponse<T> {
+  data: T[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+}
+
+export type PaginatedProblems = PaginatedResponse<Problem>;
+export type PaginatedSessions = PaginatedResponse<RevisionSession>;
+export type PaginatedPatterns = PaginatedResponse<PatternWithStats>;
+

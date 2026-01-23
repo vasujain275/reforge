@@ -110,6 +110,18 @@ func (h *handler) ListPatternsWithStats(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	// Check if we should use search/pagination
+	query := r.URL.Query().Get("q")
+	pageStr := r.URL.Query().Get("page")
+	pageSizeStr := r.URL.Query().Get("page_size")
+	sortBy := r.URL.Query().Get("sort_by")
+
+	// If any search/pagination params are present, use the search endpoint
+	if query != "" || pageStr != "" || pageSizeStr != "" || sortBy != "" {
+		h.searchPatternsWithStats(w, r, userID, query, pageStr, pageSizeStr, sortBy)
+		return
+	}
+
 	patterns, err := h.service.ListPatternsWithStats(r.Context(), userID)
 	if err != nil {
 		slog.Error("Failed to list patterns", "error", err)
@@ -118,4 +130,40 @@ func (h *handler) ListPatternsWithStats(w http.ResponseWriter, r *http.Request) 
 	}
 
 	utils.WriteSuccess(w, http.StatusOK, patterns)
+}
+
+func (h *handler) searchPatternsWithStats(w http.ResponseWriter, r *http.Request, userID int64, query, pageStr, pageSizeStr, sortBy string) {
+	// Parse pagination params
+	page := int64(1)
+	pageSize := int64(20)
+
+	if pageStr != "" {
+		if parsedPage, err := strconv.ParseInt(pageStr, 10, 64); err == nil && parsedPage > 0 {
+			page = parsedPage
+		}
+	}
+
+	if pageSizeStr != "" {
+		if parsedSize, err := strconv.ParseInt(pageSizeStr, 10, 64); err == nil && parsedSize > 0 && parsedSize <= 100 {
+			pageSize = parsedSize
+		}
+	}
+
+	offset := (page - 1) * pageSize
+
+	params := SearchPatternsParams{
+		Query:  query,
+		SortBy: sortBy,
+		Limit:  pageSize,
+		Offset: offset,
+	}
+
+	result, err := h.service.SearchPatternsWithStats(r.Context(), userID, params)
+	if err != nil {
+		slog.Error("Failed to search patterns", "error", err)
+		utils.InternalServerError(w, "Failed to search patterns")
+		return
+	}
+
+	utils.WriteSuccess(w, http.StatusOK, result)
 }

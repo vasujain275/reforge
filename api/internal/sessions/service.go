@@ -44,6 +44,7 @@ type Service interface {
 	CreateSession(ctx context.Context, userID int64, body CreateSessionBody) (*SessionResponse, error)
 	GetSession(ctx context.Context, userID int64, sessionID int64) (*SessionResponse, error)
 	ListSessionsForUser(ctx context.Context, userID int64, limit, offset int64) ([]SessionResponse, error)
+	SearchSessionsForUser(ctx context.Context, userID int64, params SearchSessionsParams) (*PaginatedSessions, error)
 	GenerateSession(ctx context.Context, userID int64, body GenerateSessionBody) (*GenerateSessionResponse, error)
 	CompleteSession(ctx context.Context, userID int64, sessionID int64) error
 	DeleteSession(ctx context.Context, userID int64, sessionID int64) error
@@ -235,6 +236,62 @@ func (s *sessionService) ListSessionsForUser(ctx context.Context, userID int64, 
 	}
 
 	return results, nil
+}
+
+func (s *sessionService) SearchSessionsForUser(ctx context.Context, userID int64, params SearchSessionsParams) (*PaginatedSessions, error) {
+	// Get total count
+	countRow, err := s.repo.CountSearchSessionsForUser(ctx, repo.CountSearchSessionsForUserParams{
+		UserID:       userID,
+		SearchQuery:  params.Query,
+		StatusFilter: params.StatusFilter,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to count sessions: %w", err)
+	}
+
+	// Get paginated results
+	sessions, err := s.repo.SearchSessionsForUser(ctx, repo.SearchSessionsForUserParams{
+		UserID:       userID,
+		SearchQuery:  params.Query,
+		StatusFilter: params.StatusFilter,
+		LimitVal:     params.Limit,
+		OffsetVal:    params.Offset,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to search sessions: %w", err)
+	}
+
+	results := make([]SessionResponse, 0, len(sessions))
+	for _, session := range sessions {
+		results = append(results, SessionResponse{
+			ID:                 session.ID,
+			UserID:             session.UserID,
+			TemplateKey:        nullStringToPtr(session.TemplateKey),
+			SessionName:        nullStringToPtr(session.SessionName),
+			IsCustom:           false,
+			CreatedAt:          session.CreatedAt.String,
+			PlannedDurationMin: nullInt64ToInt64(session.PlannedDurationMin, 0),
+			Completed:          session.CompletedAt.Valid,
+			ElapsedTimeSeconds: nullInt64ToInt64(session.ElapsedTimeSeconds, 0),
+			TimerState:         nullStringToStr(session.TimerState, "idle"),
+			TimerLastUpdatedAt: nullStringToPtr(session.TimerLastUpdatedAt),
+		})
+	}
+
+	// Calculate pagination info
+	page := params.Offset/params.Limit + 1
+	if params.Offset == 0 {
+		page = 1
+	}
+	totalPages := (countRow + params.Limit - 1) / params.Limit
+
+	return &PaginatedSessions{
+		Data:       results,
+		Total:      countRow,
+		Page:       page,
+		PageSize:   params.Limit,
+		TotalPages: totalPages,
+	}, nil
 }
 
 func (s *sessionService) GenerateSession(ctx context.Context, userID int64, body GenerateSessionBody) (*GenerateSessionResponse, error) {

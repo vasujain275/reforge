@@ -180,3 +180,22 @@ type TemplateInfo struct {
 	Icon        string `json:"icon"`
 	DurationMin int64  `json:"duration_min"`
 }
+
+// ============================================================================
+// Search & Pagination
+// ============================================================================
+
+type SearchSessionsParams struct {
+	Query        string
+	StatusFilter string // "active", "completed", or ""
+	Limit        int64
+	Offset       int64
+}
+
+type PaginatedSessions struct {
+	Data       []SessionResponse `json:"data"`
+	Total      int64             `json:"total"`
+	Page       int64             `json:"page"`
+	PageSize   int64             `json:"page_size"`
+	TotalPages int64             `json:"total_pages"`
+}

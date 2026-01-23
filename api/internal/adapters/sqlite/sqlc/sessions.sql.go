@@ -10,6 +10,27 @@ import (
 	"database/sql"
 )
 
+const countSearchSessionsForUser = `-- name: CountSearchSessionsForUser :one
+SELECT COUNT(*) as count
+FROM revision_sessions
+WHERE user_id = ?1
+  AND (?2 = '' OR template_key LIKE '%' || ?2 || '%' OR session_name LIKE '%' || ?2 || '%')
+  AND (?3 = '' OR (?3 = 'active' AND completed_at IS NULL) OR (?3 = 'completed' AND completed_at IS NOT NULL))
+`
+
+type CountSearchSessionsForUserParams struct {
+	UserID       int64       `json:"user_id"`
+	SearchQuery  interface{} `json:"search_query"`
+	StatusFilter interface{} `json:"status_filter"`
+}
+
+func (q *Queries) CountSearchSessionsForUser(ctx context.Context, arg CountSearchSessionsForUserParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countSearchSessionsForUser, arg.UserID, arg.SearchQuery, arg.StatusFilter)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createSession = `-- name: CreateSession :one
 INSERT INTO revision_sessions (user_id, template_key, planned_duration_min, items_ordered)
 VALUES (?, ?, ?, ?)
@@ -124,6 +145,66 @@ type ListSessionsForUserParams struct {
 
 func (q *Queries) ListSessionsForUser(ctx context.Context, arg ListSessionsForUserParams) ([]RevisionSession, error) {
 	rows, err := q.db.QueryContext(ctx, listSessionsForUser, arg.UserID, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []RevisionSession{}
+	for rows.Next() {
+		var i RevisionSession
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.TemplateKey,
+			&i.SessionName,
+			&i.IsCustom,
+			&i.CustomConfigJson,
+			&i.CreatedAt,
+			&i.CompletedAt,
+			&i.PlannedDurationMin,
+			&i.ItemsOrdered,
+			&i.ElapsedTimeSeconds,
+			&i.TimerState,
+			&i.TimerLastUpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const searchSessionsForUser = `-- name: SearchSessionsForUser :many
+SELECT id, user_id, template_key, session_name, is_custom, custom_config_json, created_at, completed_at, planned_duration_min, items_ordered, elapsed_time_seconds, timer_state, timer_last_updated_at FROM revision_sessions
+WHERE user_id = ?1
+  AND (?2 = '' OR template_key LIKE '%' || ?2 || '%' OR session_name LIKE '%' || ?2 || '%')
+  AND (?3 = '' OR (?3 = 'active' AND completed_at IS NULL) OR (?3 = 'completed' AND completed_at IS NOT NULL))
+ORDER BY created_at DESC
+LIMIT ?5 OFFSET ?4
+`
+
+type SearchSessionsForUserParams struct {
+	UserID       int64       `json:"user_id"`
+	SearchQuery  interface{} `json:"search_query"`
+	StatusFilter interface{} `json:"status_filter"`
+	OffsetVal    int64       `json:"offset_val"`
+	LimitVal     int64       `json:"limit_val"`
+}
+
+func (q *Queries) SearchSessionsForUser(ctx context.Context, arg SearchSessionsForUserParams) ([]RevisionSession, error) {
+	rows, err := q.db.QueryContext(ctx, searchSessionsForUser,
+		arg.UserID,
+		arg.SearchQuery,
+		arg.StatusFilter,
+		arg.OffsetVal,
+		arg.LimitVal,
+	)
 	if err != nil {
 		return nil, err
 	}

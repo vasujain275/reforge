@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"sort"
 
 	repo "github.com/vasujain275/reforge/internal/adapters/sqlite/sqlc"
 )
@@ -14,6 +15,7 @@ type Service interface {
 	UpdatePattern(ctx context.Context, patternID int64, body UpdatePatternBody) (*repo.Pattern, error)
 	DeletePattern(ctx context.Context, patternID int64) error
 	ListPatternsWithStats(ctx context.Context, userID int64) ([]PatternWithStats, error)
+	SearchPatternsWithStats(ctx context.Context, userID int64, params SearchPatternsParams) (*PaginatedPatterns, error)
 	ListPatterns(ctx context.Context) ([]repo.Pattern, error)
 }
 
@@ -100,6 +102,66 @@ func (s *patternService) ListPatternsWithStats(ctx context.Context, userID int64
 	return patterns, nil
 }
 
+func (s *patternService) SearchPatternsWithStats(ctx context.Context, userID int64, params SearchPatternsParams) (*PaginatedPatterns, error) {
+	// Get total count
+	countRow, err := s.repo.CountSearchPatternsWithStats(ctx, params.Query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to count patterns: %w", err)
+	}
+
+	// Get paginated results with stats
+	rows, err := s.repo.SearchPatternsWithStats(ctx, repo.SearchPatternsWithStatsParams{
+		UserID:      userID,
+		SearchQuery: params.Query,
+		LimitVal:    params.Limit,
+		OffsetVal:   params.Offset,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to search patterns: %w", err)
+	}
+
+	results := make([]PatternWithStats, 0, len(rows))
+	for _, row := range rows {
+		pattern := PatternWithStats{
+			ID:           row.ID,
+			Title:        row.Title,
+			Description:  nullStringToPtr(row.Description),
+			ProblemCount: row.ProblemCount,
+		}
+
+		// Add stats if they exist (times_revised > 0 indicates stats exist)
+		if row.TimesRevised > 0 || row.AvgConfidence > 0 {
+			pattern.Stats = &PatternUserStats{
+				UserID:        userID,
+				PatternID:     row.ID,
+				TimesRevised:  row.TimesRevised,
+				AvgConfidence: row.AvgConfidence,
+				LastRevisedAt: nullStringToPtr(row.LastRevisedAt),
+			}
+		}
+
+		results = append(results, pattern)
+	}
+
+	// Sort results based on params.SortBy
+	sortPatterns(results, params.SortBy)
+
+	// Calculate pagination info
+	page := params.Offset/params.Limit + 1
+	if params.Offset == 0 {
+		page = 1
+	}
+	totalPages := (countRow + params.Limit - 1) / params.Limit
+
+	return &PaginatedPatterns{
+		Data:       results,
+		Total:      countRow,
+		Page:       page,
+		PageSize:   params.Limit,
+		TotalPages: totalPages,
+	}, nil
+}
+
 func (s *patternService) ListPatterns(ctx context.Context) ([]repo.Pattern, error) {
 	patterns, err := s.repo.ListPatterns(ctx)
 	if err != nil {
@@ -121,4 +183,103 @@ func nullStringToPtr(ns sql.NullString) *string {
 		return nil
 	}
 	return &ns.String
+}
+
+// sortPatterns sorts patterns based on the provided sort_by parameter
+func sortPatterns(patterns []PatternWithStats, sortBy string) {
+	switch sortBy {
+	case "confidence_asc":
+		sort.Slice(patterns, func(i, j int) bool {
+			iConf := int64(0)
+			jConf := int64(0)
+			if patterns[i].Stats != nil {
+				iConf = patterns[i].Stats.AvgConfidence
+			}
+			if patterns[j].Stats != nil {
+				jConf = patterns[j].Stats.AvgConfidence
+			}
+			return iConf < jConf
+		})
+	case "confidence_desc":
+		sort.Slice(patterns, func(i, j int) bool {
+			iConf := int64(0)
+			jConf := int64(0)
+			if patterns[i].Stats != nil {
+				iConf = patterns[i].Stats.AvgConfidence
+			}
+			if patterns[j].Stats != nil {
+				jConf = patterns[j].Stats.AvgConfidence
+			}
+			return iConf > jConf
+		})
+	case "times_revised_asc":
+		sort.Slice(patterns, func(i, j int) bool {
+			iTimes := int64(0)
+			jTimes := int64(0)
+			if patterns[i].Stats != nil {
+				iTimes = patterns[i].Stats.TimesRevised
+			}
+			if patterns[j].Stats != nil {
+				jTimes = patterns[j].Stats.TimesRevised
+			}
+			return iTimes < jTimes
+		})
+	case "times_revised_desc":
+		sort.Slice(patterns, func(i, j int) bool {
+			iTimes := int64(0)
+			jTimes := int64(0)
+			if patterns[i].Stats != nil {
+				iTimes = patterns[i].Stats.TimesRevised
+			}
+			if patterns[j].Stats != nil {
+				jTimes = patterns[j].Stats.TimesRevised
+			}
+			return iTimes > jTimes
+		})
+	case "problem_count_asc":
+		sort.Slice(patterns, func(i, j int) bool {
+			return patterns[i].ProblemCount < patterns[j].ProblemCount
+		})
+	case "problem_count_desc":
+		sort.Slice(patterns, func(i, j int) bool {
+			return patterns[i].ProblemCount > patterns[j].ProblemCount
+		})
+	case "title_asc":
+		sort.Slice(patterns, func(i, j int) bool {
+			return patterns[i].Title < patterns[j].Title
+		})
+	case "title_desc":
+		sort.Slice(patterns, func(i, j int) bool {
+			return patterns[i].Title > patterns[j].Title
+		})
+	case "last_revised_asc":
+		sort.Slice(patterns, func(i, j int) bool {
+			iTime := ""
+			jTime := ""
+			if patterns[i].Stats != nil && patterns[i].Stats.LastRevisedAt != nil {
+				iTime = *patterns[i].Stats.LastRevisedAt
+			}
+			if patterns[j].Stats != nil && patterns[j].Stats.LastRevisedAt != nil {
+				jTime = *patterns[j].Stats.LastRevisedAt
+			}
+			return iTime < jTime
+		})
+	case "last_revised_desc":
+		sort.Slice(patterns, func(i, j int) bool {
+			iTime := ""
+			jTime := ""
+			if patterns[i].Stats != nil && patterns[i].Stats.LastRevisedAt != nil {
+				iTime = *patterns[i].Stats.LastRevisedAt
+			}
+			if patterns[j].Stats != nil && patterns[j].Stats.LastRevisedAt != nil {
+				jTime = *patterns[j].Stats.LastRevisedAt
+			}
+			return iTime > jTime
+		})
+	default:
+		// Default sort by title
+		sort.Slice(patterns, func(i, j int) bool {
+			return patterns[i].Title < patterns[j].Title
+		})
+	}
 }

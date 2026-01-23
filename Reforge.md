@@ -812,7 +812,7 @@ All endpoints are prefixed with `/api/v1`. Protected routes require a valid JWT 
   ./dsa-sensei serve --data ./data
   ```
 
-  This will create `data/dsa.db` (SQLite), provide HTTP server on `localhost:8080` by default, and serve the React SPA.
+  This will create `data/dsa.db` (SQLite), provide HTTP server on `localhost:9173` by default, and serve the React SPA.
 
 * Docker (optional):
 
@@ -823,8 +823,8 @@ All endpoints are prefixed with `/api/v1`. Protected routes require a valid JWT 
       image: vasujain/dsa-sensei:latest
       volumes:
         - ./data:/app/data
-      ports:
-        - "8080:8080"
+       ports:
+         - "9173:9173"
   ```
 
 ## Backups

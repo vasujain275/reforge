@@ -31,7 +31,7 @@ This directory contains everything you need to deploy Reforge using Docker.
    ```
 
 5. **Access Reforge:**
-   Open http://localhost:8080 in your browser.
+   Open http://localhost:9173 in your browser.
 
 6. **Complete setup:**
    Follow the onboarding wizard to create your admin account.
@@ -41,7 +41,7 @@ This directory contains everything you need to deploy Reforge using Docker.
 ```bash
 docker run -d \
   --name reforge \
-  -p 8080:8080 \
+  -p 9173:9173 \
   -v $(pwd)/data:/app/data \
   -e JWT_SECRET="your-secret-key" \
   -e ENV=prod \
@@ -90,7 +90,7 @@ $env:GOOSE_DBSTRING="file:./data/reforge.db?_pragma=journal_mode(WAL)&_pragma=fo
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `ADDR` | `:8080` | Server address |
+| `ADDR` | `:9173` | Server address |
 | `ENV` | `dev` | Environment (`dev` or `prod`) |
 | `GOOSE_DBSTRING` | `file:./data/reforge.db?...` | SQLite connection string |
 
@@ -152,7 +152,7 @@ docker compose up -d
 The container includes a health check endpoint:
 
 ```bash
-curl http://localhost:8080/api/v1/health
+curl http://localhost:9173/api/v1/health
 # Returns: {"status":"ok"}
 ```
 
@@ -193,7 +193,7 @@ sudo chown -R 1000:1000 data/
 
 ```
 reforge.example.com {
-    reverse_proxy localhost:8080
+    reverse_proxy localhost:9173
 }
 ```
 
@@ -205,7 +205,7 @@ server {
     server_name reforge.example.com;
 
     location / {
-        proxy_pass http://localhost:8080;
+        proxy_pass http://localhost:9173;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
     }

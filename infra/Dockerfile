@@ -39,7 +39,7 @@ COPY api/ ./api/
 # Copy built frontend into the web package for embedding
 COPY --from=frontend-builder /app/web/dist ./api/web/dist
 
-# Build the binary with embedded static files
+# Build the binary with embedded static files and migrations
 # CGO_ENABLED=0 for fully static binary
 # -ldflags="-s -w" strips debug info for smaller binary
 WORKDIR /app/api

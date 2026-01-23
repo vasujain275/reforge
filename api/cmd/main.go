@@ -6,9 +6,11 @@ import (
 	"log/slog"
 	"os"
 
+	"github.com/pressly/goose/v3"
 	_ "modernc.org/sqlite"
 
 	"github.com/go-playground/validator/v10"
+	migrations "github.com/vasujain275/reforge/internal/adapters/sqlite/migrations"
 	"github.com/vasujain275/reforge/internal/env"
 )
 
@@ -62,6 +64,19 @@ func main() {
 	if err := db.PingContext(ctx); err != nil {
 		panic(err)
 	}
+
+	// Run database migrations automatically on startup
+	slog.Info("Running database migrations...")
+	goose.SetBaseFS(migrations.EmbeddedMigrations)
+	if err := goose.SetDialect("sqlite3"); err != nil {
+		slog.Error("Failed to set goose dialect", "error", err)
+		os.Exit(1)
+	}
+	if err := goose.Up(db, "."); err != nil {
+		slog.Error("Failed to run migrations", "error", err)
+		os.Exit(1)
+	}
+	slog.Info("Database migrations completed successfully")
 
 	// Note: No automatic admin seeding - use /onboarding endpoint for first-time setup
 

@@ -100,7 +100,7 @@ task test
 # Run linter
 task lint
 
-# Database migrations
+# Database migrations (development only)
 task goose:up         # Apply migrations
 task goose:down       # Rollback
 task goose:status     # Show status
@@ -111,6 +111,12 @@ task sqlc:generate
 # Build binary
 task build
 ```
+
+### Note on Migrations
+
+In **development**, you can use `task goose:up` and `task goose:down` to manage migrations manually.
+
+In **production** (Docker or binary releases), migrations run **automatically on startup** via embedded migrations. No manual steps are required. See [INSTALLATION.md](./INSTALLATION.md) for details.
 
 ## Frontend Commands
 
@@ -174,6 +180,7 @@ DEFAULT_W_PATTERN='0.10'
 - Use goose for migrations
 - Tables/columns: `snake_case`
 - Run `task sqlc:generate` after changing queries
+- Migrations are embedded in the binary for production (see `api/internal/adapters/sqlite/migrations/embed.go`)
 
 ## Testing
 

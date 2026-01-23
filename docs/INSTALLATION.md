@@ -151,9 +151,25 @@ openssl rand -base64 32
 ## First-Time Setup
 
 1. **Start Reforge** using any method above
-2. **Open** `http://localhost:9173` in your browser
-3. **Complete Onboarding** - Create your admin account
-4. **Import Problems** (optional) - Use bundled datasets or add manually
+2. **Database migrations run automatically** on first startup
+3. **Open** `http://localhost:9173` in your browser
+4. **Complete Onboarding** - Create your admin account
+5. **Import Problems** (optional) - Use bundled datasets or add manually
+
+## Database Migrations
+
+Reforge automatically runs database migrations on every startup. This means:
+
+- **Fresh installs**: The database schema is created automatically
+- **Updates**: New migrations are applied when you update Docker images or binaries
+- **No manual steps**: You never need to run migration commands manually
+
+Migration logs appear during startup:
+
+```
+INFO Running database migrations...
+INFO Database migrations completed successfully
+```
 
 ## Data Storage
 
@@ -174,16 +190,31 @@ sqlite3 data/reforge.db ".backup backups/reforge-$(date +%Y%m%d).db"
 
 ## Updating
 
+Reforge applies database migrations automatically on startup, so updates are seamless.
+
 ### Docker
 
 ```bash
 docker compose pull
 docker compose up -d
+# Migrations run automatically when container starts
 ```
 
 ### Binary
 
 Download the latest release and replace the binary. Your data is preserved in `./data/`.
+
+```bash
+# Stop current instance
+pkill reforge  # or ctrl+c
+
+# Download new version
+wget https://github.com/vasujain275/reforge/releases/latest/download/reforge-linux-amd64.tar.gz
+tar -xzf reforge-linux-amd64.tar.gz
+
+# Start (migrations run automatically)
+source .env && ./reforge-linux-amd64
+```
 
 ## Troubleshooting
 

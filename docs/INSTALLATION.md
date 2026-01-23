@@ -35,18 +35,20 @@ Download the latest release from [GitHub Releases](https://github.com/vasujain27
 #### Linux
 
 ```bash
-# Download
+# Download binary
 wget https://github.com/vasujain275/reforge/releases/latest/download/reforge-linux-amd64.tar.gz
-
-# Extract
 tar -xzf reforge-linux-amd64.tar.gz
+
+# Download and configure environment
+curl -O https://raw.githubusercontent.com/vasujain275/reforge/main/infra/.env.sample
+cp .env.sample .env
+# Edit .env and set JWT_SECRET (required) - use: openssl rand -base64 32
 
 # Create data directory
 mkdir data
 
-# Run
-export JWT_SECRET="your-secret-key"
-./reforge-linux-amd64
+# Run (loads .env automatically, or source it)
+source .env && ./reforge-linux-amd64
 
 # Access http://localhost:9173
 ```
@@ -62,9 +64,16 @@ tar -xzf reforge-darwin-amd64.tar.gz
 wget https://github.com/vasujain275/reforge/releases/latest/download/reforge-darwin-arm64.tar.gz
 tar -xzf reforge-darwin-arm64.tar.gz
 
+# Download and configure environment
+curl -O https://raw.githubusercontent.com/vasujain275/reforge/main/infra/.env.sample
+cp .env.sample .env
+# Edit .env and set JWT_SECRET (required) - use: openssl rand -base64 32
+
+# Create data directory
+mkdir data
+
 # Run
-export JWT_SECRET="your-secret-key"
-./reforge-darwin-*
+source .env && ./reforge-darwin-*
 
 # Access http://localhost:9173
 ```
@@ -75,10 +84,20 @@ export JWT_SECRET="your-secret-key"
 # Download from releases page
 # Extract reforge-windows-amd64.zip
 
-# Set environment
-$env:JWT_SECRET="your-secret-key"
+# Download environment template
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/vasujain275/reforge/main/infra/.env.sample" -OutFile ".env.sample"
+Copy-Item .env.sample .env
+# Edit .env and set JWT_SECRET (required)
 
-# Run
+# Create data directory
+mkdir data
+
+# Load environment and run
+Get-Content .env | ForEach-Object {
+    if ($_ -match "^([^=]+)=(.*)$") {
+        [Environment]::SetEnvironmentVariable($matches[1], $matches[2], "Process")
+    }
+}
 .\reforge-windows-amd64.exe
 
 # Access http://localhost:9173
@@ -221,6 +240,11 @@ rm -rf data/  # Remove data (optional)
 rm reforge-*
 rm -rf data/  # Remove data (optional)
 ```
+
+## Related Documentation
+
+- [BACKUP.md](./BACKUP.md) - Database backup strategies
+- [DEVELOPMENT.md](./DEVELOPMENT.md) - Development setup
 
 ## Support
 

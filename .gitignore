@@ -14,6 +14,7 @@ Thumbs.db
 .env
 .env.*
 !.env.example
+!.env.sample
 
 # ==================================================
 # LOGS
@@ -47,6 +48,9 @@ coverage.out
 # SQLC (generated code)
 # ==================================================
 api/internal/adapters/postgres/sqlc
+
+# Embedded frontend dist (generated during build)
+api/web/dist/
 
 # ==================================================
 # DATABASE / RUNTIME DATA

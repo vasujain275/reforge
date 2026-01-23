@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import { getApiErrorMessage } from "@/types/api";
 
 export default function ResetPasswordPage() {
   const [searchParams] = useSearchParams();
@@ -54,10 +55,9 @@ export default function ResetPasswordPage() {
         new_password: password,
       });
       setIsSuccess(true);
-    } catch (err: any) {
+    } catch (err: unknown) {
       setError(
-        err.response?.data?.message ||
-          "Failed to reset password. The link may be expired or invalid."
+        getApiErrorMessage(err, "Failed to reset password. The link may be expired or invalid.")
       );
     } finally {
       setIsSubmitting(false);

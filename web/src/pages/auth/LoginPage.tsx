@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { AlertCircle, ArrowRight, Check, Loader2, Terminal } from "lucide-react";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { getApiErrorMessage } from "@/types/api";
 
 export default function LoginPage() {
   const { login } = useAuthStore();
@@ -37,8 +38,8 @@ export default function LoginPage() {
       setTimeout(() => {
         navigate("/dashboard");
       }, 1200);
-    } catch (err: any) {
-      setError(err.response?.data?.message || "Invalid credentials");
+    } catch (err: unknown) {
+      setError(getApiErrorMessage(err, "Invalid credentials"));
       setIsSubmitting(false);
     }
   };

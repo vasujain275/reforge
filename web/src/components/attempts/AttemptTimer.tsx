@@ -2,6 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import { Play, Pause, Timer, CheckCircle2, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
+import {
+  formatTime,
+  getDifficultyTextColor,
+  getTimeSinceLastSave,
+} from "@/lib/timer";
 
 interface AttemptTimerProps {
   attemptId: number;
@@ -36,32 +41,6 @@ export function AttemptTimer({
   const tickIntervalRef = useRef<number | null>(null);
   const saveIntervalRef = useRef<number | null>(null);
   const pendingSaveRef = useRef(false);
-
-  // Format time as HH:MM:SS or MM:SS
-  const formatTime = (seconds: number): string => {
-    const hours = Math.floor(seconds / 3600);
-    const mins = Math.floor((seconds % 3600) / 60);
-    const secs = seconds % 60;
-
-    if (hours > 0) {
-      return `${hours.toString().padStart(2, "0")}:${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
-    }
-    return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
-  };
-
-  // Get difficulty badge color
-  const getDifficultyColor = (difficulty?: string) => {
-    switch (difficulty) {
-      case "easy":
-        return "text-green-500";
-      case "medium":
-        return "text-orange-400";
-      case "hard":
-        return "text-red-500";
-      default:
-        return "text-muted-foreground";
-    }
-  };
 
   // Save timer state to backend
   const saveTimerState = async (
@@ -131,6 +110,7 @@ export function AttemptTimer({
         window.clearInterval(saveIntervalRef.current);
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timerState, elapsedSeconds]);
 
   // Sync on unmount - save current state before component unmounts
@@ -141,6 +121,7 @@ export function AttemptTimer({
         saveTimerState(elapsedSeconds, timerState);
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [elapsedSeconds, lastSavedSeconds, timerState]);
 
   // Sync on visibility change - save when user switches tabs/windows
@@ -157,6 +138,7 @@ export function AttemptTimer({
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [elapsedSeconds, lastSavedSeconds, timerState]);
 
   // Sync on beforeunload - save when user navigates away or closes page
@@ -173,6 +155,7 @@ export function AttemptTimer({
     return () => {
       window.removeEventListener("beforeunload", handleBeforeUnload);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [elapsedSeconds, lastSavedSeconds, timerState]);
 
   // Handle abandon with save
@@ -195,15 +178,6 @@ export function AttemptTimer({
     onComplete(elapsedSeconds);
   };
 
-  // Calculate time since last save (for display)
-  const getTimeSinceLastSave = (): string => {
-    if (!lastSaveTime) return "Never";
-    const seconds = Math.floor((Date.now() - lastSaveTime.getTime()) / 1000);
-    if (seconds < 60) return `${seconds}s ago`;
-    const minutes = Math.floor(seconds / 60);
-    return `${minutes}m ago`;
-  };
-
   return (
     <div className="border border-border rounded-md bg-card p-6">
       {/* Header */}
@@ -220,7 +194,7 @@ export function AttemptTimer({
         </div>
         {problemDifficulty && (
           <span
-            className={`text-xs font-mono uppercase tracking-wider ${getDifficultyColor(problemDifficulty)}`}
+            className={`text-xs font-mono uppercase tracking-wider ${getDifficultyTextColor(problemDifficulty)}`}
           >
             {problemDifficulty}
           </span>
@@ -272,7 +246,7 @@ export function AttemptTimer({
           {isSaving ? (
             <span className="text-orange-400">Syncing...</span>
           ) : (
-            <span>Last saved: {getTimeSinceLastSave()}</span>
+            <span>Last saved: {getTimeSinceLastSave(lastSaveTime)}</span>
           )}
         </div>
       </div>

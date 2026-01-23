@@ -14,10 +14,8 @@ import {
   arrayMove,
   SortableContext,
   sortableKeyboardCoordinates,
-  useSortable,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
 import {
   ArrowLeft,
   Calendar,
@@ -27,15 +25,12 @@ import {
   Flame,
   Focus,
   GitBranch,
-  GripVertical,
   List,
   PlayCircle,
   Search,
-  SkipForward,
   Target,
   Terminal,
   Zap,
-  ExternalLink,
   Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -59,228 +54,18 @@ import {
 import ApiError from "@/components/ApiError";
 import { SessionTimerDisplay } from "@/components/sessions/SessionTimerDisplay";
 import { SessionStats } from "@/components/sessions/SessionStats";
-import { ProblemTimer } from "@/components/sessions/ProblemTimer";
 import { FocusModeView } from "@/components/sessions/FocusModeView";
+import { SortableProblemCard } from "@/components/sessions/SortableProblemCard";
 import { useSessionTimerStore } from "@/store/sessionTimerStore";
+import { useSessionPageStore } from "@/store/sessionPageStore";
 import { api } from "@/lib/api";
 import type { RevisionSession, SessionProblem } from "@/types";
-
-// Sortable Problem Card Component
-interface SortableProblemCardProps {
-  problem: SessionProblem;
-  index: number;
-  isActive: boolean;
-  onStartTimer: () => void;
-  onCancelTimer: () => void;
-  onSkip: () => void;
-  onTimerComplete: () => void;
-  sessionId: number;
-  isSessionCompleted: boolean;
-}
-
-function SortableProblemCard({
-  problem,
-  index,
-  isActive,
-  onStartTimer,
-  onCancelTimer,
-  onSkip,
-  onTimerComplete,
-  sessionId,
-  isSessionCompleted,
-}: SortableProblemCardProps) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: problem.id });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-  };
-
-  return (
-    <motion.div
-      ref={setNodeRef}
-      style={style}
-      initial={{ opacity: 0, x: -20 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ duration: 0.3, delay: index * 0.05 }}
-      className={`border rounded-md transition-all duration-300 ${
-        isDragging ? "opacity-50 z-50" : ""
-      } ${
-        problem.completed
-          ? "bg-green-500/5 border-green-500/20"
-          : "border-border hover:border-primary/40 hover:shadow-[0_0_15px_-3px_var(--primary)]"
-      }`}
-    >
-      <div className="p-4 flex items-start gap-4">
-        {/* Drag Handle */}
-        {!isSessionCompleted && (
-          <button
-            {...attributes}
-            {...listeners}
-            className="flex items-center justify-center w-6 h-10 text-muted-foreground hover:text-foreground cursor-grab active:cursor-grabbing shrink-0"
-          >
-            <GripVertical className="h-4 w-4" />
-          </button>
-        )}
-
-        {/* Problem Number/Status Icon */}
-        <div
-          className={`flex items-center justify-center w-10 h-10 rounded-md font-bold font-mono text-sm border shrink-0 ${
-            problem.completed
-              ? "bg-green-500/10 text-green-500 border-green-500/20"
-              : "bg-primary/10 text-primary border-primary/20"
-          }`}
-        >
-          {problem.completed ? (
-            <CheckCircle2 className="h-5 w-5" />
-          ) : (
-            index + 1
-          )}
-        </div>
-
-        {/* Problem Info */}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-3 mb-2 flex-wrap">
-            <h4 className="font-semibold font-mono text-lg">
-              {problem.title}
-            </h4>
-            <span
-              className={`text-xs px-2 py-1 rounded-md font-mono uppercase tracking-wider border ${
-                problem.difficulty === "hard"
-                  ? "bg-red-500/10 text-red-500 border-red-500/20"
-                  : problem.difficulty === "medium"
-                    ? "bg-orange-500/10 text-orange-500 border-orange-500/20"
-                    : "bg-green-500/10 text-green-500 border-green-500/20"
-              }`}
-            >
-              {problem.difficulty}
-            </span>
-            {problem.url && (
-              <a
-                href={problem.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 text-xs text-primary hover:text-primary/80 transition-colors font-mono uppercase tracking-wider"
-              >
-                <ExternalLink className="h-3.5 w-3.5" />
-                Open Problem
-              </a>
-            )}
-          </div>
-
-          {/* Metadata */}
-          <div className="flex items-center gap-6 text-xs text-muted-foreground font-mono mb-2">
-            <span>
-              Score: <span className="text-foreground">{problem.score.toFixed(1)}</span>
-            </span>
-            <span>
-              Confidence: <span className="text-foreground">{problem.confidence}%</span>
-            </span>
-            {problem.days_since_last !== null &&
-              problem.days_since_last !== undefined && (
-                <span>
-                  Last: <span className="text-foreground">{problem.days_since_last}d ago</span>
-                </span>
-              )}
-            <span>
-              Time: <span className="text-foreground">{problem.planned_min}m</span>
-            </span>
-          </div>
-
-          {/* Reason */}
-          <p className="text-xs text-muted-foreground italic">
-            {problem.reason}
-          </p>
-
-          {/* Attempt Status (if completed) */}
-          {problem.completed && problem.outcome && (
-            <div className="mt-3 flex items-center gap-2">
-              <span
-                className={`inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded-md font-mono uppercase tracking-wider border ${
-                  problem.outcome === "passed"
-                    ? "bg-green-500/10 text-green-500 border-green-500/20"
-                    : "bg-red-500/10 text-red-500 border-red-500/20"
-                }`}
-              >
-                {problem.outcome === "passed" ? (
-                  <CheckCircle2 className="h-3 w-3" />
-                ) : (
-                  <Target className="h-3 w-3" />
-                )}
-                {problem.outcome}
-              </span>
-            </div>
-          )}
-        </div>
-
-        {/* Action Buttons */}
-        {!isSessionCompleted && (
-          <div className="shrink-0 flex items-center gap-2">
-            {isActive ? (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={onCancelTimer}
-                className="font-mono uppercase tracking-wider"
-              >
-                Cancel
-              </Button>
-            ) : (
-              <>
-                <Button
-                  size="sm"
-                  variant={problem.completed ? "outline" : "default"}
-                  onClick={onStartTimer}
-                  className="font-mono uppercase tracking-wider"
-                >
-                  <PlayCircle className="h-4 w-4 mr-2" />
-                  {problem.completed ? "Retry" : "Start"}
-                </Button>
-                {!problem.completed && (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={onSkip}
-                    className="font-mono uppercase tracking-wider text-muted-foreground hover:text-foreground"
-                    title="Move to end of list"
-                  >
-                    <SkipForward className="h-4 w-4" />
-                  </Button>
-                )}
-              </>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Inline Timer (when active) */}
-      {isActive && (
-        <div className="px-4 pb-4">
-          <ProblemTimer
-            problemId={problem.id}
-            problemTitle={problem.title}
-            problemDifficulty={problem.difficulty}
-            sessionId={sessionId}
-            onComplete={onTimerComplete}
-            onCancel={onCancelTimer}
-          />
-        </div>
-      )}
-    </motion.div>
-  );
-}
 
 export default function SessionDetailPage() {
   const { id } = useParams();
   const navigate = useNavigate();
 
+  // Data state (kept local - will move to React Query in Phase 5)
   const [session, setSession] = useState<RevisionSession | null>(null);
   const [problems, setProblems] = useState<SessionProblem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -289,14 +74,25 @@ export default function SessionDetailPage() {
   // Session timer from Zustand store
   const { initialize: initializeTimer, start: startTimer, cleanup: cleanupTimer } = useSessionTimerStore();
 
-  // UI State
-  const [viewMode, setViewMode] = useState<"list" | "focus">("list");
-  const [activeTimerProblemId, setActiveTimerProblemId] = useState<number | null>(null);
-  const [showCompleteDialog, setShowCompleteDialog] = useState(false);
-  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [isCompletingSession, setIsCompletingSession] = useState(false);
-  const [isDeletingSession, setIsDeletingSession] = useState(false);
-  const [isReordering, setIsReordering] = useState(false);
+  // UI state from Zustand store
+  const {
+    viewMode,
+    activeTimerProblemId,
+    showCompleteDialog,
+    showDeleteDialog,
+    isCompletingSession,
+    isDeletingSession,
+    isReordering,
+    setViewMode,
+    setActiveTimerProblemId,
+    setShowCompleteDialog,
+    setShowDeleteDialog,
+    setIsCompletingSession,
+    setIsDeletingSession,
+    setIsReordering,
+    cancelTimer,
+    reset: resetPageStore,
+  } = useSessionPageStore();
 
   // Handle entering focus mode - start the session timer
   const enterFocusMode = async () => {
@@ -321,10 +117,12 @@ export default function SessionDetailPage() {
       fetchSession();
     }
 
-    // Cleanup timer store on unmount
+    // Cleanup on unmount
     return () => {
       cleanupTimer();
+      resetPageStore();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   const fetchSession = async () => {
@@ -357,13 +155,13 @@ export default function SessionDetailPage() {
 
   // Handle problem completion from timer
   const handleProblemComplete = () => {
-    setActiveTimerProblemId(null);
+    cancelTimer();
     fetchSession(); // Refresh to get updated problem status
   };
 
   // Handle timer cancel
   const handleTimerCancel = () => {
-    setActiveTimerProblemId(null);
+    cancelTimer();
   };
 
   // Handle skip - move problem to end of list

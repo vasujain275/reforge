@@ -61,7 +61,7 @@ export default function NewSessionPage() {
           "/sessions/templates"
         );
         setTemplates(response.data.data.presets);
-      } catch (err: any) {
+      } catch (err: unknown) {
         console.error("Failed to fetch templates:", err);
         setError("Failed to load templates. Please refresh the page.");
       } finally {
@@ -79,7 +79,7 @@ export default function NewSessionPage() {
         try {
           const response = await api.get<{ data: Pattern[] }>("/patterns");
           setPatterns(response.data.data);
-        } catch (err: any) {
+        } catch (err: unknown) {
           console.error("Failed to fetch patterns:", err);
         }
       };
@@ -104,7 +104,7 @@ export default function NewSessionPage() {
     setIsGenerating(true);
     setError(null);
     try {
-      const params: any = { template_key: selectedTemplateKey };
+      const params: { template_key: string; pattern_id?: number } = { template_key: selectedTemplateKey };
       if (selectedPatternId) {
         params.pattern_id = selectedPatternId;
       }
@@ -114,12 +114,13 @@ export default function NewSessionPage() {
         params
       );
       setGeneratedSession(response.data.data);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Failed to generate session:", err);
 
-      if (err.response?.data?.error?.message) {
-        setError(err.response.data.error.message);
-      } else if (err.response?.status === 400) {
+      const apiErr = err as { response?: { data?: { error?: { message?: string } }; status?: number } };
+      if (apiErr.response?.data?.error?.message) {
+        setError(apiErr.response.data.error.message);
+      } else if (apiErr.response?.status === 400) {
         setError(
           "Unable to generate session with current problems. Try adding more problems or selecting a different template."
         );
@@ -146,11 +147,12 @@ export default function NewSessionPage() {
       // Redirect to the newly created session detail page
       const sessionId = response.data.data.id;
       navigate(`/dashboard/sessions/${sessionId}`);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Failed to start session:", err);
 
-      if (err.response?.data?.error?.message) {
-        setError(err.response.data.error.message);
+      const apiErr = err as { response?: { data?: { error?: { message?: string } } } };
+      if (apiErr.response?.data?.error?.message) {
+        setError(apiErr.response.data.error.message);
       } else {
         setError("Failed to start session. Please try again.");
       }

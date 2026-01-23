@@ -1,4 +1,3 @@
-import { api } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -20,7 +19,6 @@ import {
   Terminal,
 } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
-import { toast } from "sonner";
 import {
   onboardingImportApi,
   connectToImportStream,
@@ -28,67 +26,20 @@ import {
   type ImportProgress as ImportProgressType,
   type ImportResult,
 } from "@/api/import";
-
-type OnboardingStep = "welcome" | "features" | "setup" | "data";
+import { useOnboardingStore } from "@/store/onboardingStore";
 
 export default function OnboardingPage() {
-  const [step, setStep] = useState<OnboardingStep>("welcome");
-  
-  // Form state
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [error, setError] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  // Use onboarding store for step and form state
+  const { step, nextStep, formData, error, isSubmitting, setFormField, submitSetup, reset } = useOnboardingStore();
+
+  // Reset store on mount to ensure fresh state
+  useEffect(() => {
+    reset();
+  }, [reset]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsSubmitting(true);
-    setError("");
-
-    // Validation
-    if (!name || !email || !password || !confirmPassword) {
-      setError("All fields are required");
-      setIsSubmitting(false);
-      return;
-    }
-
-    if (password !== confirmPassword) {
-      setError("Passwords do not match");
-      setIsSubmitting(false);
-      return;
-    }
-
-    if (password.length < 8) {
-      setError("Password must be at least 8 characters");
-      setIsSubmitting(false);
-      return;
-    }
-
-    try {
-      await api.post("/onboarding/setup", {
-        name,
-        email,
-        password,
-      });
-
-      toast.success("Admin account created!");
-      
-      // Move to data import step instead of redirecting
-      setStep("data");
-    } catch (err: any) {
-      const errorMsg = err.response?.data?.message || "Failed to initialize system";
-      setError(errorMsg);
-      toast.error(errorMsg);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const nextStep = () => {
-    if (step === "welcome") setStep("features");
-    else if (step === "features") setStep("setup");
+    await submitSetup();
   };
 
   const handleFinish = () => {
@@ -150,14 +101,8 @@ export default function OnboardingPage() {
             {step === "setup" && (
               <SetupStep
                 key="setup"
-                name={name}
-                setName={setName}
-                email={email}
-                setEmail={setEmail}
-                password={password}
-                setPassword={setPassword}
-                confirmPassword={confirmPassword}
-                setConfirmPassword={setConfirmPassword}
+                formData={formData}
+                setFormField={setFormField}
                 error={error}
                 isSubmitting={isSubmitting}
                 onSubmit={handleSubmit}
@@ -430,29 +375,24 @@ function FeaturesStep({ onNext }: { onNext: () => void }) {
   );
 }
 
-interface SetupStepProps {
+interface OnboardingFormData {
   name: string;
-  setName: (v: string) => void;
   email: string;
-  setEmail: (v: string) => void;
   password: string;
-  setPassword: (v: string) => void;
   confirmPassword: string;
-  setConfirmPassword: (v: string) => void;
+}
+
+interface SetupStepProps {
+  formData: OnboardingFormData;
+  setFormField: <K extends keyof OnboardingFormData>(field: K, value: OnboardingFormData[K]) => void;
   error: string;
   isSubmitting: boolean;
   onSubmit: (e: React.FormEvent) => void;
 }
 
 function SetupStep({
-  name,
-  setName,
-  email,
-  setEmail,
-  password,
-  setPassword,
-  confirmPassword,
-  setConfirmPassword,
+  formData,
+  setFormField,
   error,
   isSubmitting,
   onSubmit,
@@ -512,8 +452,8 @@ function SetupStep({
             <Input
               id="name"
               placeholder="John Doe"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
+              value={formData.name}
+              onChange={(e) => setFormField("name", e.target.value)}
               required
               disabled={isSubmitting}
               className="h-10"
@@ -528,8 +468,8 @@ function SetupStep({
               id="email"
               type="email"
               placeholder="admin@example.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              value={formData.email}
+              onChange={(e) => setFormField("email", e.target.value)}
               required
               disabled={isSubmitting}
               className="h-10"
@@ -546,8 +486,8 @@ function SetupStep({
               id="password"
               type="password"
               placeholder="Min 8 characters"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              value={formData.password}
+              onChange={(e) => setFormField("password", e.target.value)}
               required
               disabled={isSubmitting}
               className="h-10"
@@ -562,8 +502,8 @@ function SetupStep({
               id="confirmPassword"
               type="password"
               placeholder="Re-enter password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
+              value={formData.confirmPassword}
+              onChange={(e) => setFormField("confirmPassword", e.target.value)}
               required
               disabled={isSubmitting}
               className="h-10"

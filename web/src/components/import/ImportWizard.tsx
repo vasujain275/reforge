@@ -13,6 +13,7 @@ import type {
   ImportResult,
 } from "@/api/import";
 import { connectToImportStream } from "@/api/import";
+import { getApiErrorMessage } from "@/types/api";
 
 type WizardStep = "select" | "review" | "import" | "complete";
 
@@ -59,8 +60,8 @@ export function ImportWizard({
       const result = await onParseBundled(dataset.id);
       setParseResult(result);
       setStep("review");
-    } catch (err: any) {
-      setParseError(err.response?.data?.message || "Failed to parse dataset");
+    } catch (err: unknown) {
+      setParseError(getApiErrorMessage(err, "Failed to parse dataset"));
     } finally {
       setIsParsing(false);
     }

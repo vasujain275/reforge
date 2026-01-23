@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Database, AlertCircle, Terminal } from "lucide-react";
 import { ImportWizard } from "@/components/import/ImportWizard";
 import { importApi, type BundledDataset } from "@/api/import";
+import { getApiErrorMessage } from "@/types/api";
 
 export default function ImportPage() {
   const navigate = useNavigate();
@@ -16,8 +17,8 @@ export default function ImportPage() {
       try {
         const data = await importApi.getBundledDatasets();
         setDatasets(data);
-      } catch (err: any) {
-        setError(err.response?.data?.message || "Failed to load datasets");
+      } catch (err: unknown) {
+        setError(getApiErrorMessage(err, "Failed to load datasets"));
       } finally {
         setIsLoading(false);
       }

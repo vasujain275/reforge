@@ -66,6 +66,7 @@ export default function EditProblemPage() {
   useEffect(() => {
     fetchProblem();
     fetchPatterns();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fetchProblem/fetchPatterns are stable callbacks, only re-run when id changes
   }, [id]);
 
   const fetchProblem = async () => {

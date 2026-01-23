@@ -104,8 +104,9 @@ export default function SecurityPage() {
         setConfirmPassword("");
         setPasswordSuccess(false);
       }, 2000);
-    } catch (err: any) {
-      const errorMsg = err.response?.data?.message || "Failed to change password";
+    } catch (err: unknown) {
+      const apiErr = err as { response?: { data?: { message?: string } } };
+      const errorMsg = apiErr.response?.data?.message || "Failed to change password";
       setPasswordError(errorMsg);
       toast.error(errorMsg);
     } finally {
@@ -143,8 +144,9 @@ export default function SecurityPage() {
         await logout();
         navigate("/");
       }, 1500);
-    } catch (err: any) {
-      const errorMsg = err.response?.data?.message || "Failed to delete account";
+    } catch (err: unknown) {
+      const apiErr = err as { response?: { data?: { message?: string } } };
+      const errorMsg = apiErr.response?.data?.message || "Failed to delete account";
       setDeleteError(errorMsg);
       toast.error(errorMsg);
     } finally {

@@ -59,4 +59,5 @@ function Button({
   )
 }
 
+// eslint-disable-next-line react-refresh/only-export-components -- buttonVariants is intentionally exported for use with asChild pattern
 export { Button, buttonVariants }

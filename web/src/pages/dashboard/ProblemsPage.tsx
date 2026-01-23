@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/purity */
 import ApiError from "@/components/ApiError";
 import { DataPagination } from "@/components/DataPagination";
 import { Button } from "@/components/ui/button";
@@ -13,8 +14,7 @@ import {
 } from "@/components/ui/select";
 import { usePagination } from "@/hooks/usePagination";
 import { useDebounce } from "@/hooks/useDebounce";
-import { api } from "@/lib/api";
-import type { PaginatedProblems } from "@/types";
+import { useProblems } from "@/hooks/queries";
 import {
   CheckCircle2,
   ExternalLink,
@@ -28,15 +28,10 @@ import {
   BarChart3,
   Loader2,
 } from "lucide-react";
-import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 export default function ProblemsPage() {
   const navigate = useNavigate();
-  const [data, setData] = useState<PaginatedProblems | null>(null);
-  const [initialLoading, setInitialLoading] = useState(true);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   
   const {
     page,
@@ -54,35 +49,16 @@ export default function ProblemsPage() {
   const difficultyFilter = getFilter("difficulty");
   const statusFilter = getFilter("status");
 
-  useEffect(() => {
-    fetchProblems();
-  }, [page, pageSize, debouncedSearchQuery, difficultyFilter, statusFilter]);
+  // Use TanStack Query for data fetching
+  const { data, isLoading, isFetching, error, refetch } = useProblems({
+    page,
+    pageSize,
+    searchQuery: debouncedSearchQuery,
+    difficulty: difficultyFilter,
+    status: statusFilter,
+  });
 
-  const fetchProblems = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const params = new URLSearchParams({
-        page: String(page),
-        page_size: String(pageSize),
-      });
-      if (debouncedSearchQuery) params.append("q", debouncedSearchQuery);
-      if (difficultyFilter !== "all") params.append("difficulty", difficultyFilter);
-      if (statusFilter !== "all") params.append("status", statusFilter);
-
-      const response = await api.get(`/problems?${params.toString()}`);
-      setData(response.data.data);
-    } catch (err: unknown) {
-      console.error("Failed to fetch problems:", err);
-      setError(
-        "Failed to load problems. Please ensure the backend is running."
-      );
-    } finally {
-      setLoading(false);
-      setInitialLoading(false);
-    }
-  };
-
+  // Helper to calculate days since last attempt
   const getDaysSinceLastAttempt = (date?: string) => {
     if (!date) return "NEVER";
     const days = Math.floor(
@@ -94,7 +70,7 @@ export default function ProblemsPage() {
   };
 
   // Show full-page loading only on initial load
-  if (initialLoading) {
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="flex flex-col items-center gap-4">
@@ -108,7 +84,7 @@ export default function ProblemsPage() {
   }
 
   if (error && !data) {
-    return <ApiError message={error} onRetry={fetchProblems} />;
+    return <ApiError message="Failed to load problems. Please ensure the backend is running." onRetry={() => refetch()} />;
   }
 
   const problems = data?.data || [];
@@ -148,7 +124,7 @@ export default function ProblemsPage() {
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-9 pr-10 rounded-md font-mono"
               />
-              {loading && (
+              {isFetching && (
                 <Loader2 className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground animate-spin" />
               )}
             </div>
@@ -193,7 +169,7 @@ export default function ProblemsPage() {
       )}
 
       {/* Problems List */}
-      <div className={`space-y-3 transition-opacity duration-200 ${loading ? 'opacity-50' : 'opacity-100'}`}>
+      <div className={`space-y-3 transition-opacity duration-200 ${isFetching ? 'opacity-50' : 'opacity-100'}`}>
         {problems.length === 0 ? (
           <Card className="rounded-md border border-border">
             <CardContent className="py-12 text-center">

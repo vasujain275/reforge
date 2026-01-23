@@ -12,18 +12,14 @@ import {
 } from "@/components/ui/select";
 import { usePagination } from "@/hooks/usePagination";
 import { useDebounce } from "@/hooks/useDebounce";
+import { useSessions } from "@/hooks/queries";
 import { api } from "@/lib/api";
-import type { PaginatedSessions } from "@/types";
 import { Calendar, Check, Clock, Play, Terminal, Zap, BookOpen, Target, Loader2, Search, Filter } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 export default function SessionsPage() {
   const navigate = useNavigate();
-  const [data, setData] = useState<PaginatedSessions | null>(null);
-  const [initialLoading, setInitialLoading] = useState(true);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [repeatingSessionId, setRepeatingSessionId] = useState<number | null>(null);
 
   const {
@@ -41,33 +37,13 @@ export default function SessionsPage() {
 
   const statusFilter = getFilter("status");
 
-  useEffect(() => {
-    fetchSessions();
-  }, [page, pageSize, debouncedSearchQuery, statusFilter]);
-
-  const fetchSessions = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const params = new URLSearchParams({
-        page: String(page),
-        page_size: String(pageSize),
-      });
-      if (debouncedSearchQuery) params.append("q", debouncedSearchQuery);
-      if (statusFilter !== "all") params.append("status", statusFilter);
-
-      const response = await api.get(`/sessions?${params.toString()}`);
-      setData(response.data.data);
-    } catch (err: unknown) {
-      console.error("Failed to fetch sessions:", err);
-      setError(
-        "Failed to load sessions. Please ensure the backend is running."
-      );
-    } finally {
-      setLoading(false);
-      setInitialLoading(false);
-    }
-  };
+  // Use TanStack Query for data fetching
+  const { data, isLoading, isFetching, error, refetch } = useSessions({
+    page,
+    pageSize,
+    searchQuery: debouncedSearchQuery,
+    status: statusFilter,
+  });
 
   const handleRepeatSession = async (sessionId: number) => {
     setRepeatingSessionId(sessionId);
@@ -75,7 +51,7 @@ export default function SessionsPage() {
       const sessionResponse = await api.get(`/sessions/${sessionId}`);
       const sessionData = sessionResponse.data.data;
 
-      const problemIds = sessionData.problems?.map((p: any) => p.id) || [];
+      const problemIds = sessionData.problems?.map((p: { id: number }) => p.id) || [];
 
       if (problemIds.length === 0) {
         alert("Cannot repeat session: No problems found in the original session.");
@@ -158,7 +134,7 @@ export default function SessionsPage() {
   };
 
   // Show full-page loading only on initial load
-  if (initialLoading) {
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="flex flex-col items-center gap-4">
@@ -172,7 +148,7 @@ export default function SessionsPage() {
   }
 
   if (error && !data) {
-    return <ApiError message={error} onRetry={fetchSessions} />;
+    return <ApiError message="Failed to load sessions. Please ensure the backend is running." onRetry={() => refetch()} />;
   }
 
   const sessions = data?.data || [];
@@ -214,7 +190,7 @@ export default function SessionsPage() {
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-9 pr-10 rounded-md font-mono"
               />
-              {loading && (
+              {isFetching && (
                 <Loader2 className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground animate-spin" />
               )}
             </div>
@@ -243,7 +219,7 @@ export default function SessionsPage() {
       )}
 
       {/* Sessions List - HUD Cards */}
-      <div className={`space-y-3 transition-opacity duration-200 ${loading ? 'opacity-50' : 'opacity-100'}`}>
+      <div className={`space-y-3 transition-opacity duration-200 ${isFetching ? 'opacity-50' : 'opacity-100'}`}>
         {sessions.length === 0 ? (
           <Card className="border border-dashed rounded-md">
             <CardContent className="py-12">

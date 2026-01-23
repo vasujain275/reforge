@@ -1,15 +1,16 @@
-import { useTheme } from "@/components/ThemeProvider";
+import { useTheme } from "@/hooks/useTheme";
 import { Button } from "@/components/ui/button";
 import { Moon, Sun } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
+
+// Simple subscription for SSR hydration - always returns true on client
+const subscribe = () => () => {};
+const getSnapshot = () => true;
+const getServerSnapshot = () => false;
 
 export function ModeToggle() {
   const { theme, setTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const mounted = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
 
   if (!mounted) {
     return <Button variant="ghost" size="icon" disabled className="opacity-0" />;

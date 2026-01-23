@@ -1,50 +1,19 @@
 import ApiError from "@/components/ApiError";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { api } from "@/lib/api";
-import type { Attempt, Problem } from "@/types";
-import { Check, Terminal, X, Clock, Calendar, Activity, Gauge } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useProblemAttempts } from "@/hooks/queries";
+import { Check, Terminal, X, Clock, Calendar, Activity, Gauge, Loader2 } from "lucide-react";
 import { useSearchParams, Link } from "react-router-dom";
 
 export default function AttemptsPage() {
   const [searchParams] = useSearchParams();
   const problemId = searchParams.get("problem_id");
 
-  const [attempts, setAttempts] = useState<Attempt[]>([]);
-  const [problem, setProblem] = useState<Problem | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  // Use TanStack Query for data fetching
+  const { data, isLoading, error, refetch } = useProblemAttempts({ problemId });
 
-  useEffect(() => {
-    if (problemId) {
-      fetchProblemAndAttempts();
-    } else {
-      setError("No problem ID provided");
-      setLoading(false);
-    }
-  }, [problemId]);
-
-  const fetchProblemAndAttempts = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      // Fetch problem details
-      const problemResponse = await api.get(`/problems/${problemId}`);
-      setProblem(problemResponse.data.data);
-
-      // Fetch attempts for this problem
-      const attemptsResponse = await api.get(
-        `/problems/${problemId}/attempts`
-      );
-      setAttempts(attemptsResponse.data.data || []);
-    } catch (err: unknown) {
-      console.error("Failed to fetch attempts:", err);
-      setError("Failed to load attempts. Please ensure the backend is running.");
-    } finally {
-      setLoading(false);
-    }
-  };
+  const problem = data?.problem;
+  const attempts = data?.attempts || [];
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -78,11 +47,16 @@ export default function AttemptsPage() {
     return `${diffDays}d ago`;
   };
 
-  if (loading) {
+  // Handle missing problem ID
+  if (!problemId) {
+    return <ApiError message="No problem ID provided" onRetry={() => window.location.reload()} />;
+  }
+
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="flex flex-col items-center gap-4">
-          <Terminal className="h-8 w-8 text-primary animate-pulse" />
+          <Loader2 className="h-8 w-8 text-primary animate-spin" />
           <p className="text-sm font-mono text-muted-foreground">
             Loading attempts...
           </p>
@@ -92,7 +66,7 @@ export default function AttemptsPage() {
   }
 
   if (error) {
-    return <ApiError message={error} onRetry={fetchProblemAndAttempts} />;
+    return <ApiError message="Failed to load attempts. Please ensure the backend is running." onRetry={() => refetch()} />;
   }
 
   return (

@@ -39,6 +39,7 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { getApiErrorMessage } from "@/types/api";
 
 export default function UsersPage() {
   const { user: currentUser } = useAuthStore();
@@ -53,8 +54,8 @@ export default function UsersPage() {
     try {
       const response = await adminApi.listUsers(1, 100);
       setUsers(response.users);
-    } catch (err: any) {
-      setError(err.response?.data?.message || "Failed to load users");
+    } catch (err: unknown) {
+      setError(getApiErrorMessage(err, "Failed to load users"));
     } finally {
       setIsLoading(false);
     }
@@ -70,8 +71,8 @@ export default function UsersPage() {
       await adminApi.updateUserRole(userId, newRole);
       toast.success(`User role updated to ${newRole}`);
       await loadUsers();
-    } catch (err: any) {
-      toast.error(err.response?.data?.message || "Failed to update role");
+    } catch (err: unknown) {
+      toast.error(getApiErrorMessage(err, "Failed to update role"));
     } finally {
       setActionLoading(null);
     }
@@ -88,8 +89,8 @@ export default function UsersPage() {
         toast.success("User reactivated");
       }
       await loadUsers();
-    } catch (err: any) {
-      toast.error(err.response?.data?.message || "Failed to update user status");
+    } catch (err: unknown) {
+      toast.error(getApiErrorMessage(err, "Failed to update user status"));
     } finally {
       setActionLoading(null);
     }
@@ -104,8 +105,8 @@ export default function UsersPage() {
       await adminApi.deleteUser(userId);
       toast.success("User deleted permanently");
       await loadUsers();
-    } catch (err: any) {
-      toast.error(err.response?.data?.message || "Failed to delete user");
+    } catch (err: unknown) {
+      toast.error(getApiErrorMessage(err, "Failed to delete user"));
     } finally {
       setActionLoading(null);
     }
@@ -126,8 +127,8 @@ export default function UsersPage() {
         `Password reset link for ${userName} copied to clipboard!`,
         { duration: 5000 }
       );
-    } catch (err: any) {
-      toast.error(err.response?.data?.message || "Failed to generate reset link");
+    } catch (err: unknown) {
+      toast.error(getApiErrorMessage(err, "Failed to generate reset link"));
     } finally {
       setActionLoading(null);
     }

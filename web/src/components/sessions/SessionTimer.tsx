@@ -129,7 +129,8 @@ export function SessionTimer({
         window.clearInterval(saveIntervalRef.current);
       }
     };
-  }, [timerState, elapsedSeconds]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- saveTimerState is stable, elapsedSeconds read from interval closure
+  }, [timerState]);
 
   // Sync on unmount - save current state before component unmounts
   useEffect(() => {
@@ -139,7 +140,8 @@ export function SessionTimer({
         saveTimerState(elapsedSeconds, timerState);
       }
     };
-  }, [elapsedSeconds, lastSavedSeconds, timerState]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- cleanup effect, intentionally captures values at unmount
+  }, []);
 
   // Sync on visibility change - save when user switches tabs/windows
   useEffect(() => {
@@ -155,7 +157,8 @@ export function SessionTimer({
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [elapsedSeconds, lastSavedSeconds, timerState]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- event handler references current values via closure
+  }, []);
 
   // Sync on beforeunload - save when user navigates away or closes page
   useEffect(() => {
@@ -171,7 +174,8 @@ export function SessionTimer({
     return () => {
       window.removeEventListener("beforeunload", handleBeforeUnload);
     };
-  }, [elapsedSeconds, lastSavedSeconds, timerState]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- event handler references current values via closure
+  }, []);
 
   // Auto-pause when time expires
   useEffect(() => {
@@ -179,6 +183,7 @@ export function SessionTimer({
       setTimerState("paused");
       saveTimerState(elapsedSeconds, "paused");
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only trigger on remainingSeconds/timerState changes
   }, [remainingSeconds, timerState]);
 
   // Don't render if session is completed

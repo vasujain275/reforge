@@ -38,6 +38,7 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { getApiErrorMessage } from "@/types/api";
 
 export default function InvitesPage() {
   const [invites, setInvites] = useState<InviteCode[]>([]);
@@ -55,8 +56,8 @@ export default function InvitesPage() {
     try {
       const codes = await adminApi.listInviteCodes();
       setInvites(codes);
-    } catch (err: any) {
-      setError(err.response?.data?.message || "Failed to load invite codes");
+    } catch (err: unknown) {
+      setError(getApiErrorMessage(err, "Failed to load invite codes"));
     } finally {
       setIsLoading(false);
     }
@@ -92,8 +93,8 @@ export default function InvitesPage() {
       setExpiresInHours("24");
       setMaxUses("1");
       await loadInvites();
-    } catch (err: any) {
-      toast.error(err.response?.data?.message || "Failed to create invite code");
+    } catch (err: unknown) {
+      toast.error(getApiErrorMessage(err, "Failed to create invite code"));
     } finally {
       setIsCreating(false);
     }
@@ -108,8 +109,8 @@ export default function InvitesPage() {
       await adminApi.deleteInviteCode(inviteId);
       toast.success("Invite code deleted");
       await loadInvites();
-    } catch (err: any) {
-      toast.error(err.response?.data?.message || "Failed to delete invite code");
+    } catch (err: unknown) {
+      toast.error(getApiErrorMessage(err, "Failed to delete invite code"));
     } finally {
       setDeleteLoading(null);
     }

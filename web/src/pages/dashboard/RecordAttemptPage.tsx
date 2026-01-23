@@ -126,6 +126,7 @@ export default function RecordAttemptPage() {
     };
 
     initialize();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- startNewAttempt is a stable callback, only re-run when problemId changes
   }, [problemId]);
 
   // Start a new attempt

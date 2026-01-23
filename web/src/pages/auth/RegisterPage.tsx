@@ -9,6 +9,7 @@ import { AlertCircle, ArrowRight, Brain, Loader2, Server, Shield, Terminal } fro
 import { useState, useEffect } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
+import { getApiErrorMessage } from "@/types/api";
 
 export default function RegisterPage() {
   const { register } = useAuthStore();
@@ -66,8 +67,8 @@ export default function RegisterPage() {
       await register(result.data);
       toast.success("Account created successfully!");
       navigate("/login");
-    } catch (err: any) {
-      const errorMsg = err.response?.data?.message || "Registration failed. Try again.";
+    } catch (err: unknown) {
+      const errorMsg = getApiErrorMessage(err, "Registration failed. Try again.");
       setError(errorMsg);
       toast.error(errorMsg);
     } finally {

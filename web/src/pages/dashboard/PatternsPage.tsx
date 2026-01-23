@@ -27,7 +27,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { api } from "@/lib/api";
-import type { PatternWithStats, PaginatedPatterns } from "@/types";
+import type { PatternWithStats } from "@/types";
 import {
   Network,
   Plus,
@@ -41,17 +41,16 @@ import {
   Search,
   ArrowUpDown,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { usePagination } from "@/hooks/usePagination";
 import { useDebounce } from "@/hooks/useDebounce";
+import { usePatterns } from "@/hooks/queries";
 import { DataPagination } from "@/components/DataPagination";
+import { useQueryClient } from "@tanstack/react-query";
 
 export default function PatternsPage() {
+  const queryClient = useQueryClient();
   const { page, pageSize, setPage } = usePagination();
-  const [data, setData] = useState<PaginatedPatterns | null>(null);
-  const [initialLoading, setInitialLoading] = useState(true);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState("confidence_asc");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -59,6 +58,7 @@ export default function PatternsPage() {
     null
   );
   const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     title: "",
     description: "",
@@ -67,38 +67,18 @@ export default function PatternsPage() {
   // Debounce search query to avoid triggering API calls on every keystroke
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
 
-  useEffect(() => {
-    fetchPatterns();
-  }, [page, pageSize, debouncedSearchQuery, sortBy]);
-
-  const fetchPatterns = async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const params = new URLSearchParams({
-        page: page.toString(),
-        page_size: pageSize.toString(),
-        sort_by: sortBy,
-      });
-      if (debouncedSearchQuery) {
-        params.append("q", debouncedSearchQuery);
-      }
-      const response = await api.get(`/patterns?${params.toString()}`);
-      setData(response.data.data);
-    } catch (err: unknown) {
-      console.error("Failed to fetch patterns:", err);
-      setError(
-        "Failed to load patterns. Please ensure the backend is running."
-      );
-    } finally {
-      setLoading(false);
-      setInitialLoading(false);
-    }
-  };
+  // Use TanStack Query for data fetching
+  const { data, isLoading, isFetching, error, refetch } = usePatterns({
+    page,
+    pageSize,
+    searchQuery: debouncedSearchQuery,
+    sortBy,
+  });
 
   const openCreateDialog = () => {
     setEditingPattern(null);
     setFormData({ title: "", description: "" });
+    setSaveError(null);
     setIsDialogOpen(true);
   };
 
@@ -108,17 +88,18 @@ export default function PatternsPage() {
       title: pattern.title,
       description: pattern.description || "",
     });
+    setSaveError(null);
     setIsDialogOpen(true);
   };
 
   const handleSave = async () => {
     if (!formData.title.trim()) {
-      setError("Pattern title is required");
+      setSaveError("Pattern title is required");
       return;
     }
 
     setIsSaving(true);
-    setError(null);
+    setSaveError(null);
     try {
       if (editingPattern) {
         // Update existing pattern
@@ -134,10 +115,11 @@ export default function PatternsPage() {
         });
       }
       setIsDialogOpen(false);
-      fetchPatterns();
+      // Invalidate and refetch patterns
+      queryClient.invalidateQueries({ queryKey: ["patterns"] });
     } catch (err: unknown) {
       console.error("Failed to save pattern:", err);
-      setError("Failed to save pattern. Please try again.");
+      setSaveError("Failed to save pattern. Please try again.");
     } finally {
       setIsSaving(false);
     }
@@ -148,10 +130,11 @@ export default function PatternsPage() {
 
     try {
       await api.delete(`/patterns/${patternId}`);
-      fetchPatterns();
+      // Invalidate and refetch patterns
+      queryClient.invalidateQueries({ queryKey: ["patterns"] });
     } catch (err: unknown) {
       console.error("Failed to delete pattern:", err);
-      setError("Failed to delete pattern. Please try again.");
+      setSaveError("Failed to delete pattern. Please try again.");
     }
   };
 
@@ -168,7 +151,7 @@ export default function PatternsPage() {
   };
 
   // Show full-page loader only on initial load
-  if (initialLoading) {
+  if (isLoading) {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="flex flex-col items-center gap-4">
@@ -182,7 +165,7 @@ export default function PatternsPage() {
   }
 
   if (error) {
-    return <ApiError message={error} onRetry={fetchPatterns} />;
+    return <ApiError message="Failed to load patterns. Please ensure the backend is running." onRetry={() => refetch()} />;
   }
 
   if (!data) {
@@ -231,7 +214,7 @@ export default function PatternsPage() {
                 }}
                 className="pl-10 pr-10 rounded-md font-mono"
               />
-              {loading && (
+              {isFetching && (
                 <Loader2 className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground animate-spin" />
               )}
             </div>
@@ -292,7 +275,7 @@ export default function PatternsPage() {
 
       {/* Pattern Stats Overview */}
       {patterns.length > 0 && (
-        <div className={`grid gap-4 md:grid-cols-3 transition-opacity duration-200 ${loading ? 'opacity-50' : 'opacity-100'}`}>
+        <div className={`grid gap-4 md:grid-cols-3 transition-opacity duration-200 ${isFetching ? 'opacity-50' : 'opacity-100'}`}>
           <Card className="rounded-md border border-border">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-xs font-mono uppercase tracking-wider text-muted-foreground">
@@ -366,7 +349,7 @@ export default function PatternsPage() {
       )}
 
       {/* Patterns List */}
-      <div className={`space-y-3 transition-opacity duration-200 ${loading ? 'opacity-50' : 'opacity-100'}`}>
+      <div className={`space-y-3 transition-opacity duration-200 ${isFetching ? 'opacity-50' : 'opacity-100'}`}>
         {!patterns || patterns.length === 0 ? (
           <Card className="rounded-md border border-border">
             <CardContent className="py-12 text-center">
@@ -515,8 +498,8 @@ export default function PatternsPage() {
                 rows={3}
               />
             </div>
-            {error && (
-              <p className="text-sm text-red-500 font-mono">{error}</p>
+            {saveError && (
+              <p className="text-sm text-red-500 font-mono">{saveError}</p>
             )}
           </div>
           <DialogFooter>

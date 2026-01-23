@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { getApiErrorMessage } from "@/types/api";
 
 export default function AdminSettingsPage() {
   const [settings, setSettings] = useState<SignupSettings | null>(null);
@@ -30,8 +31,8 @@ export default function AdminSettingsPage() {
     try {
       const data = await adminApi.getSignupSettings();
       setSettings(data);
-    } catch (err: any) {
-      setError(err.response?.data?.message || "Failed to load settings");
+    } catch (err: unknown) {
+      setError(getApiErrorMessage(err, "Failed to load settings"));
     } finally {
       setIsLoading(false);
     }
@@ -51,8 +52,8 @@ export default function AdminSettingsPage() {
       toast.success(
         enabled ? "Public signup enabled" : "Public signup disabled"
       );
-    } catch (err: any) {
-      toast.error(err.response?.data?.message || "Failed to update setting");
+    } catch (err: unknown) {
+      toast.error(getApiErrorMessage(err, "Failed to update setting"));
     } finally {
       setUpdating(null);
     }
@@ -68,8 +69,8 @@ export default function AdminSettingsPage() {
       toast.success(
         enabled ? "Invite codes required" : "Invite codes not required"
       );
-    } catch (err: any) {
-      toast.error(err.response?.data?.message || "Failed to update setting");
+    } catch (err: unknown) {
+      toast.error(getApiErrorMessage(err, "Failed to update setting"));
     } finally {
       setUpdating(null);
     }

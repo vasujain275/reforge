@@ -1,6 +1,9 @@
+import { QueryClientProvider } from "@tanstack/react-query";
+
 import Layout from "@/components/Layout";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import { ThemeProvider } from "@/components/ThemeProvider";
+import { queryClient } from "@/lib/queryClient";
 import { useAuthStore } from "@/store/authStore";
 import { useEffect, useState } from "react";
 import { Route, BrowserRouter as Router, Routes, Navigate, useLocation } from "react-router-dom";
@@ -73,11 +76,12 @@ function App() {
   }, [checkAuth]);
 
   return (
-    <Router>
-      <ThemeProvider defaultTheme="dark" storageKey="reforge-ui-theme">
-        <Toaster position="top-right" richColors />
-        <InitializationGuard>
-          <Routes>
+    <QueryClientProvider client={queryClient}>
+      <Router>
+        <ThemeProvider defaultTheme="dark" storageKey="reforge-ui-theme">
+          <Toaster position="top-right" richColors />
+          <InitializationGuard>
+            <Routes>
             {/* Main Layout wraps everything */}
             <Route element={<Layout />}>
 
@@ -99,6 +103,7 @@ function App() {
         </InitializationGuard>
       </ThemeProvider>
     </Router>
+    </QueryClientProvider>
   );
 }
 

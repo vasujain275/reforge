@@ -15,6 +15,7 @@ import { useAuthStore } from "@/store/authStore";
 import type { ScoringWeights } from "@/types";
 import { Cpu, Loader2, Save, Sliders, Terminal } from "lucide-react";
 import { useEffect, useState } from "react";
+import { getAppVersion } from "@/lib/version";
 
 export default function SettingsPage() {
   const { user } = useAuthStore();
@@ -334,7 +335,7 @@ export default function SettingsPage() {
           <CardContent>
             <div className="font-mono text-xs text-muted-foreground space-y-1">
               <p>$ reforge --version</p>
-              <p className="text-foreground">reforge v0.1.0-alpha</p>
+              <p className="text-foreground">reforge {getAppVersion()}</p>
               <p className="mt-2">$ echo $USER</p>
               <p className="text-foreground">{user?.email || "anonymous"}</p>
             </div>

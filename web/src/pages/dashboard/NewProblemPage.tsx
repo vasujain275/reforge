@@ -24,6 +24,10 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import {
+  RadioGroup,
+  RadioGroupItem,
+} from "@/components/ui/radio-group";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -57,6 +61,8 @@ export default function NewProblemPage() {
   const [formData, setFormData] = useState({
     title: "",
     source: "",
+    sourceType: "leetcode" as "leetcode" | "tuf" | "others",
+    customSource: "",
     url: "",
     difficulty: "medium" as "easy" | "medium" | "hard",
   });
@@ -83,8 +89,15 @@ export default function NewProblemPage() {
     setError(null);
 
     try {
+      const finalSource = formData.sourceType === "others" 
+        ? formData.customSource 
+        : formData.sourceType;
+      
       const payload = {
-        ...formData,
+        title: formData.title,
+        source: finalSource,
+        url: formData.url,
+        difficulty: formData.difficulty,
         pattern_ids: selectedPatterns.length > 0 ? selectedPatterns : undefined,
       };
       await api.post("/problems", payload);
@@ -162,17 +175,62 @@ export default function NewProblemPage() {
               </div>
 
               {/* Source */}
-              <div className="space-y-2">
-                <Label htmlFor="source">Source</Label>
-                <Input
-                  id="source"
-                  placeholder="e.g., LeetCode, NeetCode 150, Blind 75"
-                  value={formData.source}
-                  onChange={(e) =>
-                    setFormData({ ...formData, source: e.target.value })
+              <div className="space-y-3">
+                <Label>Source</Label>
+                <RadioGroup
+                  value={formData.sourceType}
+                  onValueChange={(value: "leetcode" | "tuf" | "others") =>
+                    setFormData({ ...formData, sourceType: value })
                   }
-                  className="font-mono"
-                />
+                  className="gap-3"
+                >
+                  {/* LeetCode Option */}
+                  <div className="flex items-center space-x-3 rounded-md border border-border bg-card/50 px-4 py-3 transition-colors hover:bg-accent/50">
+                    <RadioGroupItem value="leetcode" id="leetcode" />
+                    <Label
+                      htmlFor="leetcode"
+                      className="flex-1 cursor-pointer font-mono text-sm"
+                    >
+                      LeetCode
+                    </Label>
+                  </div>
+
+                  {/* TUF Option */}
+                  <div className="flex items-center space-x-3 rounded-md border border-border bg-card/50 px-4 py-3 transition-colors hover:bg-accent/50">
+                    <RadioGroupItem value="tuf" id="tuf" />
+                    <Label
+                      htmlFor="tuf"
+                      className="flex-1 cursor-pointer font-mono text-sm"
+                    >
+                      TUF (Take U Forward)
+                    </Label>
+                  </div>
+
+                  {/* Others Option */}
+                  <div className="flex items-center space-x-3 rounded-md border border-border bg-card/50 px-4 py-3 transition-colors hover:bg-accent/50">
+                    <RadioGroupItem value="others" id="others" />
+                    <Label
+                      htmlFor="others"
+                      className="flex-1 cursor-pointer font-mono text-sm"
+                    >
+                      Others
+                    </Label>
+                  </div>
+                </RadioGroup>
+
+                {/* Custom Source Input - Only shown when "Others" is selected */}
+                {formData.sourceType === "others" && (
+                  <div className="mt-2 pl-7">
+                    <Input
+                      placeholder="e.g., NeetCode 150, Blind 75, Striver's SDE Sheet"
+                      value={formData.customSource}
+                      onChange={(e) =>
+                        setFormData({ ...formData, customSource: e.target.value })
+                      }
+                      className="font-mono"
+                    />
+                  </div>
+                )}
               </div>
 
               {/* URL */}

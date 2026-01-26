@@ -35,17 +35,17 @@ jobs:
           VERSION=$(jq -r '.version' web/package.json)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
-      - name: Check if version changed
+      - name: Check if Docker image exists
         id: check
         run: |
           VERSION="${{ steps.current.outputs.version }}"
           
-          # Check if tag exists
-          if git rev-parse "v$VERSION" >/dev/null 2>&1; then
-            echo "Tag v$VERSION already exists"
+          # Check if Docker image with this version exists on Docker Hub
+          if docker manifest inspect vasujain275/reforge:$VERSION >/dev/null 2>&1; then
+            echo "Docker image vasujain275/reforge:$VERSION already exists"
             echo "changed=false" >> $GITHUB_OUTPUT
           else
-            echo "New version: v$VERSION"
+            echo "New version: v$VERSION (Docker image not found)"
             echo "changed=true" >> $GITHUB_OUTPUT
           fi
           echo "version=$VERSION" >> $GITHUB_OUTPUT

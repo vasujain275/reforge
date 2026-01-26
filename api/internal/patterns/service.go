@@ -109,6 +109,13 @@ func (s *patternService) SearchPatternsWithStats(ctx context.Context, userID int
 		return nil, fmt.Errorf("failed to count patterns: %w", err)
 	}
 
+	// Get unique problem count (no double-counting across patterns)
+	uniqueProblemCount, err := s.repo.GetUniqueProblemCount(ctx)
+	if err != nil {
+		// Non-fatal - just set to 0 if query fails
+		uniqueProblemCount = 0
+	}
+
 	// Get paginated results with stats
 	rows, err := s.repo.SearchPatternsWithStats(ctx, repo.SearchPatternsWithStatsParams{
 		UserID:      userID,
@@ -154,11 +161,12 @@ func (s *patternService) SearchPatternsWithStats(ctx context.Context, userID int
 	totalPages := (countRow + params.Limit - 1) / params.Limit
 
 	return &PaginatedPatterns{
-		Data:       results,
-		Total:      countRow,
-		Page:       page,
-		PageSize:   params.Limit,
-		TotalPages: totalPages,
+		Data:               results,
+		Total:              countRow,
+		Page:               page,
+		PageSize:           params.Limit,
+		TotalPages:         totalPages,
+		UniqueProblemCount: uniqueProblemCount,
 	}, nil
 }
 

@@ -90,6 +90,8 @@ type Querier interface {
 	GetSystemSetting(ctx context.Context, key string) (SystemSetting, error)
 	GetTemplateUseCount(ctx context.Context, arg GetTemplateUseCountParams) (sql.NullInt64, error)
 	GetTotalProblemsForUser(ctx context.Context, userID int64) (int64, error)
+	// Returns the count of unique problems across all patterns (no double-counting)
+	GetUniqueProblemCount(ctx context.Context) (int64, error)
 	GetUrgentProblems(ctx context.Context, arg GetUrgentProblemsParams) ([]GetUrgentProblemsRow, error)
 	// Used for Login: Fetch everything including the password_hash
 	GetUserByEmail(ctx context.Context, email string) (User, error)

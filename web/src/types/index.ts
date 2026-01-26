@@ -262,7 +262,11 @@ export interface PaginatedResponse<T> {
   total_pages: number;
 }
 
+export interface PaginatedPatternsResponse extends PaginatedResponse<PatternWithStats> {
+  unique_problem_count: number;
+}
+
 export type PaginatedProblems = PaginatedResponse<Problem>;
 export type PaginatedSessions = PaginatedResponse<RevisionSession>;
-export type PaginatedPatterns = PaginatedResponse<PatternWithStats>;
+export type PaginatedPatterns = PaginatedPatternsResponse;
 

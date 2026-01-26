@@ -1,4 +1,9 @@
 import ApiError from "@/components/ApiError";
+import { SearchInput } from "@/components/SearchInput";
+import {
+  PatternsContentSkeleton,
+  StatsOverviewSkeleton,
+} from "@/components/ContentSkeleton";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -37,35 +42,35 @@ import {
   Edit,
   Trash2,
   Save,
-  Loader2,
-  Search,
   ArrowUpDown,
 } from "lucide-react";
 import { useState } from "react";
 import { usePagination } from "@/hooks/usePagination";
-import { useDebounce } from "@/hooks/useDebounce";
 import { usePatterns } from "@/hooks/queries";
 import { DataPagination } from "@/components/DataPagination";
 import { useQueryClient } from "@tanstack/react-query";
 
 export default function PatternsPage() {
   const queryClient = useQueryClient();
-  const { page, pageSize, setPage } = usePagination();
-  const [searchQuery, setSearchQuery] = useState("");
+  const {
+    page,
+    pageSize,
+    localSearchQuery,
+    setLocalSearchQuery,
+    debouncedSearchQuery,
+    setPage,
+  } = usePagination();
+
   const [sortBy, setSortBy] = useState("confidence_asc");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingPattern, setEditingPattern] = useState<PatternWithStats | null>(
-    null
-  );
+  const [editingPattern, setEditingPattern] =
+    useState<PatternWithStats | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     title: "",
     description: "",
   });
-
-  // Debounce search query to avoid triggering API calls on every keystroke
-  const debouncedSearchQuery = useDebounce(searchQuery, 300);
 
   // Use TanStack Query for data fetching
   const { data, isLoading, isFetching, error, refetch } = usePatterns({
@@ -150,37 +155,6 @@ export default function PatternsPage() {
     return `${days} days ago`;
   };
 
-  // Show full-page loader only on initial load
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <div className="flex flex-col items-center gap-4">
-          <Loader2 className="h-8 w-8 text-primary animate-spin" />
-          <p className="text-sm font-mono text-muted-foreground uppercase tracking-wider">
-            Loading patterns...
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return <ApiError message="Failed to load patterns. Please ensure the backend is running." onRetry={() => refetch()} />;
-  }
-
-  if (!data) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <div className="flex flex-col items-center gap-4">
-          <Loader2 className="h-8 w-8 text-primary animate-spin" />
-          <p className="text-sm font-mono text-muted-foreground uppercase tracking-wider">
-            Loading patterns...
-          </p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="flex-1 space-y-6 p-6">
       {/* Header */}
@@ -203,20 +177,13 @@ export default function PatternsPage() {
       <Card className="rounded-md border border-border">
         <CardContent className="pt-6">
           <div className="flex gap-4">
-            <div className="flex-1 relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
+            <div className="flex-1">
+              <SearchInput
+                value={localSearchQuery}
+                onChange={setLocalSearchQuery}
                 placeholder="Search patterns by title..."
-                value={searchQuery}
-                onChange={(e) => {
-                  setSearchQuery(e.target.value);
-                  setPage(1);
-                }}
-                className="pl-10 pr-10 rounded-md font-mono"
+                isFetching={isFetching}
               />
-              {isFetching && (
-                <Loader2 className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground animate-spin" />
-              )}
             </div>
             <div className="w-64">
               <Select value={sortBy} onValueChange={setSortBy}>
@@ -273,186 +240,224 @@ export default function PatternsPage() {
         </div>
       )}
 
-      {/* Pattern Stats Overview */}
-      {patterns.length > 0 && (
-        <div className={`grid gap-4 md:grid-cols-3 transition-opacity duration-200 ${isFetching ? 'opacity-50' : 'opacity-100'}`}>
-          <Card className="rounded-md border border-border">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-xs font-mono uppercase tracking-wider text-muted-foreground">
-                Total Patterns
-              </CardTitle>
-              <Network className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold font-mono">
-                {String(patterns.length).padStart(3, "0")}
-              </div>
-              <p className="text-xs text-muted-foreground mt-1 font-mono">
-                Covering{" "}
-                {patterns.reduce((acc, p) => acc + (p.problemCount || 0), 0)}{" "}
-                problems
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card className="rounded-md border border-border">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-xs font-mono uppercase tracking-wider text-muted-foreground">
-                Strongest
-              </CardTitle>
-              <TrendingUp className="h-4 w-4 text-green-500" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-lg font-bold font-mono">
-                {patterns.length > 0
-                  ? patterns.reduce((max, p) => 
-                      (p.stats?.avg_confidence || 0) > (max.stats?.avg_confidence || 0) ? p : max
-                    ).title
-                  : "N/A"}
-              </div>
-              <p className="text-xs text-muted-foreground mt-1 font-mono">
-                {patterns.length > 0
-                  ? patterns.reduce((max, p) => 
-                      (p.stats?.avg_confidence || 0) > (max.stats?.avg_confidence || 0) ? p : max
-                    ).stats?.avg_confidence || 0
-                  : 0}
-                % confidence
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card className="rounded-md border border-border">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-xs font-mono uppercase tracking-wider text-muted-foreground">
-                Needs Work
-              </CardTitle>
-              <TrendingDown className="h-4 w-4 text-red-500" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-lg font-bold font-mono">
-                {patterns.length > 0
-                  ? patterns.reduce((min, p) => 
-                      (p.stats?.avg_confidence || 0) < (min.stats?.avg_confidence || 0) ? p : min
-                    ).title
-                  : "N/A"}
-              </div>
-              <p className="text-xs text-muted-foreground mt-1 font-mono">
-                {patterns.length > 0
-                  ? patterns.reduce((min, p) => 
-                      (p.stats?.avg_confidence || 0) < (min.stats?.avg_confidence || 0) ? p : min
-                    ).stats?.avg_confidence || 0
-                  : 0}% confidence
-              </p>
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
-      {/* Patterns List */}
-      <div className={`space-y-3 transition-opacity duration-200 ${isFetching ? 'opacity-50' : 'opacity-100'}`}>
-        {!patterns || patterns.length === 0 ? (
-          <Card className="rounded-md border border-border">
-            <CardContent className="py-12 text-center">
-              <Terminal className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-              <p className="text-muted-foreground font-mono uppercase tracking-wider text-sm">
-                {searchQuery
-                  ? "No Patterns Match Your Search"
-                  : "No Patterns Registered"}
-              </p>
-              {!searchQuery && (
-                <Button className="mt-4 rounded-md" onClick={openCreateDialog}>
-                  Initialize First Pattern
-                </Button>
-              )}
-            </CardContent>
-          </Card>
-        ) : (
-          patterns.map((pattern) => (
-            <Card
-              key={pattern.id}
-              className="rounded-md border border-border hover:border-primary/50 transition-colors"
-            >
-              <CardHeader>
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <CardTitle className="text-lg font-mono">
-                      {pattern.title}
-                    </CardTitle>
-                    {pattern.description && (
-                      <CardDescription className="mt-1">
-                        {pattern.description}
-                      </CardDescription>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <div className="text-right">
-                      <div className="text-2xl font-bold font-mono text-primary">
-                        {pattern.stats?.avg_confidence || 0}%
-                      </div>
-                      <div className="text-xs text-muted-foreground font-mono uppercase tracking-wider">
-                        Confidence
-                      </div>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="rounded-md"
-                        onClick={() => openEditDialog(pattern)}
-                      >
-                        <Edit className="h-3 w-3" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="rounded-md text-red-500 hover:text-red-600 hover:bg-red-500/10"
-                        onClick={() => handleDelete(pattern.id)}
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  <Progress
-                    value={pattern.stats?.avg_confidence || 0}
-                    className="h-2"
-                  />
-                  <div className="flex items-center justify-between text-sm text-muted-foreground">
-                    <div className="flex items-center gap-4">
-                      <span className="font-mono">
-                        {String(pattern.problemCount || 0).padStart(2, "0")}{" "}
-                        problems
-                      </span>
-                      <span className="font-mono">
-                        {String(pattern.stats?.times_revised || 0).padStart(
-                          2,
-                          "0"
-                        )}{" "}
-                        revisions
-                      </span>
-                    </div>
-                    <span className="font-mono text-xs">
-                      Last:{" "}
-                      {getDaysSinceLastRevised(pattern.stats?.last_revised_at)}
-                    </span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))
-        )}
-      </div>
-
-      {/* Pagination */}
-      {data && data.total > 0 && (
-        <DataPagination
-          currentPage={data.page}
-          totalPages={data.total_pages}
-          onPageChange={setPage}
+      {/* Content: Skeleton on initial load, error state, or data */}
+      {isLoading ? (
+        <>
+          <StatsOverviewSkeleton />
+          <PatternsContentSkeleton count={5} />
+        </>
+      ) : error && !data ? (
+        <ApiError
+          message="Failed to load patterns. Please ensure the backend is running."
+          onRetry={() => refetch()}
         />
+      ) : (
+        <>
+          {/* Pattern Stats Overview */}
+          {patterns.length > 0 && (
+            <div
+              className={`grid gap-4 md:grid-cols-3 transition-opacity duration-200 ${
+                isFetching ? "opacity-50" : "opacity-100"
+              }`}
+            >
+              <Card className="rounded-md border border-border">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-xs font-mono uppercase tracking-wider text-muted-foreground">
+                    Total Patterns
+                  </CardTitle>
+                  <Network className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold font-mono">
+                    {String(patterns.length).padStart(3, "0")}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1 font-mono">
+                    Covering {data?.unique_problem_count ?? 0} unique problems
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card className="rounded-md border border-border">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-xs font-mono uppercase tracking-wider text-muted-foreground">
+                    Strongest
+                  </CardTitle>
+                  <TrendingUp className="h-4 w-4 text-green-500" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-lg font-bold font-mono">
+                    {patterns.length > 0
+                      ? patterns.reduce((max, p) =>
+                          (p.stats?.avg_confidence || 0) >
+                          (max.stats?.avg_confidence || 0)
+                            ? p
+                            : max
+                        ).title
+                      : "N/A"}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1 font-mono">
+                    {patterns.length > 0
+                      ? patterns.reduce((max, p) =>
+                          (p.stats?.avg_confidence || 0) >
+                          (max.stats?.avg_confidence || 0)
+                            ? p
+                            : max
+                        ).stats?.avg_confidence || 0
+                      : 0}
+                    % confidence
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card className="rounded-md border border-border">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-xs font-mono uppercase tracking-wider text-muted-foreground">
+                    Needs Work
+                  </CardTitle>
+                  <TrendingDown className="h-4 w-4 text-red-500" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-lg font-bold font-mono">
+                    {patterns.length > 0
+                      ? patterns.reduce((min, p) =>
+                          (p.stats?.avg_confidence || 0) <
+                          (min.stats?.avg_confidence || 0)
+                            ? p
+                            : min
+                        ).title
+                      : "N/A"}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1 font-mono">
+                    {patterns.length > 0
+                      ? patterns.reduce((min, p) =>
+                          (p.stats?.avg_confidence || 0) <
+                          (min.stats?.avg_confidence || 0)
+                            ? p
+                            : min
+                        ).stats?.avg_confidence || 0
+                      : 0}
+                    % confidence
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {/* Patterns List */}
+          <div
+            className={`space-y-3 transition-opacity duration-200 ${
+              isFetching ? "opacity-50" : "opacity-100"
+            }`}
+          >
+            {!patterns || patterns.length === 0 ? (
+              <Card className="rounded-md border border-border">
+                <CardContent className="py-12 text-center">
+                  <Terminal className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                  <p className="text-muted-foreground font-mono uppercase tracking-wider text-sm">
+                    {localSearchQuery
+                      ? "No Patterns Match Your Search"
+                      : "No Patterns Registered"}
+                  </p>
+                  {!localSearchQuery && (
+                    <Button
+                      className="mt-4 rounded-md"
+                      onClick={openCreateDialog}
+                    >
+                      Initialize First Pattern
+                    </Button>
+                  )}
+                </CardContent>
+              </Card>
+            ) : (
+              patterns.map((pattern) => (
+                <Card
+                  key={pattern.id}
+                  className="rounded-md border border-border hover:border-primary/50 transition-colors"
+                >
+                  <CardHeader>
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <CardTitle className="text-lg font-mono">
+                          {pattern.title}
+                        </CardTitle>
+                        {pattern.description && (
+                          <CardDescription className="mt-1">
+                            {pattern.description}
+                          </CardDescription>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <div className="text-right">
+                          <div className="text-2xl font-bold font-mono text-primary">
+                            {pattern.stats?.avg_confidence || 0}%
+                          </div>
+                          <div className="text-xs text-muted-foreground font-mono uppercase tracking-wider">
+                            Confidence
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="rounded-md"
+                            onClick={() => openEditDialog(pattern)}
+                          >
+                            <Edit className="h-3 w-3" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="rounded-md text-red-500 hover:text-red-600 hover:bg-red-500/10"
+                            onClick={() => handleDelete(pattern.id)}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-3">
+                      <Progress
+                        value={pattern.stats?.avg_confidence || 0}
+                        className="h-2"
+                      />
+                      <div className="flex items-center justify-between text-sm text-muted-foreground">
+                        <div className="flex items-center gap-4">
+                          <span className="font-mono">
+                            {String(pattern.problemCount || 0).padStart(2, "0")}{" "}
+                            problems
+                          </span>
+                          <span className="font-mono">
+                            {String(
+                              pattern.stats?.times_revised || 0
+                            ).padStart(2, "0")}{" "}
+                            revisions
+                          </span>
+                        </div>
+                        <span className="font-mono text-xs">
+                          Last:{" "}
+                          {getDaysSinceLastRevised(
+                            pattern.stats?.last_revised_at
+                          )}
+                        </span>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))
+            )}
+          </div>
+
+          {/* Pagination */}
+          {data && data.total > 0 && (
+            <DataPagination
+              currentPage={data.page}
+              totalPages={data.total_pages}
+              onPageChange={setPage}
+            />
+          )}
+        </>
       )}
 
       {/* Create/Edit Pattern Dialog */}
@@ -470,7 +475,10 @@ export default function PatternsPage() {
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="title" className="font-mono uppercase tracking-wider text-xs">
+              <Label
+                htmlFor="title"
+                className="font-mono uppercase tracking-wider text-xs"
+              >
                 Pattern Title
               </Label>
               <Input
@@ -484,7 +492,10 @@ export default function PatternsPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="description" className="font-mono uppercase tracking-wider text-xs">
+              <Label
+                htmlFor="description"
+                className="font-mono uppercase tracking-wider text-xs"
+              >
                 Description (Optional)
               </Label>
               <Textarea

@@ -35,9 +35,10 @@ type SearchPatternsParams struct {
 }
 
 type PaginatedPatterns struct {
-	Data       []PatternWithStats `json:"data"`
-	Total      int64              `json:"total"`
-	Page       int64              `json:"page"`
-	PageSize   int64              `json:"page_size"`
-	TotalPages int64              `json:"total_pages"`
+	Data               []PatternWithStats `json:"data"`
+	Total              int64              `json:"total"`
+	Page               int64              `json:"page"`
+	PageSize           int64              `json:"page_size"`
+	TotalPages         int64              `json:"total_pages"`
+	UniqueProblemCount int64              `json:"unique_problem_count"`
 }

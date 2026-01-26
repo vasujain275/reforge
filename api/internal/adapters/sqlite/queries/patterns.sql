@@ -70,3 +70,8 @@ LIMIT sqlc.arg(limit_val) OFFSET sqlc.arg(offset_val);
 SELECT COUNT(DISTINCT p.id) as count
 FROM patterns p
 WHERE (sqlc.arg(search_query) = '' OR p.title LIKE '%' || sqlc.arg(search_query) || '%' OR p.description LIKE '%' || sqlc.arg(search_query) || '%');
+
+-- name: GetUniqueProblemCount :one
+-- Returns the count of unique problems across all patterns (no double-counting)
+SELECT COUNT(DISTINCT pp.problem_id) as count
+FROM problem_patterns pp;

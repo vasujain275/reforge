@@ -1,5 +1,6 @@
-import { useCallback, useState } from "react";
+import { useCallback, useState, useEffect, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
+import { useDebounce } from "./useDebounce";
 
 export interface PaginationState {
   page: number;
@@ -19,9 +20,58 @@ export function usePagination(initialPageSize: number = 20) {
   const [searchParams, setSearchParams] = useSearchParams();
   const [isLoading, setIsLoading] = useState(false);
 
+  // Initialize local search query from URL (only on mount)
+  const initialQuery = searchParams.get("q") || "";
+  const [localSearchQuery, setLocalSearchQuery] = useState(initialQuery);
+
+  // Track if this is the initial mount to prevent unnecessary URL updates
+  const isInitialMount = useRef(true);
+
+  // Debounce the local search query (300ms delay for smooth typing)
+  const debouncedSearchQuery = useDebounce(localSearchQuery, 300);
+
+  // Get current URL values
   const page = parseInt(searchParams.get("page") || "1");
-  const pageSize = parseInt(searchParams.get("page_size") || String(initialPageSize));
-  const searchQuery = searchParams.get("q") || "";
+  const pageSize = parseInt(
+    searchParams.get("page_size") || String(initialPageSize)
+  );
+
+  // Sync debounced search query to URL (only after initial mount)
+  useEffect(() => {
+    // Skip the initial mount to prevent URL update on page load
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+
+    setSearchParams((prev) => {
+      const params = new URLSearchParams(prev);
+      const currentUrlQuery = params.get("q") || "";
+
+      // Only update if the debounced value is different from URL
+      if (debouncedSearchQuery !== currentUrlQuery) {
+        if (debouncedSearchQuery) {
+          params.set("q", debouncedSearchQuery);
+        } else {
+          params.delete("q");
+        }
+        // Reset to first page when search changes
+        params.set("page", "1");
+      }
+      return params;
+    });
+  }, [debouncedSearchQuery, setSearchParams]);
+
+  // Listen for popstate (browser back/forward) to sync local state
+  useEffect(() => {
+    const handlePopState = () => {
+      const urlQuery = new URLSearchParams(window.location.search).get("q") || "";
+      setLocalSearchQuery(urlQuery);
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
 
   const setPage = useCallback(
     (newPage: number) => {
@@ -39,22 +89,6 @@ export function usePagination(initialPageSize: number = 20) {
       setSearchParams((prev) => {
         const params = new URLSearchParams(prev);
         params.set("page_size", String(newPageSize));
-        params.set("page", "1"); // Reset to first page
-        return params;
-      });
-    },
-    [setSearchParams]
-  );
-
-  const setSearchQuery = useCallback(
-    (query: string) => {
-      setSearchParams((prev) => {
-        const params = new URLSearchParams(prev);
-        if (query) {
-          params.set("q", query);
-        } else {
-          params.delete("q");
-        }
         params.set("page", "1"); // Reset to first page
         return params;
       });
@@ -85,24 +119,50 @@ export function usePagination(initialPageSize: number = 20) {
     [searchParams]
   );
 
+  const clearSearch = useCallback(() => {
+    setLocalSearchQuery("");
+  }, []);
+
   const goToFirstPage = useCallback(() => setPage(1), [setPage]);
-  const goToLastPage = useCallback((totalPages: number) => setPage(totalPages), [setPage]);
-  const goToNextPage = useCallback((currentPage: number) => setPage(currentPage + 1), [setPage]);
-  const goToPreviousPage = useCallback((currentPage: number) => setPage(currentPage - 1), [setPage]);
+  const goToLastPage = useCallback(
+    (totalPages: number) => setPage(totalPages),
+    [setPage]
+  );
+  const goToNextPage = useCallback(
+    (currentPage: number) => setPage(currentPage + 1),
+    [setPage]
+  );
+  const goToPreviousPage = useCallback(
+    (currentPage: number) => setPage(currentPage - 1),
+    [setPage]
+  );
 
   return {
+    // Pagination
     page,
     pageSize,
-    searchQuery,
     setPage,
     setPageSize,
-    setSearchQuery,
+
+    // Search - local value for input binding (immediate updates)
+    localSearchQuery,
+    setLocalSearchQuery,
+    // Search - debounced value for API calls
+    debouncedSearchQuery,
+    // Clear helper
+    clearSearch,
+
+    // Filters
     setFilter,
     getFilter,
+
+    // Navigation helpers
     goToFirstPage,
     goToLastPage,
     goToNextPage,
     goToPreviousPage,
+
+    // Loading state
     isLoading,
     setIsLoading,
   };

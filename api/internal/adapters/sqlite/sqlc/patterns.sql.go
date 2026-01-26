@@ -164,6 +164,19 @@ func (q *Queries) GetProblemsForPattern(ctx context.Context, patternID int64) ([
 	return items, nil
 }
 
+const getUniqueProblemCount = `-- name: GetUniqueProblemCount :one
+SELECT COUNT(DISTINCT pp.problem_id) as count
+FROM problem_patterns pp
+`
+
+// Returns the count of unique problems across all patterns (no double-counting)
+func (q *Queries) GetUniqueProblemCount(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, getUniqueProblemCount)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const listPatterns = `-- name: ListPatterns :many
 SELECT id, title, description FROM patterns
 ORDER BY title

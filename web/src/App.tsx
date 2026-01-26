@@ -5,19 +5,31 @@ import ProtectedRoute from "@/components/ProtectedRoute";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { queryClient } from "@/lib/queryClient";
 import { useAuthStore } from "@/store/authStore";
-import { useEffect, useState } from "react";
+import { Suspense, lazy, useEffect, useState } from "react";
 import { Route, BrowserRouter as Router, Routes, Navigate, useLocation } from "react-router-dom";
 import { Toaster } from "sonner";
 import { api } from "@/lib/api";
 
-// Pages
-import LoginPage from "@/pages/auth/LoginPage";
-import RegisterPage from "@/pages/auth/RegisterPage";
-import ResetPasswordPage from "@/pages/auth/ResetPasswordPage";
-import ForgotPasswordPage from "@/pages/auth/ForgotPasswordPage";
-import DashboardWrapper from "@/pages/DashboardWrapper";
-import LandingPage from "@/pages/Landing";
-import OnboardingPage from "@/pages/OnboardingPage";
+// Lazy load pages for code splitting
+const LoginPage = lazy(() => import("@/pages/auth/LoginPage"));
+const RegisterPage = lazy(() => import("@/pages/auth/RegisterPage"));
+const ResetPasswordPage = lazy(() => import("@/pages/auth/ResetPasswordPage"));
+const ForgotPasswordPage = lazy(() => import("@/pages/auth/ForgotPasswordPage"));
+const DashboardWrapper = lazy(() => import("@/pages/DashboardWrapper"));
+const LandingPage = lazy(() => import("@/pages/Landing"));
+const OnboardingPage = lazy(() => import("@/pages/OnboardingPage"));
+
+// Loading fallback for lazy-loaded pages
+function PageLoadingFallback() {
+  return (
+    <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="text-center space-y-4">
+        <div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full mx-auto" />
+        <p className="text-sm font-mono text-muted-foreground">Loading...</p>
+      </div>
+    </div>
+  );
+}
 
 // Initialization guard component
 function InitializationGuard({ children }: { children: React.ReactNode }) {
@@ -81,26 +93,28 @@ function App() {
         <ThemeProvider defaultTheme="dark" storageKey="reforge-ui-theme">
           <Toaster position="top-right" richColors />
           <InitializationGuard>
-            <Routes>
-            {/* Main Layout wraps everything */}
-            <Route element={<Layout />}>
+            <Suspense fallback={<PageLoadingFallback />}>
+              <Routes>
+              {/* Main Layout wraps everything */}
+              <Route element={<Layout />}>
 
-              {/* Public Routes */}
-              <Route path="/" element={<LandingPage />} />
-              <Route path="/onboarding" element={<OnboardingPage />} />
-              <Route path="/login" element={<LoginPage />} />
-              <Route path="/register" element={<RegisterPage />} />
-              <Route path="/reset-password" element={<ResetPasswordPage />} />
-              <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+                {/* Public Routes */}
+                <Route path="/" element={<LandingPage />} />
+                <Route path="/onboarding" element={<OnboardingPage />} />
+                <Route path="/login" element={<LoginPage />} />
+                <Route path="/register" element={<RegisterPage />} />
+                <Route path="/reset-password" element={<ResetPasswordPage />} />
+                <Route path="/forgot-password" element={<ForgotPasswordPage />} />
 
-              {/* Protected Routes */}
-              <Route element={<ProtectedRoute />}>
-                 <Route path="/dashboard/*" element={<DashboardWrapper />} />
+                {/* Protected Routes */}
+                <Route element={<ProtectedRoute />}>
+                   <Route path="/dashboard/*" element={<DashboardWrapper />} />
+                </Route>
+
               </Route>
-
-            </Route>
-          </Routes>
-        </InitializationGuard>
+            </Routes>
+            </Suspense>
+          </InitializationGuard>
       </ThemeProvider>
     </Router>
     </QueryClientProvider>

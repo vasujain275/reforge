@@ -1,8 +1,9 @@
 import ApiError from "@/components/ApiError";
 import { DataPagination } from "@/components/DataPagination";
+import { SearchInput } from "@/components/SearchInput";
+import { SessionsContentSkeleton } from "@/components/ContentSkeleton";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -11,29 +12,39 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { usePagination } from "@/hooks/usePagination";
-import { useDebounce } from "@/hooks/useDebounce";
 import { useSessions } from "@/hooks/queries";
 import { api } from "@/lib/api";
-import { Calendar, Check, Clock, Play, Terminal, Zap, BookOpen, Target, Loader2, Search, Filter } from "lucide-react";
+import {
+  Calendar,
+  Check,
+  Clock,
+  Play,
+  Terminal,
+  Zap,
+  BookOpen,
+  Target,
+  Loader2,
+  Filter,
+} from "lucide-react";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 export default function SessionsPage() {
   const navigate = useNavigate();
-  const [repeatingSessionId, setRepeatingSessionId] = useState<number | null>(null);
+  const [repeatingSessionId, setRepeatingSessionId] = useState<number | null>(
+    null
+  );
 
   const {
     page,
     pageSize,
-    searchQuery,
+    localSearchQuery,
+    setLocalSearchQuery,
+    debouncedSearchQuery,
     setPage,
-    setSearchQuery,
     setFilter,
     getFilter,
   } = usePagination(20);
-
-  // Debounce search query to avoid triggering API calls on every keystroke
-  const debouncedSearchQuery = useDebounce(searchQuery, 300);
 
   const statusFilter = getFilter("status");
 
@@ -51,10 +62,13 @@ export default function SessionsPage() {
       const sessionResponse = await api.get(`/sessions/${sessionId}`);
       const sessionData = sessionResponse.data.data;
 
-      const problemIds = sessionData.problems?.map((p: { id: number }) => p.id) || [];
+      const problemIds =
+        sessionData.problems?.map((p: { id: number }) => p.id) || [];
 
       if (problemIds.length === 0) {
-        alert("Cannot repeat session: No problems found in the original session.");
+        alert(
+          "Cannot repeat session: No problems found in the original session."
+        );
         return;
       }
 
@@ -91,18 +105,23 @@ export default function SessionsPage() {
     if (!key) {
       return { icon: Terminal, name: "Custom Session" };
     }
-    return templates[key] || { icon: Terminal, name: key.replace(/_/g, " ").toUpperCase() };
+    return (
+      templates[key] || {
+        icon: Terminal,
+        name: key.replace(/_/g, " ").toUpperCase(),
+      }
+    );
   };
 
   const formatDate = (dateString: string) => {
     let date: Date;
-    
-    if (dateString.includes('T') || dateString.includes('Z')) {
+
+    if (dateString.includes("T") || dateString.includes("Z")) {
       date = new Date(dateString);
     } else {
-      date = new Date(dateString + ' UTC');
+      date = new Date(dateString + " UTC");
     }
-    
+
     return date.toLocaleString("en-US", {
       year: "numeric",
       month: "2-digit",
@@ -116,13 +135,13 @@ export default function SessionsPage() {
   const getRelativeTime = (dateString: string) => {
     const now = new Date();
     let date: Date;
-    
-    if (dateString.includes('T') || dateString.includes('Z')) {
+
+    if (dateString.includes("T") || dateString.includes("Z")) {
       date = new Date(dateString);
     } else {
-      date = new Date(dateString + ' UTC');
+      date = new Date(dateString + " UTC");
     }
-    
+
     const diffMs = now.getTime() - date.getTime();
     const diffMins = Math.floor(diffMs / 60000);
     const diffHours = Math.floor(diffMins / 60);
@@ -132,24 +151,6 @@ export default function SessionsPage() {
     if (diffHours < 24) return `${diffHours}h ago`;
     return `${diffDays}d ago`;
   };
-
-  // Show full-page loading only on initial load
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <div className="flex flex-col items-center gap-4">
-          <Loader2 className="h-8 w-8 text-primary animate-spin" />
-          <p className="text-sm font-mono text-muted-foreground uppercase tracking-wider">
-            Loading Session Registry...
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  if (error && !data) {
-    return <ApiError message="Failed to load sessions. Please ensure the backend is running." onRetry={() => refetch()} />;
-  }
 
   const sessions = data?.data || [];
   const totalPages = data?.total_pages || 0;
@@ -172,8 +173,7 @@ export default function SessionsPage() {
         </div>
         <Link to="/dashboard/sessions/new">
           <Button className="font-mono rounded-md shadow-[0_0_15px_-3px_var(--primary)]">
-            <Play className="h-4 w-4 mr-2" />
-            + Initialize Session
+            <Play className="h-4 w-4 mr-2" />+ Initialize Session
           </Button>
         </Link>
       </div>
@@ -182,27 +182,32 @@ export default function SessionsPage() {
       <Card className="rounded-md border border-border">
         <CardContent className="pt-6">
           <div className="grid gap-4 md:grid-cols-3">
-            <div className="md:col-span-2 relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
+            <div className="md:col-span-2">
+              <SearchInput
+                value={localSearchQuery}
+                onChange={setLocalSearchQuery}
                 placeholder="Search sessions by template or name..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9 pr-10 rounded-md font-mono"
+                isFetching={isFetching}
               />
-              {isFetching && (
-                <Loader2 className="absolute right-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground animate-spin" />
-              )}
             </div>
-            <Select value={statusFilter} onValueChange={(v) => setFilter("status", v)}>
+            <Select
+              value={statusFilter}
+              onValueChange={(v) => setFilter("status", v)}
+            >
               <SelectTrigger className="rounded-md">
                 <Filter className="h-4 w-4 mr-2" />
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
               <SelectContent className="rounded-md">
-                <SelectItem value="all" className="font-mono">ALL SESSIONS</SelectItem>
-                <SelectItem value="active" className="font-mono">ACTIVE</SelectItem>
-                <SelectItem value="completed" className="font-mono">COMPLETED</SelectItem>
+                <SelectItem value="all" className="font-mono">
+                  ALL SESSIONS
+                </SelectItem>
+                <SelectItem value="active" className="font-mono">
+                  ACTIVE
+                </SelectItem>
+                <SelectItem value="completed" className="font-mono">
+                  COMPLETED
+                </SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -213,179 +218,216 @@ export default function SessionsPage() {
       {data && (
         <div className="flex items-center justify-between text-sm font-mono text-muted-foreground">
           <span>
-            Showing {sessions.length > 0 ? ((page - 1) * pageSize) + 1 : 0} - {Math.min(page * pageSize, data.total)} of {data.total} sessions
+            Showing {sessions.length > 0 ? (page - 1) * pageSize + 1 : 0} -{" "}
+            {Math.min(page * pageSize, data.total)} of {data.total} sessions
           </span>
         </div>
       )}
 
-      {/* Sessions List - HUD Cards */}
-      <div className={`space-y-3 transition-opacity duration-200 ${isFetching ? 'opacity-50' : 'opacity-100'}`}>
-        {sessions.length === 0 ? (
-          <Card className="border border-dashed rounded-md">
-            <CardContent className="py-12">
-              <div className="text-center space-y-4">
-                <div className="mx-auto h-12 w-12 rounded-md border border-border flex items-center justify-center">
-                  <Terminal className="h-6 w-6 text-muted-foreground" />
-                </div>
-                <div className="space-y-1">
-                  <p className="font-mono text-sm uppercase tracking-wider text-muted-foreground">
-                    No Sessions Found
-                  </p>
-                  <p className="text-xs text-muted-foreground font-mono">
-                    {searchQuery || statusFilter !== "all"
-                      ? "Try adjusting your search filters"
-                      : "Initialize first session to begin tracking"}
-                  </p>
-                </div>
-                <Link to="/dashboard/sessions/new" className="inline-block">
-                  <Button className="font-mono rounded-md">+ Initialize Session</Button>
-                </Link>
-              </div>
-            </CardContent>
-          </Card>
-        ) : (
-          sessions.map((session) => {
-            const template = getTemplateDisplay(session.template_key);
-            const Icon = template.icon;
-            return (
-              <Card
-                key={session.id}
-                className="border border-border hover:border-primary/50 hover:shadow-[0_0_15px_-3px_var(--primary)] transition-all rounded-md"
-              >
-                <CardContent className="p-4">
-                  <div className="flex items-start gap-4">
-                    {/* Left: Icon */}
-                    <div className="flex flex-col items-center gap-2 pt-1">
-                      <div className="text-xs font-mono text-muted-foreground">
-                        #{String(session.id).padStart(3, '0')}
-                      </div>
-                      <div className="h-10 w-10 rounded-md border border-primary/20 bg-primary/5 flex items-center justify-center">
-                        <Icon className="h-5 w-5 text-primary" />
-                      </div>
+      {/* Content: Skeleton on initial load, error state, or data */}
+      {isLoading ? (
+        <SessionsContentSkeleton count={5} />
+      ) : error && !data ? (
+        <ApiError
+          message="Failed to load sessions. Please ensure the backend is running."
+          onRetry={() => refetch()}
+        />
+      ) : (
+        <>
+          {/* Sessions List - HUD Cards */}
+          <div
+            className={`space-y-3 transition-opacity duration-200 ${
+              isFetching ? "opacity-50" : "opacity-100"
+            }`}
+          >
+            {sessions.length === 0 ? (
+              <Card className="border border-dashed rounded-md">
+                <CardContent className="py-12">
+                  <div className="text-center space-y-4">
+                    <div className="mx-auto h-12 w-12 rounded-md border border-border flex items-center justify-center">
+                      <Terminal className="h-6 w-6 text-muted-foreground" />
                     </div>
-
-                    {/* Center: Details */}
-                    <div className="flex-1 space-y-3">
-                      {/* Top Row - Title & Status */}
-                      <div className="flex items-center justify-between">
-                        <div className="space-y-1">
-                          <h3 className="font-mono font-semibold uppercase tracking-wider text-sm">
-                            {template.name}
-                          </h3>
-                          <div className="flex items-center gap-3 text-xs font-mono text-muted-foreground">
-                            <span>SESSION_{String(session.id).padStart(4, '0')}</span>
-                            <span className="text-muted-foreground/50">|</span>
-                            <span>{session.template_key}</span>
-                          </div>
-                        </div>
-                        <div className={`px-2 py-1 rounded-md border font-mono text-xs uppercase tracking-wider ${
-                          session.completed
-                            ? "bg-green-500/10 border-green-500/20 text-green-500"
-                            : "bg-orange-400/10 border-orange-400/20 text-orange-400"
-                        }`}>
-                          {session.completed ? (
-                            <span className="flex items-center gap-1">
-                              <Check className="h-3 w-3" />
-                              COMPLETE
-                            </span>
-                          ) : (
-                            <span className="flex items-center gap-1">
-                              <Play className="h-3 w-3" />
-                              ACTIVE
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Metadata Grid */}
-                      <div className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-2 text-xs">
-                        <div className="flex items-center gap-2">
-                          <Calendar className="h-3 w-3 text-muted-foreground" />
-                          <div className="space-y-0">
-                            <div className="font-mono text-muted-foreground">
-                              {formatDate(session.created_at)}
-                            </div>
-                            <div className="font-mono text-[10px] text-muted-foreground">
-                              {getRelativeTime(session.created_at)}
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                          <Clock className="h-3 w-3 text-muted-foreground" />
-                          <div className="space-y-0">
-                            <div className="font-mono">
-                              {String(session.planned_duration_min).padStart(3, '0')} min
-                            </div>
-                            <div className="font-mono text-[10px] text-muted-foreground">
-                              planned duration
-                            </div>
-                          </div>
-                        </div>
-
-                        {session.problems && session.problems.length > 0 && (
-                          <div className="flex items-center gap-2">
-                            <Target className="h-3 w-3 text-muted-foreground" />
-                            <div className="space-y-0">
-                              <div className="font-mono">
-                                {String(session.problems.length).padStart(2, '0')} problems
-                              </div>
-                              <div className="font-mono text-[10px] text-muted-foreground">
-                                in queue
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Actions */}
-                      <div className="flex gap-2 pt-2 border-t border-border">
-                        <Link to={`/dashboard/sessions/${session.id}`}>
-                          <Button variant="outline" size="sm" className="font-mono text-xs rounded-md">
-                            <Terminal className="h-3 w-3 mr-1.5" />
-                            View Details
-                          </Button>
-                        </Link>
-                        {session.completed && (
-                          <Button 
-                            variant="ghost" 
-                            size="sm" 
-                            className="font-mono text-xs rounded-md"
-                            onClick={() => handleRepeatSession(session.id)}
-                            disabled={repeatingSessionId === session.id}
-                          >
-                            {repeatingSessionId === session.id ? (
-                              <>
-                                <Loader2 className="h-3 w-3 mr-1.5 animate-spin" />
-                                Repeating...
-                              </>
-                            ) : (
-                              <>
-                                <Play className="h-3 w-3 mr-1.5" />
-                                Repeat Session
-                              </>
-                            )}
-                          </Button>
-                        )}
-                      </div>
+                    <div className="space-y-1">
+                      <p className="font-mono text-sm uppercase tracking-wider text-muted-foreground">
+                        No Sessions Found
+                      </p>
+                      <p className="text-xs text-muted-foreground font-mono">
+                        {localSearchQuery || statusFilter !== "all"
+                          ? "Try adjusting your search filters"
+                          : "Initialize first session to begin tracking"}
+                      </p>
                     </div>
+                    <Link to="/dashboard/sessions/new" className="inline-block">
+                      <Button className="font-mono rounded-md">
+                        + Initialize Session
+                      </Button>
+                    </Link>
                   </div>
                 </CardContent>
               </Card>
-            );
-          })
-        )}
-      </div>
+            ) : (
+              sessions.map((session) => {
+                const template = getTemplateDisplay(session.template_key);
+                const Icon = template.icon;
+                return (
+                  <Card
+                    key={session.id}
+                    className="border border-border hover:border-primary/50 hover:shadow-[0_0_15px_-3px_var(--primary)] transition-all rounded-md"
+                  >
+                    <CardContent className="p-4">
+                      <div className="flex items-start gap-4">
+                        {/* Left: Icon */}
+                        <div className="flex flex-col items-center gap-2 pt-1">
+                          <div className="text-xs font-mono text-muted-foreground">
+                            #{String(session.id).padStart(3, "0")}
+                          </div>
+                          <div className="h-10 w-10 rounded-md border border-primary/20 bg-primary/5 flex items-center justify-center">
+                            <Icon className="h-5 w-5 text-primary" />
+                          </div>
+                        </div>
 
-      {/* Pagination */}
-      {data && totalPages > 0 && (
-        <div className="flex items-center justify-center pt-4">
-          <DataPagination
-            currentPage={page}
-            totalPages={totalPages}
-            onPageChange={setPage}
-          />
-        </div>
+                        {/* Center: Details */}
+                        <div className="flex-1 space-y-3">
+                          {/* Top Row - Title & Status */}
+                          <div className="flex items-center justify-between">
+                            <div className="space-y-1">
+                              <h3 className="font-mono font-semibold uppercase tracking-wider text-sm">
+                                {template.name}
+                              </h3>
+                              <div className="flex items-center gap-3 text-xs font-mono text-muted-foreground">
+                                <span>
+                                  SESSION_{String(session.id).padStart(4, "0")}
+                                </span>
+                                <span className="text-muted-foreground/50">
+                                  |
+                                </span>
+                                <span>{session.template_key}</span>
+                              </div>
+                            </div>
+                            <div
+                              className={`px-2 py-1 rounded-md border font-mono text-xs uppercase tracking-wider ${
+                                session.completed
+                                  ? "bg-green-500/10 border-green-500/20 text-green-500"
+                                  : "bg-orange-400/10 border-orange-400/20 text-orange-400"
+                              }`}
+                            >
+                              {session.completed ? (
+                                <span className="flex items-center gap-1">
+                                  <Check className="h-3 w-3" />
+                                  COMPLETE
+                                </span>
+                              ) : (
+                                <span className="flex items-center gap-1">
+                                  <Play className="h-3 w-3" />
+                                  ACTIVE
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Metadata Grid */}
+                          <div className="grid grid-cols-2 md:grid-cols-3 gap-x-6 gap-y-2 text-xs">
+                            <div className="flex items-center gap-2">
+                              <Calendar className="h-3 w-3 text-muted-foreground" />
+                              <div className="space-y-0">
+                                <div className="font-mono text-muted-foreground">
+                                  {formatDate(session.created_at)}
+                                </div>
+                                <div className="font-mono text-[10px] text-muted-foreground">
+                                  {getRelativeTime(session.created_at)}
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              <Clock className="h-3 w-3 text-muted-foreground" />
+                              <div className="space-y-0">
+                                <div className="font-mono">
+                                  {String(session.planned_duration_min).padStart(
+                                    3,
+                                    "0"
+                                  )}{" "}
+                                  min
+                                </div>
+                                <div className="font-mono text-[10px] text-muted-foreground">
+                                  planned duration
+                                </div>
+                              </div>
+                            </div>
+
+                            {session.problems && session.problems.length > 0 && (
+                              <div className="flex items-center gap-2">
+                                <Target className="h-3 w-3 text-muted-foreground" />
+                                <div className="space-y-0">
+                                  <div className="font-mono">
+                                    {String(session.problems.length).padStart(
+                                      2,
+                                      "0"
+                                    )}{" "}
+                                    problems
+                                  </div>
+                                  <div className="font-mono text-[10px] text-muted-foreground">
+                                    in queue
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Actions */}
+                          <div className="flex gap-2 pt-2 border-t border-border">
+                            <Link to={`/dashboard/sessions/${session.id}`}>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="font-mono text-xs rounded-md"
+                              >
+                                <Terminal className="h-3 w-3 mr-1.5" />
+                                View Details
+                              </Button>
+                            </Link>
+                            {session.completed && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="font-mono text-xs rounded-md"
+                                onClick={() => handleRepeatSession(session.id)}
+                                disabled={repeatingSessionId === session.id}
+                              >
+                                {repeatingSessionId === session.id ? (
+                                  <>
+                                    <Loader2 className="h-3 w-3 mr-1.5 animate-spin" />
+                                    Repeating...
+                                  </>
+                                ) : (
+                                  <>
+                                    <Play className="h-3 w-3 mr-1.5" />
+                                    Repeat Session
+                                  </>
+                                )}
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })
+            )}
+          </div>
+
+          {/* Pagination */}
+          {data && totalPages > 0 && (
+            <div className="flex items-center justify-center pt-4">
+              <DataPagination
+                currentPage={page}
+                totalPages={totalPages}
+                onPageChange={setPage}
+              />
+            </div>
+          )}
+        </>
       )}
     </div>
   );

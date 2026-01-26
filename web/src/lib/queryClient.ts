@@ -9,8 +9,8 @@ export const queryClient = new QueryClient({
       gcTime: 5 * 60 * 1000,
       // Retry failed requests up to 2 times
       retry: 2,
-      // Refetch on window focus for fresh data
-      refetchOnWindowFocus: true,
+      // Disable refetch on window focus to prevent unexpected refetches during typing
+      refetchOnWindowFocus: false,
       // Don't refetch on mount if data is fresh
       refetchOnMount: true,
     },

@@ -71,6 +71,8 @@ export interface SessionProblem {
   created_at: string;
   completed?: boolean;
   outcome?: "passed" | "failed";
+  priority?: "overdue" | "due_soon" | "on_track" | "new";
+  days_until_due?: number;
 }
 
 export interface Attempt {
@@ -199,6 +201,8 @@ export interface UrgentProblem {
   confidence: number;
   reason: string;
   patterns?: Pattern[];
+  priority?: "overdue" | "due_soon" | "on_track" | "new";
+  days_until_due?: number;
 }
 
 // Dashboard stats type

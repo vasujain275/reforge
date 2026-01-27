@@ -23,10 +23,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import {
-  RadioGroup,
-  RadioGroupItem,
-} from "@/components/ui/radio-group";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   Select,
   SelectContent,
@@ -57,7 +54,7 @@ export default function NewProblemPage() {
   const [patternsLoading, setPatternsLoading] = useState(true);
   const [selectedPatterns, setSelectedPatterns] = useState<number[]>([]);
   const [open, setOpen] = useState(false);
-  
+
   const [formData, setFormData] = useState({
     title: "",
     source: "",
@@ -89,10 +86,11 @@ export default function NewProblemPage() {
     setError(null);
 
     try {
-      const finalSource = formData.sourceType === "others" 
-        ? formData.customSource 
-        : formData.sourceType;
-      
+      const finalSource =
+        formData.sourceType === "others"
+          ? formData.customSource
+          : formData.sourceType;
+
       const payload = {
         title: formData.title,
         source: finalSource,
@@ -105,7 +103,7 @@ export default function NewProblemPage() {
     } catch (err: unknown) {
       console.error("Failed to create problem:", err);
       setError(
-        "Failed to create problem. Please ensure the backend is running."
+        "Failed to create problem. Please ensure the backend is running.",
       );
     } finally {
       setIsSubmitting(false);
@@ -116,7 +114,7 @@ export default function NewProblemPage() {
     setSelectedPatterns((prev) =>
       prev.includes(patternId)
         ? prev.filter((id) => id !== patternId)
-        : [...prev, patternId]
+        : [...prev, patternId],
     );
   };
 
@@ -222,10 +220,13 @@ export default function NewProblemPage() {
                 {formData.sourceType === "others" && (
                   <div className="mt-2 pl-7">
                     <Input
-                      placeholder="e.g., NeetCode 150, Blind 75, Striver's SDE Sheet"
+                      placeholder="e.g., hackerank, etc (must be all lowercase)"
                       value={formData.customSource}
                       onChange={(e) =>
-                        setFormData({ ...formData, customSource: e.target.value })
+                        setFormData({
+                          ...formData,
+                          customSource: e.target.value,
+                        })
                       }
                       className="font-mono"
                     />
@@ -290,11 +291,13 @@ export default function NewProblemPage() {
 
               {/* Patterns Section */}
               <div className="space-y-2">
-                <Label className="font-mono text-xs uppercase tracking-wider">Patterns (Optional)</Label>
+                <Label className="font-mono text-xs uppercase tracking-wider">
+                  Patterns (Optional)
+                </Label>
                 <p className="text-xs text-muted-foreground mb-2 font-mono">
                   Link patterns for statistics aggregation
                 </p>
-                
+
                 {/* Selected Patterns */}
                 {selectedPatterns.length > 0 && (
                   <div className="flex flex-wrap gap-2 mb-2">
@@ -338,7 +341,10 @@ export default function NewProblemPage() {
                   </PopoverTrigger>
                   <PopoverContent className="w-full p-0" align="start">
                     <Command>
-                      <CommandInput placeholder="Search patterns..." className="font-mono" />
+                      <CommandInput
+                        placeholder="Search patterns..."
+                        className="font-mono"
+                      />
                       <CommandList>
                         {patternsLoading ? (
                           <div className="flex items-center justify-center py-6">
@@ -346,7 +352,9 @@ export default function NewProblemPage() {
                           </div>
                         ) : (
                           <>
-                            <CommandEmpty className="font-mono text-xs">No patterns found</CommandEmpty>
+                            <CommandEmpty className="font-mono text-xs">
+                              No patterns found
+                            </CommandEmpty>
                             <CommandGroup>
                               {patterns.map((pattern) => (
                                 <CommandItem
@@ -358,11 +366,15 @@ export default function NewProblemPage() {
                                   className="font-mono"
                                 >
                                   <Checkbox
-                                    checked={selectedPatterns.includes(pattern.id)}
+                                    checked={selectedPatterns.includes(
+                                      pattern.id,
+                                    )}
                                     className="mr-2"
                                   />
                                   <div className="flex-1">
-                                    <div className="font-medium font-mono text-xs">{pattern.title}</div>
+                                    <div className="font-medium font-mono text-xs">
+                                      {pattern.title}
+                                    </div>
                                     {pattern.description && (
                                       <div className="text-xs text-muted-foreground font-mono">
                                         {pattern.description}

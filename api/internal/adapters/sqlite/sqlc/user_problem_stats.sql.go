@@ -13,23 +13,28 @@ import (
 const createUserProblemStats = `-- name: CreateUserProblemStats :one
 INSERT INTO user_problem_stats (
     user_id, problem_id, status, confidence, avg_confidence,
-    last_attempt_at, total_attempts, avg_time_seconds, last_outcome, recent_history_json
+    last_attempt_at, total_attempts, avg_time_seconds, last_outcome, recent_history_json,
+    next_review_at, interval_days, ease_factor, review_count
 )
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-RETURNING id, user_id, problem_id, status, confidence, avg_confidence, last_attempt_at, total_attempts, avg_time_seconds, last_outcome, recent_history_json, updated_at
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+RETURNING id, user_id, problem_id, status, confidence, avg_confidence, last_attempt_at, total_attempts, avg_time_seconds, last_outcome, recent_history_json, updated_at, next_review_at, interval_days, ease_factor, review_count
 `
 
 type CreateUserProblemStatsParams struct {
-	UserID            int64          `json:"user_id"`
-	ProblemID         int64          `json:"problem_id"`
-	Status            sql.NullString `json:"status"`
-	Confidence        sql.NullInt64  `json:"confidence"`
-	AvgConfidence     sql.NullInt64  `json:"avg_confidence"`
-	LastAttemptAt     sql.NullString `json:"last_attempt_at"`
-	TotalAttempts     sql.NullInt64  `json:"total_attempts"`
-	AvgTimeSeconds    sql.NullInt64  `json:"avg_time_seconds"`
-	LastOutcome       sql.NullString `json:"last_outcome"`
-	RecentHistoryJson sql.NullString `json:"recent_history_json"`
+	UserID            int64           `json:"user_id"`
+	ProblemID         int64           `json:"problem_id"`
+	Status            sql.NullString  `json:"status"`
+	Confidence        sql.NullInt64   `json:"confidence"`
+	AvgConfidence     sql.NullInt64   `json:"avg_confidence"`
+	LastAttemptAt     sql.NullString  `json:"last_attempt_at"`
+	TotalAttempts     sql.NullInt64   `json:"total_attempts"`
+	AvgTimeSeconds    sql.NullInt64   `json:"avg_time_seconds"`
+	LastOutcome       sql.NullString  `json:"last_outcome"`
+	RecentHistoryJson sql.NullString  `json:"recent_history_json"`
+	NextReviewAt      sql.NullString  `json:"next_review_at"`
+	IntervalDays      sql.NullInt64   `json:"interval_days"`
+	EaseFactor        sql.NullFloat64 `json:"ease_factor"`
+	ReviewCount       sql.NullInt64   `json:"review_count"`
 }
 
 func (q *Queries) CreateUserProblemStats(ctx context.Context, arg CreateUserProblemStatsParams) (UserProblemStat, error) {
@@ -44,6 +49,10 @@ func (q *Queries) CreateUserProblemStats(ctx context.Context, arg CreateUserProb
 		arg.AvgTimeSeconds,
 		arg.LastOutcome,
 		arg.RecentHistoryJson,
+		arg.NextReviewAt,
+		arg.IntervalDays,
+		arg.EaseFactor,
+		arg.ReviewCount,
 	)
 	var i UserProblemStat
 	err := row.Scan(
@@ -59,6 +68,10 @@ func (q *Queries) CreateUserProblemStats(ctx context.Context, arg CreateUserProb
 		&i.LastOutcome,
 		&i.RecentHistoryJson,
 		&i.UpdatedAt,
+		&i.NextReviewAt,
+		&i.IntervalDays,
+		&i.EaseFactor,
+		&i.ReviewCount,
 	)
 	return i, err
 }
@@ -89,6 +102,108 @@ func (q *Queries) GetMasteredProblemsForUser(ctx context.Context, userID int64) 
 	return count, err
 }
 
+const getOverdueProblemsCount = `-- name: GetOverdueProblemsCount :one
+SELECT COUNT(*) as count
+FROM user_problem_stats
+WHERE user_id = ? 
+  AND status != 'abandoned'
+  AND next_review_at IS NOT NULL 
+  AND next_review_at < datetime('now')
+`
+
+func (q *Queries) GetOverdueProblemsCount(ctx context.Context, userID int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, getOverdueProblemsCount, userID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const getProblemsForReview = `-- name: GetProblemsForReview :many
+SELECT ups.id, ups.user_id, ups.problem_id, ups.status, ups.confidence, ups.avg_confidence, ups.last_attempt_at, ups.total_attempts, ups.avg_time_seconds, ups.last_outcome, ups.recent_history_json, ups.updated_at, ups.next_review_at, ups.interval_days, ups.ease_factor, ups.review_count, p.title, p.source, p.url, p.difficulty, p.created_at as problem_created_at
+FROM user_problem_stats ups
+JOIN problems p ON ups.problem_id = p.id
+WHERE ups.user_id = ? 
+  AND ups.status != 'abandoned'
+  AND (ups.next_review_at IS NULL OR ups.next_review_at <= ?)
+ORDER BY ups.next_review_at ASC NULLS FIRST
+LIMIT ?
+`
+
+type GetProblemsForReviewParams struct {
+	UserID       int64          `json:"user_id"`
+	NextReviewAt sql.NullString `json:"next_review_at"`
+	Limit        int64          `json:"limit"`
+}
+
+type GetProblemsForReviewRow struct {
+	ID                int64           `json:"id"`
+	UserID            int64           `json:"user_id"`
+	ProblemID         int64           `json:"problem_id"`
+	Status            sql.NullString  `json:"status"`
+	Confidence        sql.NullInt64   `json:"confidence"`
+	AvgConfidence     sql.NullInt64   `json:"avg_confidence"`
+	LastAttemptAt     sql.NullString  `json:"last_attempt_at"`
+	TotalAttempts     sql.NullInt64   `json:"total_attempts"`
+	AvgTimeSeconds    sql.NullInt64   `json:"avg_time_seconds"`
+	LastOutcome       sql.NullString  `json:"last_outcome"`
+	RecentHistoryJson sql.NullString  `json:"recent_history_json"`
+	UpdatedAt         sql.NullString  `json:"updated_at"`
+	NextReviewAt      sql.NullString  `json:"next_review_at"`
+	IntervalDays      sql.NullInt64   `json:"interval_days"`
+	EaseFactor        sql.NullFloat64 `json:"ease_factor"`
+	ReviewCount       sql.NullInt64   `json:"review_count"`
+	Title             string          `json:"title"`
+	Source            sql.NullString  `json:"source"`
+	Url               sql.NullString  `json:"url"`
+	Difficulty        sql.NullString  `json:"difficulty"`
+	ProblemCreatedAt  sql.NullString  `json:"problem_created_at"`
+}
+
+func (q *Queries) GetProblemsForReview(ctx context.Context, arg GetProblemsForReviewParams) ([]GetProblemsForReviewRow, error) {
+	rows, err := q.db.QueryContext(ctx, getProblemsForReview, arg.UserID, arg.NextReviewAt, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetProblemsForReviewRow{}
+	for rows.Next() {
+		var i GetProblemsForReviewRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.ProblemID,
+			&i.Status,
+			&i.Confidence,
+			&i.AvgConfidence,
+			&i.LastAttemptAt,
+			&i.TotalAttempts,
+			&i.AvgTimeSeconds,
+			&i.LastOutcome,
+			&i.RecentHistoryJson,
+			&i.UpdatedAt,
+			&i.NextReviewAt,
+			&i.IntervalDays,
+			&i.EaseFactor,
+			&i.ReviewCount,
+			&i.Title,
+			&i.Source,
+			&i.Url,
+			&i.Difficulty,
+			&i.ProblemCreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getTotalProblemsForUser = `-- name: GetTotalProblemsForUser :one
 SELECT COUNT(DISTINCT problem_id) as count
 FROM user_problem_stats
@@ -103,7 +218,7 @@ func (q *Queries) GetTotalProblemsForUser(ctx context.Context, userID int64) (in
 }
 
 const getUrgentProblems = `-- name: GetUrgentProblems :many
-SELECT ups.id, ups.user_id, ups.problem_id, ups.status, ups.confidence, ups.avg_confidence, ups.last_attempt_at, ups.total_attempts, ups.avg_time_seconds, ups.last_outcome, ups.recent_history_json, ups.updated_at, p.title, p.source, p.url, p.difficulty, p.created_at as problem_created_at
+SELECT ups.id, ups.user_id, ups.problem_id, ups.status, ups.confidence, ups.avg_confidence, ups.last_attempt_at, ups.total_attempts, ups.avg_time_seconds, ups.last_outcome, ups.recent_history_json, ups.updated_at, ups.next_review_at, ups.interval_days, ups.ease_factor, ups.review_count, p.title, p.source, p.url, p.difficulty, p.created_at as problem_created_at
 FROM user_problem_stats ups
 JOIN problems p ON ups.problem_id = p.id
 WHERE ups.user_id = ? AND ups.status != 'abandoned'
@@ -117,23 +232,27 @@ type GetUrgentProblemsParams struct {
 }
 
 type GetUrgentProblemsRow struct {
-	ID                int64          `json:"id"`
-	UserID            int64          `json:"user_id"`
-	ProblemID         int64          `json:"problem_id"`
-	Status            sql.NullString `json:"status"`
-	Confidence        sql.NullInt64  `json:"confidence"`
-	AvgConfidence     sql.NullInt64  `json:"avg_confidence"`
-	LastAttemptAt     sql.NullString `json:"last_attempt_at"`
-	TotalAttempts     sql.NullInt64  `json:"total_attempts"`
-	AvgTimeSeconds    sql.NullInt64  `json:"avg_time_seconds"`
-	LastOutcome       sql.NullString `json:"last_outcome"`
-	RecentHistoryJson sql.NullString `json:"recent_history_json"`
-	UpdatedAt         sql.NullString `json:"updated_at"`
-	Title             string         `json:"title"`
-	Source            sql.NullString `json:"source"`
-	Url               sql.NullString `json:"url"`
-	Difficulty        sql.NullString `json:"difficulty"`
-	ProblemCreatedAt  sql.NullString `json:"problem_created_at"`
+	ID                int64           `json:"id"`
+	UserID            int64           `json:"user_id"`
+	ProblemID         int64           `json:"problem_id"`
+	Status            sql.NullString  `json:"status"`
+	Confidence        sql.NullInt64   `json:"confidence"`
+	AvgConfidence     sql.NullInt64   `json:"avg_confidence"`
+	LastAttemptAt     sql.NullString  `json:"last_attempt_at"`
+	TotalAttempts     sql.NullInt64   `json:"total_attempts"`
+	AvgTimeSeconds    sql.NullInt64   `json:"avg_time_seconds"`
+	LastOutcome       sql.NullString  `json:"last_outcome"`
+	RecentHistoryJson sql.NullString  `json:"recent_history_json"`
+	UpdatedAt         sql.NullString  `json:"updated_at"`
+	NextReviewAt      sql.NullString  `json:"next_review_at"`
+	IntervalDays      sql.NullInt64   `json:"interval_days"`
+	EaseFactor        sql.NullFloat64 `json:"ease_factor"`
+	ReviewCount       sql.NullInt64   `json:"review_count"`
+	Title             string          `json:"title"`
+	Source            sql.NullString  `json:"source"`
+	Url               sql.NullString  `json:"url"`
+	Difficulty        sql.NullString  `json:"difficulty"`
+	ProblemCreatedAt  sql.NullString  `json:"problem_created_at"`
 }
 
 func (q *Queries) GetUrgentProblems(ctx context.Context, arg GetUrgentProblemsParams) ([]GetUrgentProblemsRow, error) {
@@ -158,6 +277,10 @@ func (q *Queries) GetUrgentProblems(ctx context.Context, arg GetUrgentProblemsPa
 			&i.LastOutcome,
 			&i.RecentHistoryJson,
 			&i.UpdatedAt,
+			&i.NextReviewAt,
+			&i.IntervalDays,
+			&i.EaseFactor,
+			&i.ReviewCount,
 			&i.Title,
 			&i.Source,
 			&i.Url,
@@ -178,7 +301,7 @@ func (q *Queries) GetUrgentProblems(ctx context.Context, arg GetUrgentProblemsPa
 }
 
 const getUserProblemStats = `-- name: GetUserProblemStats :one
-SELECT id, user_id, problem_id, status, confidence, avg_confidence, last_attempt_at, total_attempts, avg_time_seconds, last_outcome, recent_history_json, updated_at FROM user_problem_stats
+SELECT id, user_id, problem_id, status, confidence, avg_confidence, last_attempt_at, total_attempts, avg_time_seconds, last_outcome, recent_history_json, updated_at, next_review_at, interval_days, ease_factor, review_count FROM user_problem_stats
 WHERE user_id = ? AND problem_id = ?
 LIMIT 1
 `
@@ -204,12 +327,16 @@ func (q *Queries) GetUserProblemStats(ctx context.Context, arg GetUserProblemSta
 		&i.LastOutcome,
 		&i.RecentHistoryJson,
 		&i.UpdatedAt,
+		&i.NextReviewAt,
+		&i.IntervalDays,
+		&i.EaseFactor,
+		&i.ReviewCount,
 	)
 	return i, err
 }
 
 const getUserProblemStatsWithProblem = `-- name: GetUserProblemStatsWithProblem :many
-SELECT ups.id, ups.user_id, ups.problem_id, ups.status, ups.confidence, ups.avg_confidence, ups.last_attempt_at, ups.total_attempts, ups.avg_time_seconds, ups.last_outcome, ups.recent_history_json, ups.updated_at, p.title, p.source, p.url, p.difficulty, p.created_at as problem_created_at
+SELECT ups.id, ups.user_id, ups.problem_id, ups.status, ups.confidence, ups.avg_confidence, ups.last_attempt_at, ups.total_attempts, ups.avg_time_seconds, ups.last_outcome, ups.recent_history_json, ups.updated_at, ups.next_review_at, ups.interval_days, ups.ease_factor, ups.review_count, p.title, p.source, p.url, p.difficulty, p.created_at as problem_created_at
 FROM user_problem_stats ups
 JOIN problems p ON ups.problem_id = p.id
 WHERE ups.user_id = ?
@@ -217,23 +344,27 @@ ORDER BY ups.updated_at DESC
 `
 
 type GetUserProblemStatsWithProblemRow struct {
-	ID                int64          `json:"id"`
-	UserID            int64          `json:"user_id"`
-	ProblemID         int64          `json:"problem_id"`
-	Status            sql.NullString `json:"status"`
-	Confidence        sql.NullInt64  `json:"confidence"`
-	AvgConfidence     sql.NullInt64  `json:"avg_confidence"`
-	LastAttemptAt     sql.NullString `json:"last_attempt_at"`
-	TotalAttempts     sql.NullInt64  `json:"total_attempts"`
-	AvgTimeSeconds    sql.NullInt64  `json:"avg_time_seconds"`
-	LastOutcome       sql.NullString `json:"last_outcome"`
-	RecentHistoryJson sql.NullString `json:"recent_history_json"`
-	UpdatedAt         sql.NullString `json:"updated_at"`
-	Title             string         `json:"title"`
-	Source            sql.NullString `json:"source"`
-	Url               sql.NullString `json:"url"`
-	Difficulty        sql.NullString `json:"difficulty"`
-	ProblemCreatedAt  sql.NullString `json:"problem_created_at"`
+	ID                int64           `json:"id"`
+	UserID            int64           `json:"user_id"`
+	ProblemID         int64           `json:"problem_id"`
+	Status            sql.NullString  `json:"status"`
+	Confidence        sql.NullInt64   `json:"confidence"`
+	AvgConfidence     sql.NullInt64   `json:"avg_confidence"`
+	LastAttemptAt     sql.NullString  `json:"last_attempt_at"`
+	TotalAttempts     sql.NullInt64   `json:"total_attempts"`
+	AvgTimeSeconds    sql.NullInt64   `json:"avg_time_seconds"`
+	LastOutcome       sql.NullString  `json:"last_outcome"`
+	RecentHistoryJson sql.NullString  `json:"recent_history_json"`
+	UpdatedAt         sql.NullString  `json:"updated_at"`
+	NextReviewAt      sql.NullString  `json:"next_review_at"`
+	IntervalDays      sql.NullInt64   `json:"interval_days"`
+	EaseFactor        sql.NullFloat64 `json:"ease_factor"`
+	ReviewCount       sql.NullInt64   `json:"review_count"`
+	Title             string          `json:"title"`
+	Source            sql.NullString  `json:"source"`
+	Url               sql.NullString  `json:"url"`
+	Difficulty        sql.NullString  `json:"difficulty"`
+	ProblemCreatedAt  sql.NullString  `json:"problem_created_at"`
 }
 
 func (q *Queries) GetUserProblemStatsWithProblem(ctx context.Context, userID int64) ([]GetUserProblemStatsWithProblemRow, error) {
@@ -258,6 +389,10 @@ func (q *Queries) GetUserProblemStatsWithProblem(ctx context.Context, userID int
 			&i.LastOutcome,
 			&i.RecentHistoryJson,
 			&i.UpdatedAt,
+			&i.NextReviewAt,
+			&i.IntervalDays,
+			&i.EaseFactor,
+			&i.ReviewCount,
 			&i.Title,
 			&i.Source,
 			&i.Url,
@@ -277,8 +412,53 @@ func (q *Queries) GetUserProblemStatsWithProblem(ctx context.Context, userID int
 	return items, nil
 }
 
+const listAllUserProblemStats = `-- name: ListAllUserProblemStats :many
+SELECT id, user_id, problem_id, status, confidence, avg_confidence, last_attempt_at, total_attempts, avg_time_seconds, last_outcome, recent_history_json, updated_at, next_review_at, interval_days, ease_factor, review_count FROM user_problem_stats
+ORDER BY user_id, problem_id
+`
+
+func (q *Queries) ListAllUserProblemStats(ctx context.Context) ([]UserProblemStat, error) {
+	rows, err := q.db.QueryContext(ctx, listAllUserProblemStats)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []UserProblemStat{}
+	for rows.Next() {
+		var i UserProblemStat
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.ProblemID,
+			&i.Status,
+			&i.Confidence,
+			&i.AvgConfidence,
+			&i.LastAttemptAt,
+			&i.TotalAttempts,
+			&i.AvgTimeSeconds,
+			&i.LastOutcome,
+			&i.RecentHistoryJson,
+			&i.UpdatedAt,
+			&i.NextReviewAt,
+			&i.IntervalDays,
+			&i.EaseFactor,
+			&i.ReviewCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listUserProblemStats = `-- name: ListUserProblemStats :many
-SELECT id, user_id, problem_id, status, confidence, avg_confidence, last_attempt_at, total_attempts, avg_time_seconds, last_outcome, recent_history_json, updated_at FROM user_problem_stats
+SELECT id, user_id, problem_id, status, confidence, avg_confidence, last_attempt_at, total_attempts, avg_time_seconds, last_outcome, recent_history_json, updated_at, next_review_at, interval_days, ease_factor, review_count FROM user_problem_stats
 WHERE user_id = ?
 ORDER BY updated_at DESC
 `
@@ -305,6 +485,10 @@ func (q *Queries) ListUserProblemStats(ctx context.Context, userID int64) ([]Use
 			&i.LastOutcome,
 			&i.RecentHistoryJson,
 			&i.UpdatedAt,
+			&i.NextReviewAt,
+			&i.IntervalDays,
+			&i.EaseFactor,
+			&i.ReviewCount,
 		); err != nil {
 			return nil, err
 		}
@@ -319,13 +503,42 @@ func (q *Queries) ListUserProblemStats(ctx context.Context, userID int64) ([]Use
 	return items, nil
 }
 
+const updateSpacedRepetition = `-- name: UpdateSpacedRepetition :exec
+UPDATE user_problem_stats
+SET next_review_at = ?,
+    interval_days = ?,
+    ease_factor = ?,
+    review_count = review_count + 1,
+    updated_at = CURRENT_TIMESTAMP
+WHERE user_id = ? AND problem_id = ?
+`
+
+type UpdateSpacedRepetitionParams struct {
+	NextReviewAt sql.NullString  `json:"next_review_at"`
+	IntervalDays sql.NullInt64   `json:"interval_days"`
+	EaseFactor   sql.NullFloat64 `json:"ease_factor"`
+	UserID       int64           `json:"user_id"`
+	ProblemID    int64           `json:"problem_id"`
+}
+
+func (q *Queries) UpdateSpacedRepetition(ctx context.Context, arg UpdateSpacedRepetitionParams) error {
+	_, err := q.db.ExecContext(ctx, updateSpacedRepetition,
+		arg.NextReviewAt,
+		arg.IntervalDays,
+		arg.EaseFactor,
+		arg.UserID,
+		arg.ProblemID,
+	)
+	return err
+}
+
 const updateUserProblemStats = `-- name: UpdateUserProblemStats :one
 UPDATE user_problem_stats
 SET status = ?, confidence = ?, avg_confidence = ?,
     last_attempt_at = ?, total_attempts = ?, avg_time_seconds = ?,
     last_outcome = ?, recent_history_json = ?
 WHERE user_id = ? AND problem_id = ?
-RETURNING id, user_id, problem_id, status, confidence, avg_confidence, last_attempt_at, total_attempts, avg_time_seconds, last_outcome, recent_history_json, updated_at
+RETURNING id, user_id, problem_id, status, confidence, avg_confidence, last_attempt_at, total_attempts, avg_time_seconds, last_outcome, recent_history_json, updated_at, next_review_at, interval_days, ease_factor, review_count
 `
 
 type UpdateUserProblemStatsParams struct {
@@ -368,6 +581,10 @@ func (q *Queries) UpdateUserProblemStats(ctx context.Context, arg UpdateUserProb
 		&i.LastOutcome,
 		&i.RecentHistoryJson,
 		&i.UpdatedAt,
+		&i.NextReviewAt,
+		&i.IntervalDays,
+		&i.EaseFactor,
+		&i.ReviewCount,
 	)
 	return i, err
 }
@@ -375,9 +592,10 @@ func (q *Queries) UpdateUserProblemStats(ctx context.Context, arg UpdateUserProb
 const upsertUserProblemStats = `-- name: UpsertUserProblemStats :one
 INSERT INTO user_problem_stats (
     user_id, problem_id, status, confidence, avg_confidence,
-    last_attempt_at, total_attempts, avg_time_seconds, last_outcome, recent_history_json
+    last_attempt_at, total_attempts, avg_time_seconds, last_outcome, recent_history_json,
+    next_review_at, interval_days, ease_factor, review_count
 )
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(user_id, problem_id) DO UPDATE SET
     status = excluded.status,
     confidence = excluded.confidence,
@@ -386,21 +604,29 @@ ON CONFLICT(user_id, problem_id) DO UPDATE SET
     total_attempts = excluded.total_attempts,
     avg_time_seconds = excluded.avg_time_seconds,
     last_outcome = excluded.last_outcome,
-    recent_history_json = excluded.recent_history_json
-RETURNING id, user_id, problem_id, status, confidence, avg_confidence, last_attempt_at, total_attempts, avg_time_seconds, last_outcome, recent_history_json, updated_at
+    recent_history_json = excluded.recent_history_json,
+    next_review_at = excluded.next_review_at,
+    interval_days = excluded.interval_days,
+    ease_factor = excluded.ease_factor,
+    review_count = excluded.review_count
+RETURNING id, user_id, problem_id, status, confidence, avg_confidence, last_attempt_at, total_attempts, avg_time_seconds, last_outcome, recent_history_json, updated_at, next_review_at, interval_days, ease_factor, review_count
 `
 
 type UpsertUserProblemStatsParams struct {
-	UserID            int64          `json:"user_id"`
-	ProblemID         int64          `json:"problem_id"`
-	Status            sql.NullString `json:"status"`
-	Confidence        sql.NullInt64  `json:"confidence"`
-	AvgConfidence     sql.NullInt64  `json:"avg_confidence"`
-	LastAttemptAt     sql.NullString `json:"last_attempt_at"`
-	TotalAttempts     sql.NullInt64  `json:"total_attempts"`
-	AvgTimeSeconds    sql.NullInt64  `json:"avg_time_seconds"`
-	LastOutcome       sql.NullString `json:"last_outcome"`
-	RecentHistoryJson sql.NullString `json:"recent_history_json"`
+	UserID            int64           `json:"user_id"`
+	ProblemID         int64           `json:"problem_id"`
+	Status            sql.NullString  `json:"status"`
+	Confidence        sql.NullInt64   `json:"confidence"`
+	AvgConfidence     sql.NullInt64   `json:"avg_confidence"`
+	LastAttemptAt     sql.NullString  `json:"last_attempt_at"`
+	TotalAttempts     sql.NullInt64   `json:"total_attempts"`
+	AvgTimeSeconds    sql.NullInt64   `json:"avg_time_seconds"`
+	LastOutcome       sql.NullString  `json:"last_outcome"`
+	RecentHistoryJson sql.NullString  `json:"recent_history_json"`
+	NextReviewAt      sql.NullString  `json:"next_review_at"`
+	IntervalDays      sql.NullInt64   `json:"interval_days"`
+	EaseFactor        sql.NullFloat64 `json:"ease_factor"`
+	ReviewCount       sql.NullInt64   `json:"review_count"`
 }
 
 func (q *Queries) UpsertUserProblemStats(ctx context.Context, arg UpsertUserProblemStatsParams) (UserProblemStat, error) {
@@ -415,6 +641,10 @@ func (q *Queries) UpsertUserProblemStats(ctx context.Context, arg UpsertUserProb
 		arg.AvgTimeSeconds,
 		arg.LastOutcome,
 		arg.RecentHistoryJson,
+		arg.NextReviewAt,
+		arg.IntervalDays,
+		arg.EaseFactor,
+		arg.ReviewCount,
 	)
 	var i UserProblemStat
 	err := row.Scan(
@@ -430,6 +660,10 @@ func (q *Queries) UpsertUserProblemStats(ctx context.Context, arg UpsertUserProb
 		&i.LastOutcome,
 		&i.RecentHistoryJson,
 		&i.UpdatedAt,
+		&i.NextReviewAt,
+		&i.IntervalDays,
+		&i.EaseFactor,
+		&i.ReviewCount,
 	)
 	return i, err
 }

@@ -50,7 +50,7 @@ func (app *application) mount() http.Handler {
 	problemService := problems.NewService(repoInstance, scoringService)
 	patternService := patterns.NewService(repoInstance)
 	sessionService := sessions.NewService(repoInstance, scoringService)
-	attemptService := attempts.NewService(repoInstance)
+	attemptService := attempts.NewService(repoInstance, scoringService)
 	dashboardService := dashboard.NewService(repoInstance)
 
 	// Create default weights from config

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	repo "github.com/vasujain275/reforge/internal/adapters/sqlite/sqlc"
+	"github.com/vasujain275/reforge/internal/scoring"
 )
 
 type Service interface {
@@ -25,12 +26,14 @@ type Service interface {
 }
 
 type attemptService struct {
-	repo repo.Querier
+	repo           repo.Querier
+	scoringService scoring.Service
 }
 
-func NewService(repo repo.Querier) Service {
+func NewService(repo repo.Querier, scoringService scoring.Service) Service {
 	return &attemptService{
-		repo: repo,
+		repo:           repo,
+		scoringService: scoringService,
 	}
 }
 
@@ -198,7 +201,41 @@ func (s *attemptService) updateUserProblemStats(ctx context.Context, userID int6
 	}
 	recentHistoryJSON, _ := json.Marshal(recentHistory)
 
-	// Upsert stats
+	// Get existing stats for spaced repetition data
+	existingStats, err := s.repo.GetUserProblemStats(ctx, repo.GetUserProblemStatsParams{
+		UserID:    userID,
+		ProblemID: problemID,
+	})
+
+	// Default spaced repetition values for new problems
+	var currentInterval int
+	var easeFactor float64
+	var reviewCount int
+
+	if err == nil {
+		// Use existing values
+		currentInterval = int(existingStats.IntervalDays.Int64)
+		easeFactor = existingStats.EaseFactor.Float64
+		reviewCount = int(existingStats.ReviewCount.Int64)
+	} else {
+		// New problem defaults
+		currentInterval = 0
+		easeFactor = 2.5 // SM-2 default
+		reviewCount = 0
+	}
+
+	// Calculate next review using SM-2 algorithm
+	newInterval, newEaseFactor, nextReviewDate := s.scoringService.CalculateNextReview(
+		lastOutcome,
+		int(latestConfidence),
+		currentInterval,
+		easeFactor,
+		reviewCount,
+	)
+
+	nextReviewStr := nextReviewDate.Format(time.RFC3339)
+
+	// Upsert stats with spaced repetition data
 	_, err = s.repo.UpsertUserProblemStats(ctx, repo.UpsertUserProblemStatsParams{
 		UserID:            userID,
 		ProblemID:         problemID,
@@ -210,6 +247,10 @@ func (s *attemptService) updateUserProblemStats(ctx context.Context, userID int6
 		AvgTimeSeconds:    sqlNullInt64(avgTimeSeconds),
 		LastOutcome:       sqlNullString(&lastOutcome),
 		RecentHistoryJson: sqlNullString(strPtr(string(recentHistoryJSON))),
+		NextReviewAt:      sqlNullString(&nextReviewStr),
+		IntervalDays:      sqlNullInt64(int64Ptr(int64(newInterval))),
+		EaseFactor:        sql.NullFloat64{Float64: newEaseFactor, Valid: true},
+		ReviewCount:       sqlNullInt64(int64Ptr(int64(reviewCount + 1))),
 	})
 
 	return err

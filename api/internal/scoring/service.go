@@ -42,7 +42,10 @@ type FeatureBreakdown struct {
 type Service interface {
 	GetWeights(ctx context.Context) (*ScoringWeights, error)
 	ComputeScore(ctx context.Context, userID int64, problemID int64) (*ProblemScore, error)
+	ComputeScoreWithEmphasis(ctx context.Context, userID int64, problemID int64, emphasis string) (*ProblemScore, error)
 	ComputeScoresForUser(ctx context.Context, userID int64) ([]ProblemScore, error)
+	ComputeScoresForUserWithEmphasis(ctx context.Context, userID int64, emphasis string) ([]ProblemScore, error)
+	CalculateNextReview(outcome string, confidence int, currentInterval int, easeFactor float64, reviewCount int) (int, float64, time.Time)
 }
 
 type scoringService struct {
@@ -94,12 +97,62 @@ func (s *scoringService) GetWeights(ctx context.Context) (*ScoringWeights, error
 	return weights, nil
 }
 
+// ApplyEmphasis modifies weights based on scoring emphasis and renormalizes
+func (s *scoringService) applyEmphasis(weights *ScoringWeights, emphasis string) *ScoringWeights {
+	// Copy weights to avoid modifying original
+	w := &ScoringWeights{
+		WConf:       weights.WConf,
+		WDays:       weights.WDays,
+		WAttempts:   weights.WAttempts,
+		WTime:       weights.WTime,
+		WDifficulty: weights.WDifficulty,
+		WFailed:     weights.WFailed,
+		WPattern:    weights.WPattern,
+	}
+
+	// Apply emphasis multipliers
+	switch emphasis {
+	case "confidence":
+		w.WConf *= 2.0
+	case "failure":
+		w.WFailed *= 2.0
+	case "time":
+		w.WTime *= 3.0
+	case "standard":
+		// No modification
+		return w
+	default:
+		return w
+	}
+
+	// Renormalize weights to sum to 1.0
+	total := w.WConf + w.WDays + w.WAttempts + w.WTime + w.WDifficulty + w.WFailed + w.WPattern
+	if total > 0 {
+		w.WConf /= total
+		w.WDays /= total
+		w.WAttempts /= total
+		w.WTime /= total
+		w.WDifficulty /= total
+		w.WFailed /= total
+		w.WPattern /= total
+	}
+
+	return w
+}
+
 func (s *scoringService) ComputeScore(ctx context.Context, userID int64, problemID int64) (*ProblemScore, error) {
+	return s.ComputeScoreWithEmphasis(ctx, userID, problemID, "standard")
+}
+
+func (s *scoringService) ComputeScoreWithEmphasis(ctx context.Context, userID int64, problemID int64, emphasis string) (*ProblemScore, error) {
 	// Get weights
 	weights, err := s.GetWeights(ctx)
 	if err != nil {
 		return nil, err
 	}
+
+	// Apply emphasis
+	weights = s.applyEmphasis(weights, emphasis)
 
 	// Get user problem stats
 	stats, err := s.repo.GetUserProblemStats(ctx, repo.GetUserProblemStatsParams{
@@ -122,8 +175,11 @@ func (s *scoringService) ComputeScore(ctx context.Context, userID int64, problem
 		patterns = []repo.Pattern{}
 	}
 
+	// Get pattern stats in bulk to avoid N+1 queries
+	patternStatsMap := s.getPatternStatsMap(ctx, userID)
+
 	// Compute features
-	features := s.computeFeatures(stats, problem, patterns, userID, ctx)
+	features := s.computeFeatures(stats, problem, patterns, patternStatsMap)
 
 	// Compute final score
 	score := weights.WConf*features.FConf +
@@ -146,11 +202,25 @@ func (s *scoringService) ComputeScore(ctx context.Context, userID int64, problem
 }
 
 func (s *scoringService) ComputeScoresForUser(ctx context.Context, userID int64) ([]ProblemScore, error) {
+	return s.ComputeScoresForUserWithEmphasis(ctx, userID, "standard")
+}
+
+func (s *scoringService) ComputeScoresForUserWithEmphasis(ctx context.Context, userID int64, emphasis string) ([]ProblemScore, error) {
 	// Get all user problem stats
 	statsList, err := s.repo.ListUserProblemStats(ctx, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list user problem stats: %w", err)
 	}
+
+	// Get weights once for all problems
+	weights, err := s.GetWeights(ctx)
+	if err != nil {
+		return nil, err
+	}
+	weights = s.applyEmphasis(weights, emphasis)
+
+	// Get all pattern stats for user upfront (fix N+1 query)
+	patternStatsMap := s.getPatternStatsMap(ctx, userID)
 
 	scores := make([]ProblemScore, 0, len(statsList))
 	for _, stats := range statsList {
@@ -159,36 +229,149 @@ func (s *scoringService) ComputeScoresForUser(ctx context.Context, userID int64)
 			continue
 		}
 
-		score, err := s.ComputeScore(ctx, userID, stats.ProblemID)
+		// Get problem details
+		problem, err := s.repo.GetProblem(ctx, stats.ProblemID)
 		if err != nil {
-			// Log error but continue
-			fmt.Printf("Warning: failed to compute score for problem %d: %v\n", stats.ProblemID, err)
+			fmt.Printf("Warning: failed to get problem %d: %v\n", stats.ProblemID, err)
 			continue
 		}
 
-		scores = append(scores, *score)
+		// Get patterns for this problem
+		patterns, err := s.repo.GetPatternsForProblem(ctx, stats.ProblemID)
+		if err != nil {
+			patterns = []repo.Pattern{}
+		}
+
+		// Compute features using cached pattern stats
+		features := s.computeFeatures(stats, problem, patterns, patternStatsMap)
+
+		// Compute final score
+		score := weights.WConf*features.FConf +
+			weights.WDays*features.FDays +
+			weights.WAttempts*features.FAttempts +
+			weights.WTime*features.FTime +
+			weights.WDifficulty*features.FDifficulty +
+			weights.WFailed*features.FFailed +
+			weights.WPattern*features.FPattern
+
+		// Build reason string
+		reason := s.buildReason(features, weights, stats)
+
+		scores = append(scores, ProblemScore{
+			ProblemID: stats.ProblemID,
+			Score:     score,
+			Features:  features,
+			Reason:    reason,
+		})
 	}
 
 	return scores, nil
+}
+
+// getPatternStatsMap fetches all pattern stats for a user and returns a map
+// This fixes the N+1 query problem when computing scores for many problems
+func (s *scoringService) getPatternStatsMap(ctx context.Context, userID int64) map[int64]repo.UserPatternStat {
+	patternStats, err := s.repo.ListUserPatternStats(ctx, userID)
+	if err != nil {
+		return make(map[int64]repo.UserPatternStat)
+	}
+
+	statsMap := make(map[int64]repo.UserPatternStat, len(patternStats))
+	for _, ps := range patternStats {
+		statsMap[ps.PatternID] = ps
+	}
+	return statsMap
 }
 
 func (s *scoringService) computeFeatures(
 	stats repo.UserProblemStat,
 	problem repo.Problem,
 	patterns []repo.Pattern,
-	userID int64,
-	ctx context.Context,
+	patternStatsMap map[int64]repo.UserPatternStat,
 ) FeatureBreakdown {
 	features := FeatureBreakdown{}
 
 	// 1. f_conf - confidence urgency
+	// Lower confidence = higher urgency for revision
 	confidence := float64(50) // default
 	if stats.Confidence.Valid {
 		confidence = float64(stats.Confidence.Int64)
 	}
 	features.FConf = (100.0 - confidence) / 100.0
 
-	// 2. f_days - age urgency with dynamic mastery multiplier
+	// 2. f_days - SM-2 based due date urgency
+	// Uses next_review_at if available, otherwise falls back to legacy calculation
+	features.FDays = s.calculateDaysUrgency(stats)
+
+	// 3. f_attempts - INVERTED: fewer attempts = higher priority for building familiarity
+	// This encourages practicing newer/less-practiced problems
+	const attemptCap = 10.0
+	totalAttempts := int64(0)
+	if stats.TotalAttempts.Valid {
+		totalAttempts = stats.TotalAttempts.Int64
+	}
+	// Invert: more attempts = lower score, fewer attempts = higher score
+	features.FAttempts = 1.0 - (math.Min(float64(totalAttempts), attemptCap) / attemptCap)
+
+	// 4. f_time - time-based complexity
+	if stats.AvgTimeSeconds.Valid && stats.AvgTimeSeconds.Int64 > 0 {
+		const timeCap = 3600.0 // 1 hour
+		features.FTime = math.Min(float64(stats.AvgTimeSeconds.Int64), timeCap) / timeCap
+	} else {
+		features.FTime = 0.0
+	}
+
+	// 5. f_difficulty - difficulty indicator
+	difficulty := "medium"
+	if problem.Difficulty.Valid {
+		difficulty = problem.Difficulty.String
+	}
+	switch difficulty {
+	case "easy":
+		features.FDifficulty = 0.20
+	case "medium":
+		features.FDifficulty = 0.50
+	case "hard":
+		features.FDifficulty = 1.00
+	default:
+		features.FDifficulty = 0.50
+	}
+
+	// 6. f_failed - last outcome failure flag WITH TIME DECAY
+	// Failed recently = high urgency, failed long ago = lower urgency
+	features.FFailed = s.calculateFailedUrgency(stats)
+
+	// 7. f_pattern - pattern weakness (aggregated) using cached stats
+	features.FPattern = s.calculatePatternWeakness(patterns, patternStatsMap)
+
+	return features
+}
+
+// calculateDaysUrgency computes f_days using SM-2 due dates when available
+func (s *scoringService) calculateDaysUrgency(stats repo.UserProblemStat) float64 {
+	// Use SM-2 next_review_at if available
+	if stats.NextReviewAt.Valid && stats.NextReviewAt.String != "" {
+		dueDate, err := time.Parse(time.RFC3339, stats.NextReviewAt.String)
+		if err == nil {
+			daysOverdue := time.Since(dueDate).Hours() / 24.0
+
+			if daysOverdue > 0 {
+				// Overdue: urgency increases exponentially
+				// 7 days overdue = ~0.86, 14 days = ~0.95, 30 days = ~0.99
+				return math.Min(1.0, 0.5+0.5*(1-math.Exp(-daysOverdue/7.0)))
+			}
+			// Not due yet: low urgency that increases as due date approaches
+			// -30 days = ~0.0, -7 days = ~0.23, 0 days = 0.5
+			return math.Max(0.0, 0.5*(1.0+daysOverdue/30.0))
+		}
+	}
+
+	// Fallback: legacy calculation based on last_attempt_at
+	return s.calculateLegacyDaysUrgency(stats)
+}
+
+// calculateLegacyDaysUrgency is the original f_days calculation for backward compatibility
+func (s *scoringService) calculateLegacyDaysUrgency(stats repo.UserProblemStat) float64 {
 	daysSinceLast := 365.0 // default for never attempted
 	if stats.LastAttemptAt.Valid {
 		lastAttempt, err := time.Parse(time.RFC3339, stats.LastAttemptAt.String)
@@ -215,64 +398,105 @@ func (s *scoringService) computeFeatures(
 	}
 
 	dynamicDaysCap := 90.0 * masteryMultiplier
-	features.FDays = math.Min(daysSinceLast, dynamicDaysCap) / dynamicDaysCap
+	return math.Min(daysSinceLast, dynamicDaysCap) / dynamicDaysCap
+}
 
-	// 3. f_attempts - attempt-based signal
-	const attemptCap = 10.0
-	features.FAttempts = math.Min(float64(totalAttempts), attemptCap) / attemptCap
-
-	// 4. f_time - time-based complexity
-	if stats.AvgTimeSeconds.Valid && stats.AvgTimeSeconds.Int64 > 0 {
-		const timeCap = 3600.0 // 1 hour
-		features.FTime = math.Min(float64(stats.AvgTimeSeconds.Int64), timeCap) / timeCap
-	} else {
-		features.FTime = 0.0
+// calculateFailedUrgency computes f_failed with time decay
+// Recent failures have high urgency, old failures decay over 30 days
+func (s *scoringService) calculateFailedUrgency(stats repo.UserProblemStat) float64 {
+	if !stats.LastOutcome.Valid || stats.LastOutcome.String != "failed" {
+		return 0.0
 	}
 
-	// 5. f_difficulty - difficulty indicator
-	difficulty := "medium"
-	if problem.Difficulty.Valid {
-		difficulty = problem.Difficulty.String
-	}
-	switch difficulty {
-	case "easy":
-		features.FDifficulty = 0.20
-	case "medium":
-		features.FDifficulty = 0.50
-	case "hard":
-		features.FDifficulty = 1.00
-	default:
-		features.FDifficulty = 0.50
-	}
-
-	// 6. f_failed - last outcome failure flag
-	if stats.LastOutcome.Valid && stats.LastOutcome.String == "failed" {
-		features.FFailed = 1.0
-	} else {
-		features.FFailed = 0.0
-	}
-
-	// 7. f_pattern - pattern weakness (aggregated)
-	if len(patterns) > 0 {
-		totalWeakness := 0.0
-		for _, pattern := range patterns {
-			patternStats, err := s.repo.GetUserPatternStats(ctx, repo.GetUserPatternStatsParams{
-				UserID:    userID,
-				PatternID: pattern.ID,
-			})
-			if err == nil && patternStats.AvgConfidence.Valid {
-				patternWeakness := 1.0 - (float64(patternStats.AvgConfidence.Int64) / 100.0)
-				totalWeakness += patternWeakness
-			} else {
-				totalWeakness += 0.5 // fallback
-			}
+	// If we have a timestamp, apply exponential decay
+	if stats.LastAttemptAt.Valid {
+		lastAttempt, err := time.Parse(time.RFC3339, stats.LastAttemptAt.String)
+		if err == nil {
+			daysSinceFailure := time.Since(lastAttempt).Hours() / 24.0
+			// Exponential decay: half-life of ~20 days
+			// 0 days = 1.0, 20 days = 0.5, 40 days = 0.25
+			return math.Exp(-daysSinceFailure / 30.0)
 		}
-		features.FPattern = totalWeakness / float64(len(patterns))
-	} else {
-		features.FPattern = 0.5 // fallback
 	}
 
-	return features
+	// No timestamp, assume recent failure
+	return 1.0
+}
+
+// calculatePatternWeakness computes f_pattern using pre-fetched pattern stats
+func (s *scoringService) calculatePatternWeakness(patterns []repo.Pattern, patternStatsMap map[int64]repo.UserPatternStat) float64 {
+	if len(patterns) == 0 {
+		return 0.5 // fallback for problems without patterns
+	}
+
+	totalWeakness := 0.0
+	for _, pattern := range patterns {
+		if ps, exists := patternStatsMap[pattern.ID]; exists && ps.AvgConfidence.Valid {
+			patternWeakness := 1.0 - (float64(ps.AvgConfidence.Int64) / 100.0)
+			totalWeakness += patternWeakness
+		} else {
+			totalWeakness += 0.5 // fallback for missing pattern stats
+		}
+	}
+	return totalWeakness / float64(len(patterns))
+}
+
+// CalculateNextReview implements SM-2 algorithm for spaced repetition scheduling
+// Returns: new interval (days), new ease factor, next review date
+func (s *scoringService) CalculateNextReview(outcome string, confidence int, currentInterval int, easeFactor float64, reviewCount int) (int, float64, time.Time) {
+	// Map confidence (0-100) to SM-2 quality rating (0-5)
+	// confidence >= 80 -> quality 5 (perfect)
+	// confidence >= 60 -> quality 4 (correct with hesitation)
+	// confidence >= 40 -> quality 3 (correct with difficulty)
+	// confidence >= 20 -> quality 2 (incorrect, but remembered)
+	// confidence < 20  -> quality 1 (wrong, barely remembered)
+	// outcome = failed -> quality 0 (complete blackout)
+	var quality float64
+	if outcome == "failed" {
+		quality = 0
+	} else {
+		switch {
+		case confidence >= 80:
+			quality = 5
+		case confidence >= 60:
+			quality = 4
+		case confidence >= 40:
+			quality = 3
+		case confidence >= 20:
+			quality = 2
+		default:
+			quality = 1
+		}
+	}
+
+	var newInterval int
+	var newEaseFactor float64
+
+	if quality >= 3 {
+		// Correct response - increase interval
+		if reviewCount == 0 {
+			newInterval = 1
+		} else if reviewCount == 1 {
+			newInterval = 6
+		} else {
+			newInterval = int(math.Round(float64(currentInterval) * easeFactor))
+		}
+
+		// Update ease factor using SM-2 formula
+		newEaseFactor = easeFactor + (0.1 - (5-quality)*(0.08+(5-quality)*0.02))
+		if newEaseFactor < 1.3 {
+			newEaseFactor = 1.3
+		}
+	} else {
+		// Incorrect response - reset interval
+		newInterval = 1
+		newEaseFactor = math.Max(1.3, easeFactor-0.2)
+	}
+
+	// Calculate next review date
+	nextReview := time.Now().AddDate(0, 0, newInterval)
+
+	return newInterval, newEaseFactor, nextReview
 }
 
 func (s *scoringService) buildReason(features FeatureBreakdown, weights *ScoringWeights, stats repo.UserProblemStat) string {
@@ -284,11 +508,11 @@ func (s *scoringService) buildReason(features FeatureBreakdown, weights *Scoring
 
 	contributions := []contribution{
 		{"Low confidence", weights.WConf * features.FConf},
-		{"Time since last attempt", weights.WDays * features.FDays},
-		{"Multiple attempts", weights.WAttempts * features.FAttempts},
+		{"Due for review", weights.WDays * features.FDays},
+		{"Needs more practice", weights.WAttempts * features.FAttempts},
 		{"Long solve time", weights.WTime * features.FTime},
 		{"High difficulty", weights.WDifficulty * features.FDifficulty},
-		{"Failed last attempt", weights.WFailed * features.FFailed},
+		{"Failed recently", weights.WFailed * features.FFailed},
 		{"Weak pattern", weights.WPattern * features.FPattern},
 	}
 
@@ -314,14 +538,32 @@ func (s *scoringService) buildReason(features FeatureBreakdown, weights *Scoring
 			switch c.name {
 			case "Low confidence":
 				if stats.Confidence.Valid {
-					reason += fmt.Sprintf("Low confidence (%d%%)", stats.Confidence.Int64)
+					reason += fmt.Sprintf("confidence %d%%", stats.Confidence.Int64)
+				} else {
+					reason += "low confidence"
 				}
-			case "Failed last attempt":
-				if features.FFailed > 0 {
-					reason += "failed last"
+			case "Failed recently":
+				if features.FFailed > 0.5 {
+					reason += "failed recently"
+				} else if features.FFailed > 0 {
+					reason += "failed before"
 				}
-			case "Time since last attempt":
-				if stats.LastAttemptAt.Valid {
+			case "Due for review":
+				if stats.NextReviewAt.Valid {
+					dueDate, err := time.Parse(time.RFC3339, stats.NextReviewAt.String)
+					if err == nil {
+						daysOverdue := int(time.Since(dueDate).Hours() / 24)
+						if daysOverdue > 0 {
+							reason += fmt.Sprintf("%d days overdue", daysOverdue)
+						} else if daysOverdue == 0 {
+							reason += "due today"
+						} else {
+							reason += fmt.Sprintf("due in %d days", -daysOverdue)
+						}
+					} else {
+						reason += "due for review"
+					}
+				} else if stats.LastAttemptAt.Valid {
 					lastAttempt, err := time.Parse(time.RFC3339, stats.LastAttemptAt.String)
 					if err == nil {
 						days := int(time.Since(lastAttempt).Hours() / 24)
@@ -329,6 +571,12 @@ func (s *scoringService) buildReason(features FeatureBreakdown, weights *Scoring
 					}
 				} else {
 					reason += "never attempted"
+				}
+			case "Needs more practice":
+				if stats.TotalAttempts.Valid && stats.TotalAttempts.Int64 < 3 {
+					reason += fmt.Sprintf("only %d attempts", stats.TotalAttempts.Int64)
+				} else {
+					reason += "needs practice"
 				}
 			default:
 				reason += c.name

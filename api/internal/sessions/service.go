@@ -598,7 +598,7 @@ func (s *sessionService) applyDifficultyDistributionSmart(
 	return result
 }
 
-// greedySelectProblems performs greedy selection with soft pattern constraints
+// greedySelectProblems performs greedy selection with pattern diversity and minimum problem enforcement
 func (s *sessionService) greedySelectProblems(
 	candidates []candidateProblem,
 	template TemplateConfig,
@@ -607,15 +607,20 @@ func (s *sessionService) greedySelectProblems(
 	problems := make([]SessionProblem, 0)
 	totalMinutes := int64(0)
 	patternCounts := make(map[int64]int)
+	uniquePatterns := make(map[int64]bool)
 	quickWinCount := 0
+	usedCandidateIdx := make(map[int]bool)
 
-	// First pass: respect pattern constraints
-	for _, candidate := range candidates {
+	minProblems := template.MinProblems
+	minDifferentPatterns := template.MinDifferentPatterns
+
+	// First pass: respect time budget and pattern constraints
+	for i, candidate := range candidates {
 		if totalMinutes+int64(candidate.estimatedMin) > durationMin {
-			break
+			continue // Don't break - we might find smaller problems that fit
 		}
 
-		// Check pattern constraints (soft - skip if exceeded)
+		// Check MaxSamePattern constraint (soft - skip if exceeded)
 		skipDueToPattern := false
 		if template.MaxSamePattern > 0 {
 			for _, pattern := range candidate.patterns {
@@ -631,6 +636,7 @@ func (s *sessionService) greedySelectProblems(
 
 		problems = append(problems, s.candidateToSessionProblem(candidate))
 		totalMinutes += int64(candidate.estimatedMin)
+		usedCandidateIdx[i] = true
 
 		if candidate.estimatedMin <= 15 {
 			quickWinCount++
@@ -638,23 +644,95 @@ func (s *sessionService) greedySelectProblems(
 
 		for _, pattern := range candidate.patterns {
 			patternCounts[pattern.ID]++
+			uniquePatterns[pattern.ID] = true
 		}
 	}
 
-	// If we got no problems due to pattern constraints, do a second pass ignoring them
-	if len(problems) == 0 {
-		totalMinutes = 0
-		for _, candidate := range candidates {
-			if totalMinutes+int64(candidate.estimatedMin) > durationMin {
-				break
+	// Second pass: Enforce MinDifferentPatterns by adding problems with new patterns
+	// Allow slight time budget overflow to meet diversity requirements
+	if minDifferentPatterns > 0 && len(uniquePatterns) < minDifferentPatterns {
+		for i, candidate := range candidates {
+			if usedCandidateIdx[i] {
+				continue
+			}
+
+			// Check if this candidate brings a new pattern
+			bringsNewPattern := false
+			for _, pattern := range candidate.patterns {
+				if !uniquePatterns[pattern.ID] {
+					bringsNewPattern = true
+					break
+				}
+			}
+
+			if !bringsNewPattern {
+				continue
+			}
+
+			// Allow up to 25% time overflow for diversity
+			maxOverflow := int64(float64(durationMin) * 0.25)
+			if totalMinutes+int64(candidate.estimatedMin) > durationMin+maxOverflow {
+				continue
 			}
 
 			problems = append(problems, s.candidateToSessionProblem(candidate))
 			totalMinutes += int64(candidate.estimatedMin)
+			usedCandidateIdx[i] = true
 
 			if candidate.estimatedMin <= 15 {
 				quickWinCount++
 			}
+
+			for _, pattern := range candidate.patterns {
+				patternCounts[pattern.ID]++
+				uniquePatterns[pattern.ID] = true
+			}
+
+			if len(uniquePatterns) >= minDifferentPatterns {
+				break
+			}
+		}
+	}
+
+	// Third pass: Enforce MinProblems if we don't have enough
+	// Allow time budget overflow to meet minimum problem count
+	if minProblems > 0 && len(problems) < minProblems {
+		for i, candidate := range candidates {
+			if usedCandidateIdx[i] {
+				continue
+			}
+
+			if len(problems) >= minProblems {
+				break
+			}
+
+			// Allow up to 50% time overflow for minimum problem count
+			maxOverflow := int64(float64(durationMin) * 0.50)
+			if totalMinutes+int64(candidate.estimatedMin) > durationMin+maxOverflow {
+				continue
+			}
+
+			problems = append(problems, s.candidateToSessionProblem(candidate))
+			totalMinutes += int64(candidate.estimatedMin)
+			usedCandidateIdx[i] = true
+
+			if candidate.estimatedMin <= 15 {
+				quickWinCount++
+			}
+
+			for _, pattern := range candidate.patterns {
+				patternCounts[pattern.ID]++
+				uniquePatterns[pattern.ID] = true
+			}
+		}
+	}
+
+	// Final fallback: If we still have 0 problems, ignore all constraints
+	if len(problems) == 0 && len(candidates) > 0 {
+		candidate := candidates[0]
+		problems = append(problems, s.candidateToSessionProblem(candidate))
+		if candidate.estimatedMin <= 15 {
+			quickWinCount++
 		}
 	}
 
@@ -663,6 +741,9 @@ func (s *sessionService) greedySelectProblems(
 
 // candidateToSessionProblem converts a candidate to a SessionProblem
 func (s *sessionService) candidateToSessionProblem(candidate candidateProblem) SessionProblem {
+	// Calculate priority based on spaced repetition data
+	priority, daysUntilDue := s.calculatePriority(candidate.stats)
+
 	return SessionProblem{
 		ID:            candidate.problem.ID,
 		Title:         candidate.problem.Title,
@@ -677,7 +758,47 @@ func (s *sessionService) candidateToSessionProblem(candidate candidateProblem) S
 		CreatedAt:     candidate.problem.CreatedAt.String,
 		Completed:     false,
 		Outcome:       nil,
+		Priority:      priority,
+		DaysUntilDue:  daysUntilDue,
 	}
+}
+
+// calculatePriority determines problem priority based on spaced repetition data
+// Returns priority status and days until due (negative = overdue)
+func (s *sessionService) calculatePriority(stats repo.UserProblemStat) (string, *int) {
+	// If never reviewed, it's a new problem
+	if !stats.NextReviewAt.Valid || stats.NextReviewAt.String == "" {
+		return "new", nil
+	}
+
+	// Parse next review date
+	nextReview, err := time.Parse(time.RFC3339, stats.NextReviewAt.String)
+	if err != nil {
+		// Try parsing as date only
+		nextReview, err = time.Parse("2006-01-02", stats.NextReviewAt.String)
+		if err != nil {
+			return "new", nil
+		}
+	}
+
+	now := time.Now()
+	daysUntil := int(nextReview.Sub(now).Hours() / 24)
+
+	// Priority thresholds:
+	// overdue: daysUntil < 0
+	// due_soon: daysUntil 0-2 (due today, tomorrow, or day after)
+	// on_track: daysUntil > 2
+	var priority string
+	switch {
+	case daysUntil < 0:
+		priority = "overdue"
+	case daysUntil <= 2:
+		priority = "due_soon"
+	default:
+		priority = "on_track"
+	}
+
+	return priority, &daysUntil
 }
 
 // buildFallbackSession creates a session with minimal filtering - last resort
@@ -943,11 +1064,11 @@ func strPtr(s string) *string {
 func getEstimatedTime(difficulty string) int {
 	switch difficulty {
 	case "easy":
-		return 12
+		return 15
 	case "medium":
 		return 25
 	case "hard":
-		return 45
+		return 35
 	default:
 		return 25
 	}

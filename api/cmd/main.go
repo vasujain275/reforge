@@ -24,7 +24,7 @@ func main() {
 	}
 
 	cfg := config{
-		addr: env.GetString("ADDR", ":9173"),
+		addr: env.GetString("ADDR", "0.0.0.0:9173"),
 		env:  env.GetString("ENV", "dev"),
 		db: dbConfig{
 			dsn: env.GetString(

@@ -15,16 +15,18 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
+import { Slider } from "@/components/ui/slider";
 import { api } from "@/lib/api";
 import type {
   TemplateInfo,
   GenerateSessionResponse,
   Pattern,
 } from "@/types";
-import { ArrowLeft, Loader2, Play, Terminal, Activity } from "lucide-react";
+import { ArrowLeft, Loader2, Play, Terminal, Activity, Clock } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { TemplateGallery } from "@/components/sessions/TemplateGallery";
+import { PriorityBadge } from "@/components/sessions/PriorityBadge";
 import { motion, AnimatePresence } from "framer-motion";
 
 export default function NewSessionPage() {
@@ -36,10 +38,14 @@ export default function NewSessionPage() {
   const [selectedPatternId, setSelectedPatternId] = useState<number | null>(
     null
   );
+  const [customDuration, setCustomDuration] = useState<number | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedSession, setGeneratedSession] =
     useState<GenerateSessionResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Duration presets (in minutes)
+  const DURATION_PRESETS = [30, 45, 60, 90, 120];
 
   // Pattern-specific templates that need pattern selection
   const PATTERN_TEMPLATES = [
@@ -90,6 +96,7 @@ export default function NewSessionPage() {
   const handleTemplateSelect = (templateKey: string) => {
     setSelectedTemplateKey(templateKey);
     setSelectedPatternId(null);
+    setCustomDuration(null); // Reset to template default
     setGeneratedSession(null);
     setError(null);
   };
@@ -104,9 +111,14 @@ export default function NewSessionPage() {
     setIsGenerating(true);
     setError(null);
     try {
-      const params: { template_key: string; pattern_id?: number } = { template_key: selectedTemplateKey };
+      const params: { template_key: string; pattern_id?: number; duration_min?: number } = { 
+        template_key: selectedTemplateKey 
+      };
       if (selectedPatternId) {
         params.pattern_id = selectedPatternId;
+      }
+      if (customDuration !== null) {
+        params.duration_min = customDuration;
       }
 
       const response = await api.post<{ data: GenerateSessionResponse }>(
@@ -257,6 +269,76 @@ export default function NewSessionPage() {
                 )}
               </AnimatePresence>
 
+              {/* Duration Customization */}
+              <AnimatePresence>
+                {selectedTemplate && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -20 }}
+                    transition={{ duration: 0.3 }}
+                  >
+                    <Card className="border">
+                      <CardHeader className="pb-3">
+                        <CardTitle className="flex items-center gap-2 text-xs md:text-sm font-mono uppercase tracking-wider">
+                          <Clock className="h-4 w-4" />
+                          Session Duration
+                        </CardTitle>
+                        <CardDescription className="text-xs">
+                          Adjust the time budget for your session
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        {/* Quick Presets */}
+                        <div className="flex flex-wrap gap-2">
+                          {DURATION_PRESETS.map((mins) => (
+                            <Button
+                              key={mins}
+                              variant={
+                                customDuration === mins ||
+                                (!customDuration && selectedTemplate.duration_min === mins)
+                                  ? "default"
+                                  : "outline"
+                              }
+                              size="sm"
+                              className="font-mono text-xs"
+                              onClick={() => setCustomDuration(mins)}
+                            >
+                              {mins}m
+                            </Button>
+                          ))}
+                        </div>
+
+                        {/* Slider */}
+                        <div className="space-y-2">
+                          <div className="flex justify-between text-xs text-muted-foreground">
+                            <span>15 min</span>
+                            <span className="font-mono font-semibold text-foreground">
+                              {customDuration ?? selectedTemplate.duration_min} min
+                            </span>
+                            <span>180 min</span>
+                          </div>
+                          <Slider
+                            value={[customDuration ?? selectedTemplate.duration_min]}
+                            min={15}
+                            max={180}
+                            step={5}
+                            onValueChange={([value]) => setCustomDuration(value)}
+                            className="w-full"
+                          />
+                        </div>
+
+                        {customDuration !== null && customDuration !== selectedTemplate.duration_min && (
+                          <p className="text-[10px] text-muted-foreground">
+                            Template default: {selectedTemplate.duration_min} min
+                          </p>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
               {/* Generate Button */}
               {selectedTemplate && (
                 <motion.div
@@ -380,6 +462,10 @@ export default function NewSessionPage() {
                             >
                               {problem.difficulty}
                             </span>
+                            <PriorityBadge
+                              priority={problem.priority}
+                              daysUntilDue={problem.days_until_due}
+                            />
                           </div>
                           <p className="text-[10px] md:text-xs text-muted-foreground mt-1 line-clamp-2">
                             {problem.reason}

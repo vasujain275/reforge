@@ -61,6 +61,10 @@ type SessionProblem struct {
 	CreatedAt     string  `json:"created_at"`
 	Completed     bool    `json:"completed"`
 	Outcome       *string `json:"outcome"` // "passed" or "failed"
+
+	// Spaced repetition priority indicators
+	Priority     string `json:"priority"`       // "overdue", "due_soon", "on_track", "new"
+	DaysUntilDue *int   `json:"days_until_due"` // Negative = overdue, positive = days until due
 }
 
 type GenerateSessionResponse struct {
@@ -119,6 +123,10 @@ type TemplateConfig struct {
 	DifficultyDist *DifficultyDistribution `json:"difficulty_dist,omitempty"`
 	MinQuickWins   int                     `json:"min_quick_wins"`
 	MaxSamePattern int                     `json:"max_same_pattern"`
+
+	// Minimum problem guarantees (for better session quality)
+	MinProblems          int `json:"min_problems"`           // Minimum problems to include in session
+	MinDifferentPatterns int `json:"min_different_patterns"` // Ensure pattern diversity
 
 	// Pattern focus
 	PatternMode  string `json:"pattern_mode"`         // "all", "weakest", "specific", "multi_pattern"

@@ -65,6 +65,7 @@ type Querier interface {
 	GetInviteCodeByID(ctx context.Context, id int64) (AdminInviteCode, error)
 	GetLatestAttemptForProblemInSession(ctx context.Context, arg GetLatestAttemptForProblemInSessionParams) (Attempt, error)
 	GetMasteredProblemsForUser(ctx context.Context, userID int64) (int64, error)
+	GetOverdueProblemsCount(ctx context.Context, userID int64) (int64, error)
 	GetPasswordResetToken(ctx context.Context, tokenHash string) (PasswordResetToken, error)
 	GetPattern(ctx context.Context, id int64) (Pattern, error)
 	// Import-specific queries for bulk operations
@@ -80,6 +81,7 @@ type Querier interface {
 	// More precise duplicate check including URL
 	GetProblemByTitleSourceURL(ctx context.Context, arg GetProblemByTitleSourceURLParams) (Problem, error)
 	GetProblemsForPattern(ctx context.Context, patternID int64) ([]Problem, error)
+	GetProblemsForReview(ctx context.Context, arg GetProblemsForReviewParams) ([]GetProblemsForReviewRow, error)
 	GetProblemsForUser(ctx context.Context, userID int64) ([]GetProblemsForUserRow, error)
 	GetRecentAttempts(ctx context.Context, arg GetRecentAttemptsParams) ([]GetRecentAttemptsRow, error)
 	GetRefreshTokenByHash(ctx context.Context, tokenHash string) (GetRefreshTokenByHashRow, error)
@@ -110,6 +112,7 @@ type Querier interface {
 	// Idempotent pattern linking (ignore if already linked)
 	LinkProblemToPatternIfNotExists(ctx context.Context, arg LinkProblemToPatternIfNotExistsParams) error
 	ListAllProblems(ctx context.Context) ([]Problem, error)
+	ListAllUserProblemStats(ctx context.Context) ([]UserProblemStat, error)
 	ListAttemptsForProblem(ctx context.Context, arg ListAttemptsForProblemParams) ([]Attempt, error)
 	ListAttemptsForUser(ctx context.Context, arg ListAttemptsForUserParams) ([]ListAttemptsForUserRow, error)
 	ListFavoriteTemplates(ctx context.Context, userID int64) ([]UserSessionTemplate, error)
@@ -134,6 +137,7 @@ type Querier interface {
 	UpdateSessionCompleted(ctx context.Context, arg UpdateSessionCompletedParams) error
 	UpdateSessionOrder(ctx context.Context, arg UpdateSessionOrderParams) error
 	UpdateSessionTimer(ctx context.Context, arg UpdateSessionTimerParams) error
+	UpdateSpacedRepetition(ctx context.Context, arg UpdateSpacedRepetitionParams) error
 	UpdateSystemSetting(ctx context.Context, arg UpdateSystemSettingParams) (SystemSetting, error)
 	// Admin: Soft activate/deactivate users
 	UpdateUserActiveStatus(ctx context.Context, arg UpdateUserActiveStatusParams) error

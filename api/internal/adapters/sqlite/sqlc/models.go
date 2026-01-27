@@ -130,18 +130,22 @@ type UserPatternStat struct {
 }
 
 type UserProblemStat struct {
-	ID                int64          `json:"id"`
-	UserID            int64          `json:"user_id"`
-	ProblemID         int64          `json:"problem_id"`
-	Status            sql.NullString `json:"status"`
-	Confidence        sql.NullInt64  `json:"confidence"`
-	AvgConfidence     sql.NullInt64  `json:"avg_confidence"`
-	LastAttemptAt     sql.NullString `json:"last_attempt_at"`
-	TotalAttempts     sql.NullInt64  `json:"total_attempts"`
-	AvgTimeSeconds    sql.NullInt64  `json:"avg_time_seconds"`
-	LastOutcome       sql.NullString `json:"last_outcome"`
-	RecentHistoryJson sql.NullString `json:"recent_history_json"`
-	UpdatedAt         sql.NullString `json:"updated_at"`
+	ID                int64           `json:"id"`
+	UserID            int64           `json:"user_id"`
+	ProblemID         int64           `json:"problem_id"`
+	Status            sql.NullString  `json:"status"`
+	Confidence        sql.NullInt64   `json:"confidence"`
+	AvgConfidence     sql.NullInt64   `json:"avg_confidence"`
+	LastAttemptAt     sql.NullString  `json:"last_attempt_at"`
+	TotalAttempts     sql.NullInt64   `json:"total_attempts"`
+	AvgTimeSeconds    sql.NullInt64   `json:"avg_time_seconds"`
+	LastOutcome       sql.NullString  `json:"last_outcome"`
+	RecentHistoryJson sql.NullString  `json:"recent_history_json"`
+	UpdatedAt         sql.NullString  `json:"updated_at"`
+	NextReviewAt      sql.NullString  `json:"next_review_at"`
+	IntervalDays      sql.NullInt64   `json:"interval_days"`
+	EaseFactor        sql.NullFloat64 `json:"ease_factor"`
+	ReviewCount       sql.NullInt64   `json:"review_count"`
 }
 
 type UserSessionTemplate struct {

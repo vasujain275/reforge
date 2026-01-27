@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ProblemTimer } from "@/components/sessions/ProblemTimer";
+import { PriorityBadge } from "@/components/sessions/PriorityBadge";
 import type { SessionProblem } from "@/types";
 
 interface SortableProblemCardProps {
@@ -109,6 +110,10 @@ export function SortableProblemCard({
             >
               {problem.difficulty}
             </span>
+            <PriorityBadge
+              priority={problem.priority}
+              daysUntilDue={problem.days_until_due}
+            />
             {problem.url && (
               <a
                 href={problem.url}

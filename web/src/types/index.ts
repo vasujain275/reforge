@@ -1,11 +1,19 @@
-// Core domain types matching backend schema
+/**
+ * Core domain types matching backend schema.
+ * 
+ * IMPORTANT: All IDs are integers (int64 in backend, number in TypeScript).
+ */
+
+// ============================================================================
+// CORE ENTITIES
+// ============================================================================
 
 export interface Problem {
   id: number;
   title: string;
   source?: string;
   url?: string;
-  difficulty: "easy" | "medium" | "hard";
+  difficulty: Difficulty;
   created_at: string;
   patterns?: Pattern[];
   stats?: UserProblemStats;
@@ -17,19 +25,33 @@ export interface Pattern {
   description?: string;
 }
 
+export type Difficulty = "easy" | "medium" | "hard";
+export type AttemptOutcome = "passed" | "failed";
+export type ProblemStatus = "unsolved" | "solved" | "abandoned";
+export type TimerState = "idle" | "running" | "paused";
+export type ProblemPriority = "overdue" | "due_soon" | "on_track" | "new";
+
+// ============================================================================
+// USER STATS
+// ============================================================================
+
 export interface UserProblemStats {
   id: number;
   user_id: number;
   problem_id: number;
-  status: "unsolved" | "solved" | "abandoned";
+  status: ProblemStatus;
   confidence: number; // 0-100
   avg_confidence: number; // 0-100
   last_attempt_at?: string;
   total_attempts: number;
   avg_time_seconds?: number;
-  last_outcome?: "passed" | "failed";
+  last_outcome?: AttemptOutcome;
   recent_history_json?: string;
   updated_at: string;
+  // Spaced repetition fields
+  ease_factor?: number;
+  interval_days?: number;
+  next_review_at?: string;
 }
 
 export interface UserPatternStats {
@@ -41,6 +63,10 @@ export interface UserPatternStats {
   last_revised_at?: string;
 }
 
+// ============================================================================
+// SESSIONS
+// ============================================================================
+
 export interface RevisionSession {
   id: number;
   user_id: number;
@@ -51,16 +77,18 @@ export interface RevisionSession {
   planned_duration_min: number;
   items_ordered?: string; // JSON array
   completed?: boolean;
+  started_at?: string;
+  completed_at?: string;
   problems?: SessionProblem[];
   elapsed_time_seconds: number;
-  timer_state: "idle" | "running" | "paused";
+  timer_state: TimerState;
   timer_last_updated_at?: string;
 }
 
 export interface SessionProblem {
   id: number;
   title: string;
-  difficulty: "easy" | "medium" | "hard";
+  difficulty: Difficulty;
   source?: string;
   url?: string;
   planned_min: number;
@@ -70,10 +98,14 @@ export interface SessionProblem {
   reason: string;
   created_at: string;
   completed?: boolean;
-  outcome?: "passed" | "failed";
-  priority?: "overdue" | "due_soon" | "on_track" | "new";
+  outcome?: AttemptOutcome;
+  priority?: ProblemPriority;
   days_until_due?: number;
 }
+
+// ============================================================================
+// ATTEMPTS
+// ============================================================================
 
 export interface Attempt {
   id: number;
@@ -82,16 +114,11 @@ export interface Attempt {
   session_id?: number;
   confidence_score: number;
   duration_seconds?: number;
-  outcome: "passed" | "failed";
+  outcome: AttemptOutcome;
   notes?: string;
   performed_at: string;
 }
 
-// ============================================================================
-// ATTEMPT TIMER TYPES (for stopwatch functionality)
-// ============================================================================
-
-// In-progress attempt with timer state (matches backend InProgressAttemptResponse)
 export interface InProgressAttempt {
   id: number;
   user_id: number;
@@ -99,54 +126,64 @@ export interface InProgressAttempt {
   session_id?: number;
   status: "in_progress" | "completed" | "abandoned";
   elapsed_time_seconds: number;
-  timer_state: "idle" | "running" | "paused";
+  timer_state: TimerState;
   timer_last_updated_at?: string;
   started_at: string;
   problem_title?: string;
   problem_difficulty?: string;
 }
 
-// Request body for starting an attempt (matches backend StartAttemptBody)
+export interface InProgressAttempt {
+  id: string;
+  user_id: string;
+  problem_id: string;
+  session_id?: string;
+  status: "in_progress" | "completed" | "abandoned";
+  elapsed_time_seconds: number;
+  timer_state: TimerState;
+  timer_last_updated_at?: string;
+  started_at: string;
+  problem_title?: string;
+  problem_difficulty?: string;
+}
+
+// ============================================================================
+// ATTEMPT API REQUEST TYPES
+// ============================================================================
+
 export interface StartAttemptBody {
   problem_id: number;
   session_id?: number;
 }
 
-// Request body for updating attempt timer (matches backend UpdateAttemptTimerBody)
 export interface UpdateAttemptTimerBody {
   elapsed_time_seconds: number;
-  timer_state: "idle" | "running" | "paused";
+  timer_state: TimerState;
 }
 
-// Request body for completing an attempt (matches backend CompleteAttemptBody)
 export interface CompleteAttemptBody {
   confidence_score: number;
-  outcome: "passed" | "failed";
+  outcome: AttemptOutcome;
   notes?: string;
-  duration_seconds?: number; // Optional: override elapsed time
+  duration_seconds?: number;
 }
 
-// Enhanced template types matching new backend
+// ============================================================================
+// SESSION TEMPLATES
+// ============================================================================
+
+export type TemplateCategory = "daily" | "pattern" | "weekend";
+export type ScoringEmphasis = "standard" | "confidence" | "time" | "failure";
+export type PatternMode = "all" | "specific" | "exclude" | "weakest";
+export type ProblemCountStrategy = "auto" | "fixed";
+
 export interface TemplateInfo {
   key: string;
   display_name: string;
   description: string;
-  category: "daily" | "pattern" | "weekend";
+  category: TemplateCategory;
   icon: string;
   duration_min: number;
-}
-
-export interface GenerateSessionResponse {
-  template_key?: string;
-  template_name: string;
-  template_description: string;
-  planned_duration_min: number;
-  problems: SessionProblem[];
-}
-
-export interface TemplateListResponse {
-  presets: TemplateInfo[];
-  custom: UserSessionTemplate[];
 }
 
 export interface UserSessionTemplate {
@@ -165,14 +202,14 @@ export interface UserSessionTemplate {
 export interface CustomSessionConfig {
   session_name?: string;
   duration_min: number;
-  problem_count_strategy: "auto" | "fixed";
+  problem_count_strategy: ProblemCountStrategy;
   fixed_problem_count?: number;
   difficulty_distribution: DifficultyDistribution;
   require_quick_win: boolean;
-  pattern_mode: "all" | "specific" | "exclude" | "weakest";
+  pattern_mode: PatternMode;
   pattern_ids?: number[];
   max_same_pattern: number;
-  scoring_emphasis: "standard" | "confidence" | "time" | "failure";
+  scoring_emphasis: ScoringEmphasis;
   confidence_range?: ConfidenceRange;
   min_days_since_last?: number;
   goals?: string[];
@@ -189,46 +226,80 @@ export interface ConfidenceRange {
   max: number;
 }
 
-// Urgent problem type for dashboard
+export interface GenerateSessionResponse {
+  template_key?: string;
+  template_name: string;
+  template_description: string;
+  planned_duration_min: number;
+  problems: SessionProblem[];
+}
+
+export interface TemplateListResponse {
+  presets: TemplateInfo[];
+  custom: UserSessionTemplate[];
+}
+
+// ============================================================================
+// DASHBOARD
+// ============================================================================
+
 export interface UrgentProblem {
   id: number;
   title: string;
   source?: string;
   url?: string;
-  difficulty: "easy" | "medium" | "hard";
+  difficulty: Difficulty;
   score: number;
   days_since_last?: number;
   confidence: number;
   reason: string;
   patterns?: Pattern[];
-  priority?: "overdue" | "due_soon" | "on_track" | "new";
+  priority?: ProblemPriority;
   days_until_due?: number;
 }
 
-// Dashboard stats type
 export interface DashboardStats {
   total_problems: number;
   mastered_problems: number;
   avg_confidence: number;
   current_streak: number;
+  problems_due?: number;
   weakest_pattern?: {
     name: string;
     confidence: number;
   };
 }
 
-// Score breakdown type
+// ============================================================================
+// SCORING
+// ============================================================================
+
 export interface ScoreBreakdown {
   total_score: number;
-  features: {
-    name: string;
-    value: number;
-    weight: number;
-    contribution: number;
-  }[];
+  features: ScoreFeature[];
 }
 
-// Pattern types matching backend
+export interface ScoreFeature {
+  name: string;
+  value: number;
+  weight: number;
+  contribution: number;
+}
+
+export interface ScoringWeights {
+  w_conf: number;
+  w_days: number;
+  w_attempts: number;
+  w_time: number;
+  w_difficulty: number;
+  w_failed: number;
+  w_pattern: number;
+}
+
+// ============================================================================
+// PATTERNS WITH STATS
+// ============================================================================
+
 export interface PatternWithStats {
   id: number;
   title: string;
@@ -246,18 +317,10 @@ export interface PatternUserStats {
   last_revised_at?: string;
 }
 
-// Settings types matching backend
-export interface ScoringWeights {
-  w_conf: number;
-  w_days: number;
-  w_attempts: number;
-  w_time: number;
-  w_difficulty: number;
-  w_failed: number;
-  w_pattern: number;
-}
+// ============================================================================
+// PAGINATION
+// ============================================================================
 
-// Pagination types
 export interface PaginatedResponse<T> {
   data: T[];
   total: number;
@@ -274,3 +337,19 @@ export type PaginatedProblems = PaginatedResponse<Problem>;
 export type PaginatedSessions = PaginatedResponse<RevisionSession>;
 export type PaginatedPatterns = PaginatedPatternsResponse;
 
+// ============================================================================
+// USER & AUTH
+// ============================================================================
+
+export interface User {
+  id: number;
+  email: string;
+  name: string;
+  role: "user" | "admin";
+  created_at: string;
+}
+
+export interface AuthResponse {
+  user: User;
+  access_token?: string;
+}

@@ -1,5 +1,4 @@
 import ApiError from "@/components/ApiError";
-import SystemStatusBar from "@/components/SystemStatusBar";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -10,124 +9,60 @@ import {
 } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { api } from "@/lib/api";
+import { COPY } from "@/lib/copy";
+import { useAuthStore } from "@/store/authStore";
 import type { DashboardStats, UrgentProblem } from "@/types";
 import {
-  Activity,
   BarChart3,
   BookOpen,
-  Calendar,
+  Clock,
   Flame,
-  Terminal,
   TrendingUp,
   Zap,
   Target,
   Repeat,
-  Cpu,
-  Link2,
-  GraduationCap,
-  Search,
+  ArrowRight,
+  ExternalLink,
+  Loader2,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
-interface SessionTemplateWithIcon {
+interface SessionTemplate {
   key: string;
-  display_name: string;
+  name: string;
   icon: typeof Zap;
-  duration_min: number;
-  category: "daily" | "pattern" | "weekend";
+  duration: number;
   description: string;
 }
 
-// 10 Enhanced Smart Templates
-const SESSION_TEMPLATES: SessionTemplateWithIcon[] = [
-  // Daily Templates
+const QUICK_TEMPLATES: SessionTemplate[] = [
   {
     key: "morning_momentum",
-    display_name: "Morning Momentum",
+    name: "Quick Review",
     icon: Zap,
-    duration_min: 35,
-    category: "daily",
-    description: "Confidence wins to start your day",
+    duration: 35,
+    description: "Quick confidence wins",
   },
   {
     key: "weakness_crusher",
-    display_name: "Weakness Crusher",
+    name: "Focus Session",
     icon: Target,
-    duration_min: 45,
-    category: "daily",
-    description: "Target low-confidence patterns",
+    duration: 45,
+    description: "Target weak areas",
   },
   {
     key: "daily_mixed_grind",
-    display_name: "Daily Mixed Grind",
-    icon: BookOpen,
-    duration_min: 55,
-    category: "daily",
-    description: "Adaptive difficulty practice",
-  },
-  // Pattern Templates
-  {
-    key: "pattern_deep_dive",
-    display_name: "Pattern Deep Dive",
-    icon: Search,
-    duration_min: 90,
-    category: "pattern",
-    description: "Master one pattern intensively",
-  },
-  {
-    key: "pattern_rotation",
-    display_name: "Pattern Rotation",
+    name: "Standard Practice",
     icon: Repeat,
-    duration_min: 60,
-    category: "pattern",
-    description: "Systematic 3-pattern exposure",
-  },
-  {
-    key: "pattern_combo_chains",
-    display_name: "Pattern Combos",
-    icon: Link2,
-    duration_min: 75,
-    category: "pattern",
-    description: "Multi-pattern hybrid problems",
-  },
-  {
-    key: "pattern_graduation",
-    display_name: "Pattern Graduation",
-    icon: GraduationCap,
-    duration_min: 50,
-    category: "pattern",
-    description: "Test mastery with 3 hard problems",
-  },
-  // Weekend Templates
-  {
-    key: "weekend_comprehensive",
-    display_name: "Weekend Session",
-    icon: Cpu,
-    duration_min: 150,
-    category: "weekend",
-    description: "6-8 problems across all levels",
-  },
-  {
-    key: "weak_pattern_marathon",
-    display_name: "Weak Pattern Marathon",
-    icon: Target,
-    duration_min: 120,
-    category: "weekend",
-    description: "Intensive focus on 2 weakest",
-  },
-  {
-    key: "challenge_gauntlet",
-    display_name: "Challenge Gauntlet",
-    icon: Flame,
-    duration_min: 100,
-    category: "weekend",
-    description: "Interview pressure simulation",
+    duration: 55,
+    description: "Balanced difficulty mix",
   },
 ];
 
 export default function DashboardHome() {
   const navigate = useNavigate();
+  const { user } = useAuthStore();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [urgentProblems, setUrgentProblems] = useState<UrgentProblem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -150,7 +85,7 @@ export default function DashboardHome() {
     } catch (err: unknown) {
       console.error("Failed to fetch dashboard data:", err);
       setError(
-        "Failed to load dashboard data. Please ensure the backend is running."
+        "Failed to load dashboard data. Please check your connection and try again."
       );
     } finally {
       setLoading(false);
@@ -163,42 +98,12 @@ export default function DashboardHome() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-full animate-in fade-in duration-300">
-        <div className="flex flex-col items-center gap-6">
-          <div className="relative">
-            <div className="absolute inset-0 rounded-full bg-primary/20 animate-ping" />
-            <Terminal className="relative h-10 w-10 text-primary animate-pulse" />
-          </div>
-          <div className="flex flex-col items-center gap-2">
-            <p className="text-sm font-mono text-foreground">
-              Initializing system...
-            </p>
-            <div className="flex items-center gap-1 font-mono text-xs text-muted-foreground">
-              <span className="animate-pulse">$</span>
-              <span className="animate-[pulse_1s_ease-in-out_0.2s_infinite]">
-                r
-              </span>
-              <span className="animate-[pulse_1s_ease-in-out_0.3s_infinite]">
-                e
-              </span>
-              <span className="animate-[pulse_1s_ease-in-out_0.4s_infinite]">
-                f
-              </span>
-              <span className="animate-[pulse_1s_ease-in-out_0.5s_infinite]">
-                o
-              </span>
-              <span className="animate-[pulse_1s_ease-in-out_0.6s_infinite]">
-                r
-              </span>
-              <span className="animate-[pulse_1s_ease-in-out_0.7s_infinite]">
-                g
-              </span>
-              <span className="animate-[pulse_1s_ease-in-out_0.8s_infinite]">
-                e
-              </span>
-              <span className="ml-1 animate-pulse">--load</span>
-            </div>
-          </div>
+      <div className="flex items-center justify-center h-full">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="h-8 w-8 text-primary animate-spin" />
+          <p className="text-sm text-muted-foreground">
+            {COPY.status.loading}
+          </p>
         </div>
       </div>
     );
@@ -211,209 +116,231 @@ export default function DashboardHome() {
   const confidenceTrend = stats ? ((stats.avg_confidence - 62) / 62) * 100 : 0;
 
   return (
-    <div className="flex-1 flex flex-col h-full">
-      {/* System Status Bar */}
-      <SystemStatusBar />
+    <div className="flex-1 overflow-y-auto">
+      <div className="max-w-6xl mx-auto p-6 space-y-8">
+        {/* Welcome Header */}
+        <div className="space-y-2">
+          <h1 className="text-2xl font-semibold">
+            {COPY.dashboard.welcome}, {user?.name?.split(' ')[0] || 'there'}
+          </h1>
+          {(stats?.problems_due ?? 0) > 0 && (
+            <p className="text-muted-foreground">
+              You have <span className="text-foreground font-medium">{stats?.problems_due}</span> {COPY.dashboard.problemsDue}
+            </p>
+          )}
+        </div>
 
-      {/* Main Content */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="space-y-6 p-6">
-          {/* Quick Session Launcher */}
-          <Card className="border border-primary/20">
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Zap className="h-4 w-4 text-primary" />
-              <CardTitle className="text-base font-mono uppercase tracking-wider">
-                Quick Start
-              </CardTitle>
+        {/* Quick Start Card */}
+        <Card>
+          <CardHeader className="pb-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <Zap className="h-5 w-5 text-primary" />
+                  {COPY.dashboard.readyToPractice}
+                </CardTitle>
+                <CardDescription className="mt-1">
+                  Choose a session type to get started
+                </CardDescription>
+              </div>
+              <Link to="/dashboard/sessions/new">
+                <Button variant="ghost" size="sm" className="gap-1">
+                  All templates
+                  <ArrowRight className="h-4 w-4" />
+                </Button>
+              </Link>
             </div>
-            <Link to="/dashboard/sessions/new">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-xs font-mono hover:text-primary"
-              >
-                View All Templates →
-              </Button>
-            </Link>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-3 gap-2">
-            {SESSION_TEMPLATES.filter((t) => t.category === "daily").map(
-              (template) => {
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              {QUICK_TEMPLATES.map((template) => {
                 const Icon = template.icon;
                 return (
                   <button
                     key={template.key}
                     onClick={() => handleStartSession(template.key)}
-                    className="p-3 border rounded-md hover:border-primary hover:bg-accent/50 hover:shadow-[0_0_15px_-3px_var(--primary)] transition-all text-left"
+                    className="p-4 border rounded-lg hover:border-primary hover:bg-accent/50 transition-colors text-left group"
                   >
-                    <div className="flex items-center gap-2 mb-1">
-                      <Icon className="h-4 w-4 text-primary" />
-                      <div className="text-xs font-mono text-muted-foreground">
-                        {template.duration_min}m
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className="p-2 rounded-md bg-primary/10 group-hover:bg-primary/20 transition-colors">
+                        <Icon className="h-4 w-4 text-primary" />
                       </div>
+                      <span className="text-sm text-muted-foreground font-medium">
+                        {template.duration} min
+                      </span>
                     </div>
-                    <div className="font-semibold text-sm">
-                      {template.display_name}
+                    <div className="font-medium mb-1">{template.name}</div>
+                    <div className="text-sm text-muted-foreground">
+                      {template.description}
                     </div>
                   </button>
                 );
-              }
-            )}
+              })}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Stats Grid */}
+        <div>
+          <h2 className="text-lg font-medium mb-4">{COPY.dashboard.yourProgress}</h2>
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  {COPY.dashboard.stats.totalProblems}
+                </CardTitle>
+                <BookOpen className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  {stats?.total_problems ?? 0}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  <span className="text-success font-medium">
+                    {stats?.mastered_problems ?? 0} mastered
+                  </span>{" "}
+                  ({Math.round(((stats?.mastered_problems || 0) / (stats?.total_problems || 1)) * 100)}%)
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  {COPY.dashboard.stats.avgConfidence}
+                </CardTitle>
+                <TrendingUp className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  {Math.round(stats?.avg_confidence ?? 0)}%
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  <span className={confidenceTrend > 0 ? "text-success" : "text-destructive"}>
+                    {confidenceTrend > 0 ? "↑" : "↓"} {Math.abs(confidenceTrend).toFixed(1)}%
+                  </span>{" "}
+                  from last week
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  {COPY.dashboard.stats.currentStreak}
+                </CardTitle>
+                <Flame className="h-4 w-4 text-warning" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  {stats?.current_streak ?? 0} <span className="text-base font-normal text-muted-foreground">{COPY.dashboard.stats.days}</span>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Keep it going!
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  Weakest Pattern
+                </CardTitle>
+                <BarChart3 className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-lg font-bold truncate">
+                  {stats?.weakest_pattern?.name || "N/A"}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {stats?.weakest_pattern?.confidence ?? 0}% confidence
+                </p>
+              </CardContent>
+            </Card>
           </div>
-        </CardContent>
-      </Card>
+        </div>
 
-      {/* Quick Stats Grid */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card className="hover:border-primary/50 transition-colors">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Problems</CardTitle>
-            <BookOpen className="h-4 w-4 text-muted-foreground" />
+        {/* Problems Needing Review */}
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle>{COPY.dashboard.problemsNeedingReview}</CardTitle>
+                <CardDescription>
+                  Problems ranked by priority score
+                </CardDescription>
+              </div>
+              <Link to="/dashboard/problems">
+                <Button variant="ghost" size="sm" className="gap-1">
+                  {COPY.actions.viewAll}
+                  <ArrowRight className="h-4 w-4" />
+                </Button>
+              </Link>
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold font-mono">
-              {stats?.total_problems ?? 0}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              <span className="text-green-500 font-semibold">
-                {stats?.mastered_problems ?? 0} mastered
-              </span>{" "}
-              (
-              {Math.round(
-                ((stats?.mastered_problems || 0) /
-                  (stats?.total_problems || 1)) *
-                  100
-              )}
-              %)
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="hover:border-primary/50 transition-colors">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              Avg Confidence
-            </CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold font-mono">
-              {Math.round(stats?.avg_confidence ?? 0)}%
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              <span
-                className={
-                  confidenceTrend > 0 ? "text-green-500" : "text-red-500"
-                }
-              >
-                {confidenceTrend > 0 ? "↑" : "↓"}{" "}
-                {Math.abs(confidenceTrend).toFixed(1)}%
-              </span>{" "}
-              from last week
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="hover:border-primary/50 transition-colors">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Streak</CardTitle>
-            <Flame className="h-4 w-4 text-orange-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold font-mono">
-              {stats?.current_streak ?? 0} days
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">Keep it going!</p>
-          </CardContent>
-        </Card>
-
-        <Card className="hover:border-primary/50 transition-colors">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Weak Pattern</CardTitle>
-            <BarChart3 className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-lg font-bold">
-              {stats?.weakest_pattern?.name || "N/A"}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              {stats?.weakest_pattern?.confidence ?? 0}% confidence
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Urgent Problems List */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Activity className="h-5 w-5 text-red-500" />
-            Top 5 Urgent Problems
-          </CardTitle>
-          <CardDescription>
-            Problems requiring immediate attention based on scoring algorithm
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {urgentProblems.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              <Activity className="h-8 w-8 mx-auto mb-3 opacity-50" />
-              <p className="text-sm">No urgent problems yet.</p>
-              <p className="text-xs mt-1">Add some problems to get started!</p>
-            </div>
-          ) : (
-            <>
-              <div className="space-y-3">
-                {urgentProblems.map((problem, index) => (
+            {urgentProblems.length === 0 ? (
+              <div className="text-center py-12">
+                <BookOpen className="h-12 w-12 mx-auto mb-4 text-muted-foreground/50" />
+                <h3 className="font-medium mb-1">{COPY.empty.problems.title}</h3>
+                <p className="text-sm text-muted-foreground mb-4">
+                  {COPY.empty.problems.description}
+                </p>
+                <Link to="/dashboard/problems/new">
+                  <Button>{COPY.empty.problems.action}</Button>
+                </Link>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {urgentProblems.slice(0, 5).map((problem, index) => (
                   <div
                     key={problem.id}
-                    className="flex items-center gap-4 p-3 border rounded-lg hover:bg-accent/50 transition-colors group"
+                    className="flex items-center gap-4 p-3 rounded-lg hover:bg-accent/50 transition-colors"
                   >
-                    <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 text-primary font-bold font-mono text-sm">
+                    <div className="flex items-center justify-center w-8 h-8 rounded-full bg-muted text-muted-foreground font-medium text-sm">
                       {index + 1}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h4 className="font-semibold truncate">
-                          {problem.title}
-                        </h4>
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <h4 className="font-medium truncate">{problem.title}</h4>
                         <span
-                          className={`text-xs px-2 py-0.5 rounded font-mono ${
+                          className={`text-xs px-2 py-0.5 rounded ${
                             problem.difficulty === "hard"
-                              ? "bg-red-500/10 text-red-500"
+                              ? "bg-difficulty-hard text-difficulty-hard"
                               : problem.difficulty === "medium"
-                              ? "bg-orange-500/10 text-orange-500"
-                              : "bg-green-500/10 text-green-500"
+                              ? "bg-difficulty-medium text-difficulty-medium"
+                              : "bg-difficulty-easy text-difficulty-easy"
                           }`}
                         >
                           {problem.difficulty}
                         </span>
+                        {problem.url && (
+                          <a
+                            href={problem.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-muted-foreground hover:text-foreground"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <ExternalLink className="h-3 w-3" />
+                          </a>
+                        )}
                       </div>
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-xs text-muted-foreground truncate">
                         {problem.reason}
                       </p>
                     </div>
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-6 text-sm">
                       <div className="text-right">
-                        <div className="text-sm font-mono text-muted-foreground">
-                          {problem.confidence}%
-                        </div>
-                        <Progress
-                          value={problem.confidence}
-                          className="w-16 h-1.5 mt-1"
-                        />
+                        <div className="text-muted-foreground">{problem.confidence}%</div>
+                        <Progress value={problem.confidence} className="w-16 h-1.5 mt-1" />
                       </div>
-                      <div className="text-right">
-                        <div className="text-sm font-mono text-muted-foreground">
-                          {problem.days_since_last}d
-                        </div>
+                      <div className="text-right text-muted-foreground">
+                        <Clock className="h-3 w-3 inline mr-1" />
+                        {problem.days_since_last}d
                       </div>
                       <div className="text-right min-w-[3rem]">
-                        <div className="text-lg font-bold font-mono text-primary">
+                        <div className="font-mono font-bold text-primary">
                           {problem.score.toFixed(2)}
                         </div>
                       </div>
@@ -421,17 +348,9 @@ export default function DashboardHome() {
                   </div>
                 ))}
               </div>
-              <div className="mt-4 pt-4 border-t">
-                <Button className="w-full" variant="outline">
-                  <Calendar className="h-4 w-4 mr-2" />
-                  Start Quick Session with Top 3
-                </Button>
-              </div>
-            </>
-          )}
-        </CardContent>
-      </Card>
-        </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

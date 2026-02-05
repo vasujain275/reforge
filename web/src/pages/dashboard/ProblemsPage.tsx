@@ -20,7 +20,7 @@ import {
   ExternalLink,
   Filter,
   Plus,
-  Terminal,
+  BookOpen,
   XCircle,
   Edit,
   Play,
@@ -56,13 +56,13 @@ export default function ProblemsPage() {
 
   // Helper to calculate days since last attempt
   const getDaysSinceLastAttempt = (date?: string) => {
-    if (!date) return "NEVER";
+    if (!date) return "Never";
     const days = Math.floor(
       (Date.now() - new Date(date).getTime()) / (1000 * 60 * 60 * 24)
     );
-    if (days === 0) return "TODAY";
-    if (days === 1) return "1d AGO";
-    return `${days}d AGO`;
+    if (days === 0) return "Today";
+    if (days === 1) return "1d ago";
+    return `${days}d ago`;
   };
 
   const problems = data?.data || [];
@@ -73,19 +73,17 @@ export default function ProblemsPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-3xl font-bold tracking-tight font-mono uppercase">
-            PROBLEM REGISTRY
+          <h2 className="text-3xl font-bold">
+            Problems
           </h2>
           <p className="text-muted-foreground mt-1 text-sm">
-            Manage problem set and track execution metrics
+            Manage your problem set and track progress
           </p>
         </div>
         <Link to="/dashboard/problems/new">
-          <Button className="rounded-md shadow-[0_0_15px_-3px_var(--primary)]">
+          <Button>
             <Plus className="h-4 w-4 mr-2" />
-            <span className="font-mono uppercase tracking-wider text-xs">
-              Register Problem
-            </span>
+            Add Problem
           </Button>
         </Link>
       </div>
@@ -111,17 +109,17 @@ export default function ProblemsPage() {
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
               <SelectContent className="rounded-md">
-                <SelectItem value="all" className="font-mono">
-                  ALL STATUS
+                <SelectItem value="all">
+                  All Status
                 </SelectItem>
-                <SelectItem value="unsolved" className="font-mono">
-                  UNSOLVED
+                <SelectItem value="unsolved">
+                  Unsolved
                 </SelectItem>
-                <SelectItem value="solved" className="font-mono">
-                  SOLVED
+                <SelectItem value="solved">
+                  Solved
                 </SelectItem>
-                <SelectItem value="abandoned" className="font-mono">
-                  ABANDONED
+                <SelectItem value="abandoned">
+                  Abandoned
                 </SelectItem>
               </SelectContent>
             </Select>
@@ -134,17 +132,17 @@ export default function ProblemsPage() {
                 <SelectValue placeholder="Difficulty" />
               </SelectTrigger>
               <SelectContent className="rounded-md">
-                <SelectItem value="all" className="font-mono">
-                  ALL LEVELS
+                <SelectItem value="all">
+                  All Levels
                 </SelectItem>
-                <SelectItem value="easy" className="font-mono">
-                  EASY
+                <SelectItem value="easy">
+                  Easy
                 </SelectItem>
-                <SelectItem value="medium" className="font-mono">
-                  MEDIUM
+                <SelectItem value="medium">
+                  Medium
                 </SelectItem>
-                <SelectItem value="hard" className="font-mono">
-                  HARD
+                <SelectItem value="hard">
+                  Hard
                 </SelectItem>
               </SelectContent>
             </Select>
@@ -154,7 +152,7 @@ export default function ProblemsPage() {
 
       {/* Results Summary */}
       {data && (
-        <div className="flex items-center justify-between text-sm font-mono text-muted-foreground">
+        <div className="flex items-center justify-between text-sm text-muted-foreground">
           <span>
             Showing{" "}
             {problems.length > 0 ? (page - 1) * pageSize + 1 : 0} -{" "}
@@ -182,8 +180,8 @@ export default function ProblemsPage() {
             {problems.length === 0 ? (
               <Card className="rounded-md border border-border">
                 <CardContent className="py-12 text-center">
-                  <Terminal className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                  <p className="text-muted-foreground font-mono uppercase tracking-wider text-sm">
+                  <BookOpen className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                  <p className="text-muted-foreground text-sm">
                     No Problems Found
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">
@@ -191,14 +189,12 @@ export default function ProblemsPage() {
                     difficultyFilter !== "all" ||
                     statusFilter !== "all"
                       ? "Try adjusting your search filters"
-                      : "Initialize your first problem to begin tracking"}
+                      : "Add your first problem to begin tracking"}
                   </p>
                   <Link to="/dashboard/problems/new" className="inline-block mt-4">
                     <Button className="rounded-md">
                       <Plus className="h-4 w-4 mr-2" />
-                      <span className="font-mono uppercase tracking-wider text-xs">
-                        Register Problem
-                      </span>
+                      Add Problem
                     </Button>
                   </Link>
                 </CardContent>
@@ -207,7 +203,7 @@ export default function ProblemsPage() {
               problems.map((problem, index) => (
                 <Card
                   key={problem.id}
-                  className="rounded-md border border-border hover:border-primary/50 hover:shadow-[0_0_15px_-3px_var(--primary)] transition-all"
+                  className="rounded-md border border-border hover:border-primary/50 transition-all"
                 >
                   <CardContent className="pt-6">
                     <div className="flex items-start gap-4">
@@ -223,11 +219,11 @@ export default function ProblemsPage() {
 
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-2">
-                          <h3 className="font-semibold text-lg font-mono">
+                          <h3 className="font-semibold text-lg">
                             {problem.title}
                           </h3>
                           <span
-                            className={`text-xs px-2 py-0.5 rounded-md font-mono uppercase tracking-wider border ${
+                            className={`text-xs px-2 py-0.5 rounded-md border ${
                               problem.difficulty === "hard"
                                 ? "bg-red-500/10 text-red-500 border-red-500/20"
                                 : problem.difficulty === "medium"
@@ -238,22 +234,22 @@ export default function ProblemsPage() {
                             {problem.difficulty}
                           </span>
                           {problem.stats?.status === "solved" && (
-                            <span className="text-xs px-2 py-0.5 rounded-md bg-green-500/10 text-green-500 border border-green-500/20 flex items-center gap-1 font-mono uppercase tracking-wider">
+                            <span className="text-xs px-2 py-0.5 rounded-md bg-green-500/10 text-green-500 border border-green-500/20 flex items-center gap-1">
                               <CheckCircle2 className="h-3 w-3" />
-                              SOLVED
+                              Solved
                             </span>
                           )}
                         </div>
                         <div className="flex items-center gap-4 text-sm text-muted-foreground mb-3">
-                          <span className="font-mono text-xs uppercase tracking-wider">
-                            {problem.source || "CUSTOM"}
+                          <span className="text-xs">
+                            {problem.source || "Custom"}
                           </span>
                           {problem.url && (
                             <a
                               href={problem.url}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="flex items-center gap-1 hover:text-primary transition-colors font-mono text-xs uppercase tracking-wider"
+                              className="flex items-center gap-1 hover:text-primary transition-colors text-xs"
                             >
                               <ExternalLink className="h-3 w-3" />
                               External Link
@@ -263,7 +259,7 @@ export default function ProblemsPage() {
                         {problem.stats && (
                           <div className="grid grid-cols-4 gap-4">
                             <div>
-                              <div className="text-xs text-muted-foreground mb-1 font-mono uppercase tracking-wider">
+                              <div className="text-xs text-muted-foreground mb-1">
                                 Confidence
                               </div>
                               <div className="flex items-center gap-2">
@@ -277,8 +273,8 @@ export default function ProblemsPage() {
                               </div>
                             </div>
                             <div>
-                              <div className="text-xs text-muted-foreground mb-1 font-mono uppercase tracking-wider">
-                                Last Exec
+                              <div className="text-xs text-muted-foreground mb-1">
+                                Last Attempt
                               </div>
                               <div className="text-sm font-mono font-bold">
                                 {getDaysSinceLastAttempt(
@@ -287,8 +283,8 @@ export default function ProblemsPage() {
                               </div>
                             </div>
                             <div>
-                              <div className="text-xs text-muted-foreground mb-1 font-mono uppercase tracking-wider">
-                                Executions
+                              <div className="text-xs text-muted-foreground mb-1">
+                                Attempts
                               </div>
                               <div className="text-sm font-mono font-bold">
                                 {String(problem.stats.total_attempts).padStart(
@@ -299,11 +295,11 @@ export default function ProblemsPage() {
                             </div>
                             {problem.stats.last_outcome && (
                               <div>
-                                <div className="text-xs text-muted-foreground mb-1 font-mono uppercase tracking-wider">
+                                <div className="text-xs text-muted-foreground mb-1">
                                   Last Result
                                 </div>
                                 <div
-                                  className={`text-sm font-mono font-bold flex items-center gap-1 ${
+                                  className={`text-sm font-bold flex items-center gap-1 ${
                                     problem.stats.last_outcome === "passed"
                                       ? "text-green-500"
                                       : "text-red-500"
@@ -314,7 +310,7 @@ export default function ProblemsPage() {
                                   ) : (
                                     <XCircle className="h-4 w-4" />
                                   )}
-                                  {problem.stats.last_outcome.toUpperCase()}
+                                  {problem.stats.last_outcome === "passed" ? "Passed" : "Failed"}
                                 </div>
                               </div>
                             )}
@@ -330,11 +326,11 @@ export default function ProblemsPage() {
                               `/dashboard/attempts/new?problem_id=${problem.id}`
                             )
                           }
-                          className="rounded-md shadow-[0_0_10px_-3px_var(--primary)]"
+                          className="rounded-md"
                         >
                           <Play className="h-3 w-3 mr-1" />
-                          <span className="font-mono uppercase tracking-wider text-xs">
-                            Execute
+                          <span className="text-xs">
+                            Start
                           </span>
                         </Button>
                         <Button
@@ -348,7 +344,7 @@ export default function ProblemsPage() {
                           className="rounded-md"
                         >
                           <BarChart3 className="h-3 w-3 mr-1" />
-                          <span className="font-mono uppercase tracking-wider text-xs">
+                          <span className="text-xs">
                             Stats
                           </span>
                         </Button>

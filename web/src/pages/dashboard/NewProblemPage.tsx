@@ -40,7 +40,7 @@ import {
   Link as LinkIcon,
   Loader2,
   Plus,
-  Terminal,
+  BookOpen,
   X,
 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -133,9 +133,9 @@ export default function NewProblemPage() {
           <ArrowLeft className="h-4 w-4" />
           Back to Problems
         </Link>
-        <h2 className="text-3xl font-bold tracking-tight">Add New Problem</h2>
-        <p className="text-muted-foreground mt-1 font-mono text-sm">
-          Register problem to tracking system
+        <h2 className="text-3xl font-bold">Add New Problem</h2>
+        <p className="text-muted-foreground mt-1 text-sm">
+          Add a problem to your tracking system
         </p>
       </div>
 
@@ -146,11 +146,11 @@ export default function NewProblemPage() {
         <Card className="border-2">
           <CardHeader>
             <div className="flex items-center gap-2">
-              <Terminal className="h-5 w-5 text-primary" />
+              <BookOpen className="h-5 w-5 text-primary" />
               <CardTitle>Problem Details</CardTitle>
             </div>
             <CardDescription>
-              Enter problem metadata and configuration
+              Enter problem information and settings
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -168,7 +168,6 @@ export default function NewProblemPage() {
                     setFormData({ ...formData, title: e.target.value })
                   }
                   required
-                  className="font-mono"
                 />
               </div>
 
@@ -187,7 +186,7 @@ export default function NewProblemPage() {
                     <RadioGroupItem value="leetcode" id="leetcode" />
                     <Label
                       htmlFor="leetcode"
-                      className="flex-1 cursor-pointer font-mono text-sm"
+                      className="flex-1 cursor-pointer text-sm"
                     >
                       LeetCode
                     </Label>
@@ -198,7 +197,7 @@ export default function NewProblemPage() {
                     <RadioGroupItem value="tuf" id="tuf" />
                     <Label
                       htmlFor="tuf"
-                      className="flex-1 cursor-pointer font-mono text-sm"
+                      className="flex-1 cursor-pointer text-sm"
                     >
                       TUF (Take U Forward)
                     </Label>
@@ -209,7 +208,7 @@ export default function NewProblemPage() {
                     <RadioGroupItem value="others" id="others" />
                     <Label
                       htmlFor="others"
-                      className="flex-1 cursor-pointer font-mono text-sm"
+                      className="flex-1 cursor-pointer text-sm"
                     >
                       Others
                     </Label>
@@ -228,7 +227,6 @@ export default function NewProblemPage() {
                           customSource: e.target.value,
                         })
                       }
-                      className="font-mono"
                     />
                   </div>
                 )}
@@ -247,7 +245,7 @@ export default function NewProblemPage() {
                     onChange={(e) =>
                       setFormData({ ...formData, url: e.target.value })
                     }
-                    className="pl-9 font-mono"
+                    className="pl-9"
                   />
                 </div>
               </div>
@@ -263,7 +261,7 @@ export default function NewProblemPage() {
                     setFormData({ ...formData, difficulty: value })
                   }
                 >
-                  <SelectTrigger className="font-mono">
+                  <SelectTrigger>
                     <SelectValue placeholder="Select difficulty" />
                   </SelectTrigger>
                   <SelectContent>
@@ -291,11 +289,11 @@ export default function NewProblemPage() {
 
               {/* Patterns Section */}
               <div className="space-y-2">
-                <Label className="font-mono text-xs uppercase tracking-wider">
+                <Label className="text-sm">
                   Patterns (Optional)
                 </Label>
-                <p className="text-xs text-muted-foreground mb-2 font-mono">
-                  Link patterns for statistics aggregation
+                <p className="text-xs text-muted-foreground mb-2">
+                  Link patterns for better organization
                 </p>
 
                 {/* Selected Patterns */}
@@ -306,7 +304,7 @@ export default function NewProblemPage() {
                       return (
                         <div
                           key={patternId}
-                          className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-primary/10 text-primary text-xs font-mono border border-primary/20"
+                          className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-primary/10 text-primary text-xs border border-primary/20"
                         >
                           <span>{pattern?.title}</span>
                           <button
@@ -330,7 +328,7 @@ export default function NewProblemPage() {
                       variant="outline"
                       role="combobox"
                       aria-expanded={open}
-                      className="w-full justify-between font-mono"
+                      className="w-full justify-between"
                     >
                       <span className="flex items-center gap-2">
                         <Plus className="h-4 w-4" />
@@ -343,7 +341,6 @@ export default function NewProblemPage() {
                     <Command>
                       <CommandInput
                         placeholder="Search patterns..."
-                        className="font-mono"
                       />
                       <CommandList>
                         {patternsLoading ? (
@@ -352,7 +349,7 @@ export default function NewProblemPage() {
                           </div>
                         ) : (
                           <>
-                            <CommandEmpty className="font-mono text-xs">
+                            <CommandEmpty className="text-xs">
                               No patterns found
                             </CommandEmpty>
                             <CommandGroup>
@@ -363,7 +360,6 @@ export default function NewProblemPage() {
                                   onSelect={() => {
                                     togglePattern(pattern.id);
                                   }}
-                                  className="font-mono"
                                 >
                                   <Checkbox
                                     checked={selectedPatterns.includes(
@@ -372,11 +368,11 @@ export default function NewProblemPage() {
                                     className="mr-2"
                                   />
                                   <div className="flex-1">
-                                    <div className="font-medium font-mono text-xs">
+                                    <div className="font-medium text-xs">
                                       {pattern.title}
                                     </div>
                                     {pattern.description && (
-                                      <div className="text-xs text-muted-foreground font-mono">
+                                      <div className="text-xs text-muted-foreground">
                                         {pattern.description}
                                       </div>
                                     )}
@@ -421,26 +417,6 @@ export default function NewProblemPage() {
                 </Link>
               </div>
             </form>
-          </CardContent>
-        </Card>
-
-        {/* System Reference */}
-        <Card className="mt-6 border-border bg-card">
-          <CardContent className="pt-6">
-            <div className="flex gap-4">
-              <Terminal className="h-5 w-5 text-primary shrink-0 mt-0.5" />
-              <div className="space-y-2 text-sm">
-                <p className="font-medium text-foreground font-mono uppercase tracking-wider text-xs">
-                  Input Guidelines
-                </p>
-                <div className="space-y-1 text-muted-foreground font-mono text-xs">
-                  <div>Use consistent naming conventions</div>
-                  <div>Include URL for external reference access</div>
-                  <div>Associate patterns for metric aggregation</div>
-                  <div className="text-primary">Ctrl+Enter: Submit form</div>
-                </div>
-              </div>
-            </div>
           </CardContent>
         </Card>
       </div>

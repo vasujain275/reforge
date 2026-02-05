@@ -24,7 +24,7 @@ function PageLoadingFallback() {
     <div className="flex items-center justify-center min-h-[400px]">
       <div className="text-center space-y-4">
         <div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full mx-auto" />
-        <p className="text-sm font-mono text-muted-foreground">Loading...</p>
+        <p className="text-sm text-muted-foreground">Loading...</p>
       </div>
     </div>
   );

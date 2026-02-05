@@ -25,7 +25,7 @@ function PageLoadingFallback() {
     <div className="min-h-screen bg-background flex items-center justify-center">
       <div className="text-center space-y-4">
         <div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full mx-auto" />
-        <p className="text-sm font-mono text-muted-foreground">Loading...</p>
+        <p className="text-sm text-muted-foreground">Loading...</p>
       </div>
     </div>
   );
@@ -59,7 +59,7 @@ function InitializationGuard({ children }: { children: React.ReactNode }) {
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-center space-y-4">
           <div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full mx-auto" />
-          <p className="text-sm font-mono text-muted-foreground">Checking system status...</p>
+          <p className="text-sm text-muted-foreground">Checking system status...</p>
         </div>
       </div>
     );

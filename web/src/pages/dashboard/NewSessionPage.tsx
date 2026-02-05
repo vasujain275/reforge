@@ -22,7 +22,7 @@ import type {
   GenerateSessionResponse,
   Pattern,
 } from "@/types";
-import { ArrowLeft, Loader2, Play, Terminal, Activity, Clock } from "lucide-react";
+import { ArrowLeft, Loader2, Play, Sparkles, Activity, Clock } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { TemplateGallery } from "@/components/sessions/TemplateGallery";
@@ -182,14 +182,14 @@ export default function NewSessionPage() {
           <ArrowLeft className="h-4 w-4" />
           Back to Sessions
         </Link>
-        <div className="flex items-center gap-3 mb-2">
-          <Activity className="h-7 w-7 md:h-8 md:w-8 text-primary flex-shrink-0" />
-          <h2 className="text-2xl md:text-3xl font-bold tracking-tight">
-            Session Generator Online
+        <div className="flex items-center gap-3">
+          <Sparkles className="h-7 w-7 md:h-8 md:w-8 text-primary flex-shrink-0" />
+          <h2 className="text-2xl md:text-3xl font-bold">
+            Generate Session
           </h2>
         </div>
-        <p className="text-muted-foreground font-mono text-xs md:text-sm">
-          $ reforge session --generate --smart
+        <p className="text-muted-foreground text-sm md:text-base mt-2">
+          Create a custom practice session based on your goals
         </p>
       </div>
 
@@ -209,7 +209,7 @@ export default function NewSessionPage() {
               <CardContent className="py-12">
                 <div className="flex flex-col items-center justify-center gap-3">
                   <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                  <p className="text-sm text-muted-foreground font-mono">
+                  <p className="text-sm text-muted-foreground">
                     Loading templates...
                   </p>
                 </div>
@@ -234,7 +234,7 @@ export default function NewSessionPage() {
                   >
                     <Card className="border-2 border-primary/50">
                       <CardHeader className="pb-3">
-                        <CardTitle className="text-xs md:text-sm font-mono uppercase tracking-wider">
+                        <CardTitle className="text-sm">
                           Pattern Selection Required
                         </CardTitle>
                         <CardDescription className="text-xs">
@@ -249,7 +249,7 @@ export default function NewSessionPage() {
                             setSelectedPatternId(parseInt(val))
                           }
                         >
-                          <SelectTrigger className="font-mono mt-2 text-sm">
+                          <SelectTrigger className="mt-2 text-sm">
                             <SelectValue placeholder="Choose a pattern..." />
                           </SelectTrigger>
                           <SelectContent>
@@ -280,7 +280,7 @@ export default function NewSessionPage() {
                   >
                     <Card className="border">
                       <CardHeader className="pb-3">
-                        <CardTitle className="flex items-center gap-2 text-xs md:text-sm font-mono uppercase tracking-wider">
+                        <CardTitle className="flex items-center gap-2 text-sm">
                           <Clock className="h-4 w-4" />
                           Session Duration
                         </CardTitle>
@@ -358,12 +358,12 @@ export default function NewSessionPage() {
                     {isGenerating ? (
                       <>
                         <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        <span className="font-mono text-sm">Generating...</span>
+                        <span className="text-sm">Generating...</span>
                       </>
                     ) : (
                       <>
-                        <Terminal className="h-4 w-4 mr-2" />
-                        <span className="font-mono text-sm">Generate Session</span>
+                        <Sparkles className="h-4 w-4 mr-2" />
+                        <span className="text-sm">Generate Session</span>
                       </>
                     )}
                   </Button>
@@ -377,8 +377,8 @@ export default function NewSessionPage() {
         <div className="lg:sticky lg:top-6 lg:self-start">
           <Card className="border h-full">
             <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2 font-mono text-xs md:text-sm uppercase tracking-wider">
-                <Terminal className="h-4 w-4 md:h-5 md:w-5" />
+              <CardTitle className="flex items-center gap-2 text-sm">
+                <Play className="h-4 w-4 md:h-5 md:w-5" />
                 Session Preview
               </CardTitle>
               <CardDescription className="text-xs">
@@ -390,11 +390,8 @@ export default function NewSessionPage() {
             <CardContent>
               {!generatedSession ? (
                 <div className="text-center py-12 md:py-16 text-muted-foreground">
-                  <Terminal className="h-12 w-12 md:h-16 md:w-16 mx-auto mb-4 opacity-30" />
-                  <p className="font-mono text-xs md:text-sm">
-                    $ reforge session --preview
-                  </p>
-                  <p className="text-[10px] md:text-xs mt-2">
+                  <Play className="h-12 w-12 md:h-16 md:w-16 mx-auto mb-4 opacity-30" />
+                  <p className="text-sm">
                     Generate a session to see problem selection
                   </p>
                 </div>
@@ -411,7 +408,7 @@ export default function NewSessionPage() {
                       <span className="text-xs text-muted-foreground">
                         Template
                       </span>
-                      <span className="font-mono text-xs md:text-sm font-semibold text-right">
+                      <span className="text-xs md:text-sm font-semibold text-right">
                         {generatedSession.template_name}
                       </span>
                     </div>
@@ -443,7 +440,7 @@ export default function NewSessionPage() {
                         transition={{ duration: 0.3, delay: index * 0.05 }}
                         className="flex items-start gap-2 md:gap-3 p-2 md:p-3 border rounded-lg hover:bg-muted/30 transition-colors"
                       >
-                        <div className="flex items-center justify-center w-5 h-5 md:w-6 md:h-6 rounded-full bg-primary/10 text-primary font-bold font-mono text-[10px] md:text-xs flex-shrink-0">
+                        <div className="flex items-center justify-center w-5 h-5 md:w-6 md:h-6 rounded-full bg-primary/10 text-primary font-bold text-[10px] md:text-xs flex-shrink-0">
                           {index + 1}
                         </div>
                         <div className="flex-1 min-w-0">
@@ -452,7 +449,7 @@ export default function NewSessionPage() {
                               {problem.title}
                             </span>
                             <span
-                              className={`text-[10px] md:text-xs px-1.5 py-0.5 rounded-md font-mono uppercase tracking-wider flex-shrink-0 ${
+                              className={`text-[10px] md:text-xs px-1.5 py-0.5 rounded-md flex-shrink-0 ${
                                 problem.difficulty === "hard"
                                   ? "bg-red-500/10 text-red-500"
                                   : problem.difficulty === "medium"
@@ -491,7 +488,7 @@ export default function NewSessionPage() {
                     size="lg"
                   >
                     <Play className="h-4 w-4 mr-2" />
-                    <span className="font-mono text-sm">Start Session</span>
+                    <span className="text-sm">Start Session</span>
                   </Button>
                 </motion.div>
               )}

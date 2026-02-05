@@ -2,7 +2,6 @@ package dataimport
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"io"
 	"os"
@@ -11,7 +10,11 @@ import (
 	"strings"
 	"time"
 
-	repo "github.com/vasujain275/reforge/internal/adapters/sqlite/sqlc"
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jackc/pgx/v5/pgxpool"
+	repo "github.com/vasujain275/reforge/internal/adapters/postgres/sqlc"
 )
 
 const (
@@ -44,16 +47,16 @@ type Service interface {
 
 type importService struct {
 	repo        repo.Querier
-	db          *sql.DB // Need raw DB for transactions
+	pool        *pgxpool.Pool // Need pool for transactions
 	parser      *Parser
 	datasetPath string // Path to sample-datasets folder
 }
 
 // NewService creates a new import service
-func NewService(queries repo.Querier, db *sql.DB, datasetPath string) Service {
+func NewService(queries repo.Querier, pool *pgxpool.Pool, datasetPath string) Service {
 	return &importService{
 		repo:        queries,
-		db:          db,
+		pool:        pool,
 		parser:      NewParser(),
 		datasetPath: datasetPath,
 	}
@@ -117,7 +120,7 @@ func (s *importService) analyzeProblems(ctx context.Context, problems []ParsedPr
 
 	for _, pattern := range allPatterns {
 		_, err := s.repo.GetPatternByTitle(ctx, strings.ToLower(pattern))
-		if err == sql.ErrNoRows {
+		if err == pgx.ErrNoRows {
 			patternsToCreate = append(patternsToCreate, pattern)
 		} else if err == nil {
 			existingPatterns = append(existingPatterns, pattern)
@@ -137,7 +140,7 @@ func (s *importService) analyzeProblems(ctx context.Context, problems []ParsedPr
 		}
 		_, err := s.repo.GetProblemByTitleAndSource(ctx, repo.GetProblemByTitleAndSourceParams{
 			Title:  prob.Title,
-			Source: sql.NullString{String: source, Valid: true},
+			Source: pgtype.Text{String: source, Valid: true},
 		})
 		if err == nil {
 			duplicateCount++
@@ -197,7 +200,7 @@ func (s *importService) ExecuteImportFromReader(ctx context.Context, reader io.R
 
 	// Phase 1: Create patterns
 	patternNames := s.parser.GetUniquePatterns(problems)
-	patternIDMap := make(map[string]int64) // pattern name -> ID
+	patternIDMap := make(map[string]uuid.UUID) // pattern name -> ID
 
 	progressFn(ImportProgress{
 		Phase:       "patterns",
@@ -210,11 +213,11 @@ func (s *importService) ExecuteImportFromReader(ctx context.Context, reader io.R
 		existingPattern, err := s.repo.GetPatternByTitle(ctx, strings.ToLower(patternName))
 		if err == nil {
 			patternIDMap[strings.ToLower(patternName)] = existingPattern.ID
-		} else if err == sql.ErrNoRows {
+		} else if err == pgx.ErrNoRows {
 			// Create new pattern
 			newPattern, err := s.repo.CreatePattern(ctx, repo.CreatePatternParams{
 				Title:       patternName,
-				Description: sql.NullString{},
+				Description: pgtype.Text{},
 			})
 			if err != nil {
 				// Log error but continue
@@ -247,7 +250,7 @@ func (s *importService) ExecuteImportFromReader(ctx context.Context, reader io.R
 
 		_, err := s.repo.GetProblemByTitleAndSource(ctx, repo.GetProblemByTitleAndSourceParams{
 			Title:  prob.Title,
-			Source: sql.NullString{String: source, Valid: true},
+			Source: pgtype.Text{String: source, Valid: true},
 		})
 
 		status := "created"
@@ -255,13 +258,13 @@ func (s *importService) ExecuteImportFromReader(ctx context.Context, reader io.R
 			// Duplicate found, skip
 			result.DuplicatesSkipped++
 			status = "skipped"
-		} else if err == sql.ErrNoRows {
+		} else if err == pgx.ErrNoRows {
 			// Create problem
 			newProblem, err := s.repo.CreateProblem(ctx, repo.CreateProblemParams{
 				Title:      prob.Title,
-				Source:     sql.NullString{String: source, Valid: true},
-				Url:        sql.NullString{String: prob.URL, Valid: prob.URL != ""},
-				Difficulty: sql.NullString{String: prob.Difficulty, Valid: true},
+				Source:     pgtype.Text{String: source, Valid: true},
+				Url:        pgtype.Text{String: prob.URL, Valid: prob.URL != ""},
+				Difficulty: pgtype.Text{String: prob.Difficulty, Valid: true},
 			})
 			if err != nil {
 				result.Errors = append(result.Errors, ImportError{

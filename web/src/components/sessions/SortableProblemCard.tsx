@@ -22,7 +22,7 @@ interface SortableProblemCardProps {
   onCancelTimer: () => void;
   onSkip: () => void;
   onTimerComplete: () => void;
-  sessionId: number;
+  sessionId: string;
   isSessionCompleted: boolean;
 }
 

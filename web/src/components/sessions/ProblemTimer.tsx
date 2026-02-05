@@ -86,10 +86,10 @@ function ResumeDialog({
 }
 
 interface ProblemTimerProps {
-  problemId: number;
+  problemId: string;
   problemTitle: string;
   problemDifficulty?: string;
-  sessionId: number;
+  sessionId: string;
   onComplete: () => void;
   onCancel: () => void;
 }

@@ -9,7 +9,7 @@ import {
 } from "@/lib/timer";
 
 interface AttemptTimerProps {
-  attemptId: number;
+  attemptId: string;
   problemTitle: string;
   problemDifficulty?: string;
   initialElapsedSeconds: number;

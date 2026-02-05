@@ -1,10 +1,13 @@
 package auth
 
-import "database/sql"
+import (
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
+)
 
 // UserResponse represents user data returned to clients (without sensitive fields)
 type UserResponse struct {
-	ID        int64  `json:"id"`
+	ID        string `json:"id"`
 	Email     string `json:"email"`
 	Name      string `json:"name"`
 	Role      string `json:"role"` // Always "user" or "admin", never null in response
@@ -13,7 +16,7 @@ type UserResponse struct {
 }
 
 // toUserResponse converts DB row to UserResponse
-func toUserResponse(id int64, email, name string, role sql.NullString, isActive sql.NullBool, createdAt sql.NullString) UserResponse {
+func toUserResponse(id uuid.UUID, email, name string, role pgtype.Text, isActive pgtype.Bool, createdAt pgtype.Timestamptz) UserResponse {
 	// Default values for nullable fields
 	roleStr := "user"
 	if role.Valid && role.String != "" {
@@ -27,11 +30,11 @@ func toUserResponse(id int64, email, name string, role sql.NullString, isActive 
 
 	createdAtStr := ""
 	if createdAt.Valid {
-		createdAtStr = createdAt.String
+		createdAtStr = createdAt.Time.Format("2006-01-02T15:04:05Z07:00")
 	}
 
 	return UserResponse{
-		ID:        id,
+		ID:        id.String(),
 		Email:     email,
 		Name:      name,
 		Role:      roleStr,

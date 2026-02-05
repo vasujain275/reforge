@@ -2,12 +2,13 @@ package auth
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
-	repo "github.com/vasujain275/reforge/internal/adapters/sqlite/sqlc"
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
+	repo "github.com/vasujain275/reforge/internal/adapters/postgres/sqlc"
 	"github.com/vasujain275/reforge/internal/security"
 )
 
@@ -76,14 +77,14 @@ func (s *authService) Login(ctx context.Context, email, password, userAgent, ip 
 	tokenHash := security.HashToken(rawRefreshToken)
 
 	// Store in DB
-	expiresAt := time.Now().Add(30 * 24 * time.Hour).Format(time.RFC3339)
+	expiresAt := time.Now().Add(30 * 24 * time.Hour)
 
 	params := repo.CreateRefreshTokenParams{
 		UserID:    user.ID,
 		TokenHash: tokenHash,
 		ExpiresAt: expiresAt,
-		UserAgent: toNullString(userAgent),
-		IpAddress: toNullString(ip),
+		UserAgent: toPgText(userAgent),
+		IpAddress: toPgText(ip),
 	}
 
 	_, err = s.repo.CreateRefreshToken(ctx, params)
@@ -113,9 +114,8 @@ func (s *authService) Refresh(ctx context.Context, rawRefreshToken string) (stri
 		return "", ErrInvalidToken
 	}
 
-	// Parse ISO8601 string from SQLite
-	expiry, err := time.Parse(time.RFC3339, storedToken.ExpiresAt)
-	if err != nil || time.Now().After(expiry) {
+	// Check expiry - ExpiresAt is time.Time in PostgreSQL
+	if time.Now().After(storedToken.ExpiresAt) {
 		_ = s.repo.RevokeRefreshToken(ctx, storedToken.TokenHash) // Cleanup
 		return "", ErrTokenExpired
 	}
@@ -142,9 +142,9 @@ func (s *authService) Logout(ctx context.Context, rawRefreshToken string) error 
 
 // --- Helpers ---
 
-func (s *authService) generateJWT(userID int64, email, role string) (string, error) {
+func (s *authService) generateJWT(userID uuid.UUID, email, role string) (string, error) {
 	claims := jwt.MapClaims{
-		"sub":   userID,
+		"sub":   userID.String(),
 		"email": email,
 		"role":  role,
 		"iss":   "reforge-api",
@@ -155,8 +155,8 @@ func (s *authService) generateJWT(userID int64, email, role string) (string, err
 	return token.SignedString(s.jwtSecret)
 }
 
-func toNullString(s string) sql.NullString {
-	return sql.NullString{
+func toPgText(s string) pgtype.Text {
+	return pgtype.Text{
 		String: s,
 		Valid:  s != "",
 	}

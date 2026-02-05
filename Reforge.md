@@ -1,992 +1,789 @@
-> **Tagline:** Local-first, self-hostable tool to drive consistent, explainable DSA revision for coding interviews.
-> **Design goal:** Minimal ops, maximum clarity — one Go binary serving a React SPA, SQLite as single source of truth, no ML, fully explainable selection logic.
+# Reforge
+
+> **Tagline:** Master DSA for your next coding interview with intelligent spaced repetition.
+
+> **Vision:** A professional-grade interview preparation platform that helps engineers systematically build and retain algorithmic problem-solving skills through science-backed revision scheduling.
 
 ---
 
-# Table of contents
+# Table of Contents
 
-1. Problem statement
-2. High-level solution overview
-3. Architectural decisions (rationale)
-4. **Authentication & Security** *(implemented)*
-5. Deep dive: scoring formula (math, features, tuning)
-6. Database schema (DDL + explanations)
-7. Selection & session-building algorithm (pseudocode / constraints)
-8. Revision templates (catalog + when to use each)
-9. API surface & UX flow (what the SPA will call)
-10. Deployment, backup, security, migration notes
-11. Roadmap & next steps
-
----
-
-# 1. Problem statement
-
-Preparing for technical interviews requires repeated practice and revision of coding problems and patterns. The core problems we solve:
-
-* You forget or under-prioritize problems that need revision.
-* You don’t have a reliable, explainable way to decide *which* problems to revisit and *when*.
-* Many tools are cloud-centric, opaque, or require complex setups.
-* You want a minimal, local-first solution that is self-hostable, deterministic, and auditable.
-
-**Primary user story:**
-“I want to open a local app, choose a revision template, start a session, and have the app produce a curated, time-budgeted list of problems I should revise now — with a clear explanation for each choice.”
+1. [Overview](#1-overview)
+2. [Core Features](#2-core-features)
+3. [Architecture](#3-architecture)
+4. [Tech Stack](#4-tech-stack)
+5. [Authentication & Security](#5-authentication--security)
+6. [The Scoring System](#6-the-scoring-system)
+7. [Database Schema](#7-database-schema)
+8. [Session Generation Algorithm](#8-session-generation-algorithm)
+9. [Revision Templates](#9-revision-templates)
+10. [API Reference](#10-api-reference)
+11. [Deployment](#11-deployment)
+12. [Development Setup](#12-development-setup)
+13. [Roadmap](#13-roadmap)
 
 ---
 
-# 2. High-level solution overview
+# 1. Overview
 
-**Core idea:** Use a deterministic, explainable scoring function computed from structured per-problem and per-pattern metadata to prioritize and schedule revision sessions. No AI decision-making — the system is simple, predictable, and auditable.
+## What is Reforge?
 
-**System components:**
+Reforge is a DSA (Data Structures & Algorithms) revision platform designed for software engineers preparing for technical interviews. It uses a deterministic, explainable scoring algorithm to intelligently schedule which problems you should practice and when.
 
-* Single Go backend binary:
+## Key Principles
 
-  * Serves REST API + static React SPA (built assets embedded in the binary).
-  * Uses SQLite as the single source of truth.
-  * Handles scoring, session-building, imports/exports, and all business logic.
-* React SPA (desktop-first):
+1. **Explainable Decisions** — Every recommendation shows exactly why a problem was selected, building trust and understanding.
 
-  * UI for adding problems, editing metadata, starting sessions, logging attempts.
-  * Shows breakdowns (why a problem was chosen).
-* No external services required; self-hostable via `./dsa-sensei` or Docker image.
+2. **Spaced Repetition** — Uses proven memory science to schedule reviews at optimal intervals for long-term retention.
 
-**Key properties:**
+3. **Progress Tracking** — Comprehensive analytics on your confidence, patterns, and improvement over time.
 
-* Single source of truth (SQLite)
-* Deterministic & testable scoring
-* Explainable decisions (show feature-by-feature contribution)
-* Extensible templates (user chooses intent)
-* Minimal operations — easy to run on a personal machine
+4. **Open Source** — 100% open source under MIT license. Self-host for free, or use our managed service.
 
----
+5. **Privacy First** — Your practice data is yours. Self-hosted instances keep all data on your infrastructure.
 
-# 3. Architectural decisions (rationale)
+## Who is it for?
 
-1. **Go backend + SQLite**
-
-   * Single binary deployable everywhere (Linux, Mac, Windows).
-   * Low memory, fast startup, stable.
-   * SQLite is local-first and simple to backup.
-   * All business logic in one compiled artefact simplifies trust & security.
-
-2. **React SPA served by the Go binary**
-
-   * Desktop-focused UI with familiar UX patterns.
-   * No PWA/ServiceWorker complexity — simpler offline model.
-   * Embedding static assets into binary simplifies deployment.
-
-3. **No AI in core decision-making**
-
-   * Your revision needs are rule-based and explainable; deterministic heuristics suffice and build trust.
-   * AI introduces non-determinism and a maintenance burden without proportionate benefit for this problem.
-
-4. **Pattern/problem normalization**
-
-   * Keep patterns as first-class entities (many-to-many with problems).
-   * Track both problem-level and pattern-level user stats for smarter decisions.
+- **Individual Engineers** — Preparing for FAANG/MAANG interviews systematically
+- **Bootcamp Students** — Tracking progress through DSA curriculum
+- **Study Groups** — Teams preparing together with shared problem sets
+- **Educators** — Managing student cohorts and tracking class progress
 
 ---
 
-# 4. Authentication & Security *(Implemented)*
+# 2. Core Features
 
-The system implements a stateful JWT-based authentication flow with refresh tokens. This was added to support multi-user environments and secure personal data.
+## Smart Problem Scheduling
+
+The heart of Reforge is its scoring algorithm. For each problem, it calculates a priority score based on:
+
+- Your confidence level (self-reported)
+- Time since last practice
+- Historical performance (pass/fail rate)
+- Pattern weaknesses (if you're weak at "Dynamic Programming", those problems get prioritized)
+- Problem difficulty
+
+The algorithm is fully transparent — you can see exactly how each factor contributes to a problem's priority.
+
+## Session Generation
+
+Tell Reforge how much time you have, and it generates an optimized practice session:
+
+- **Quick Session (15-30 min)** — Focus on weak areas with quick wins
+- **Standard Session (45-60 min)** — Balanced mix of review and challenge
+- **Deep Dive (90+ min)** — Comprehensive pattern practice
+
+Each session explains why each problem was selected.
+
+## Progress Analytics
+
+- Confidence trends over time
+- Pattern mastery breakdown
+- Streak tracking
+- Session history with detailed attempt logs
+
+## Flexible Problem Management
+
+- Add problems from any source (LeetCode, HackerRank, custom)
+- Tag with multiple patterns (Two Pointers, BFS, etc.)
+- Track solutions and notes
+- Import/export capabilities
+
+---
+
+# 3. Architecture
+
+## System Overview
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                        Clients                               │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐       │
+│  │   Web App    │  │   Mobile     │  │    CLI       │       │
+│  │   (React)    │  │   (Future)   │  │   (Future)   │       │
+│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘       │
+└─────────┼─────────────────┼─────────────────┼───────────────┘
+          │                 │                 │
+          ▼                 ▼                 ▼
+┌─────────────────────────────────────────────────────────────┐
+│                      API Gateway                             │
+│                    (Go + Chi Router)                         │
+│  ┌─────────────────────────────────────────────────────┐    │
+│  │  Authentication │ Rate Limiting │ Request Logging   │    │
+│  └─────────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────────┘
+          │
+          ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    Application Layer                         │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐    │
+│  │  Users   │  │ Problems │  │ Sessions │  │ Scoring  │    │
+│  │ Service  │  │ Service  │  │ Service  │  │ Service  │    │
+│  └──────────┘  └──────────┘  └──────────┘  └──────────┘    │
+└─────────────────────────────────────────────────────────────┘
+          │
+          ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    Data Layer                                │
+│  ┌─────────────────────────────────────────────────────┐    │
+│  │                   PostgreSQL                         │    │
+│  │   (UUID primary keys, TIMESTAMPTZ, full-text search) │    │
+│  └─────────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## Design Principles
+
+### Hexagonal Architecture
+
+The backend follows hexagonal (ports & adapters) architecture:
+
+- **Domain Layer** — Pure business logic, no external dependencies
+- **Ports** — Interfaces defining how the domain interacts with the outside world
+- **Adapters** — Implementations of ports (PostgreSQL adapter, HTTP handlers, etc.)
+
+This allows easy testing and the ability to swap implementations.
+
+### API-First Design
+
+- RESTful JSON API
+- JWT-based authentication with refresh tokens
+- Consistent error responses
+- OpenAPI specification (coming soon)
+
+### Type Safety
+
+- **Backend:** SQLC generates type-safe Go code from SQL queries
+- **Frontend:** TypeScript strict mode, no `any` types
+- **API Contract:** Shared types ensure frontend/backend alignment
+
+---
+
+# 4. Tech Stack
+
+## Backend
+
+| Component | Technology | Purpose |
+|-----------|------------|---------|
+| Language | Go 1.23+ | Fast, type-safe, excellent concurrency |
+| Router | Chi | Lightweight, idiomatic Go HTTP router |
+| Database | PostgreSQL 16+ | Production-grade relational database |
+| DB Driver | pgx/v5 | High-performance PostgreSQL driver |
+| Migrations | Goose | Database schema versioning |
+| Query Gen | SQLC | Type-safe SQL query generation |
+| Auth | JWT + bcrypt | Stateful refresh tokens |
+
+## Frontend
+
+| Component | Technology | Purpose |
+|-----------|------------|---------|
+| Framework | React 19 | Component-based UI |
+| Language | TypeScript 5.7+ | Type safety |
+| Build Tool | Vite | Fast development and builds |
+| Styling | Tailwind CSS | Utility-first CSS |
+| Components | Shadcn UI | Accessible, customizable components |
+| State | Zustand | Lightweight state management |
+| HTTP Client | Axios | API communication with interceptors |
+
+## Infrastructure
+
+| Component | Technology | Purpose |
+|-----------|------------|---------|
+| Containerization | Docker | Consistent deployment |
+| Orchestration | Docker Compose | Multi-container management |
+| Reverse Proxy | Nginx/Caddy | SSL termination, static serving |
+| CI/CD | GitHub Actions | Automated testing and deployment |
+
+---
+
+# 5. Authentication & Security
 
 ## Authentication Flow
 
-1. **Registration:** User provides email, password, and name. Password is hashed using bcrypt before storage.
-2. **Login:** User submits email/password → backend validates credentials → returns short-lived JWT access token (15 min) + long-lived refresh token (7 days) stored as HTTP-only cookies.
-3. **Protected Routes:** Access token is validated via middleware. If expired, client uses refresh token to obtain new access token.
-4. **Logout:** Invalidates the refresh token in the database, removing the session.
+1. **Registration:** User provides email, password, name. Password hashed with bcrypt.
+2. **Login:** Validates credentials → Returns short-lived access token (15 min) + long-lived refresh token (7 days)
+3. **Token Refresh:** Access token expired → Use refresh token to get new access token
+4. **Logout:** Invalidates refresh token server-side
 
-## Token Storage
+## Token Strategy
 
-* **Access Token:** Short-lived JWT (15 minutes), stored in HTTP-only cookie.
-* **Refresh Token:** Long-lived token (7 days), hashed and stored in `refresh_tokens` table.
-* **Stateful Refresh:** Refresh tokens are stored server-side, allowing for explicit revocation and session management.
+| Token | Lifetime | Storage | Purpose |
+|-------|----------|---------|---------|
+| Access Token | 15 minutes | HTTP-only cookie | API authentication |
+| Refresh Token | 7 days | HTTP-only cookie + DB hash | Session persistence |
 
-## Security Considerations
+## Security Measures
 
-* Passwords hashed with bcrypt (cost factor 10+).
-* HTTP-only cookies prevent XSS access to tokens.
-* CSRF protection via SameSite cookie attribute.
-* Refresh tokens are hashed before storage.
-* Token expiry prevents indefinite session persistence.
+- **Password Hashing:** bcrypt with cost factor 10+
+- **Token Storage:** HTTP-only cookies prevent XSS access
+- **CSRF Protection:** SameSite cookie attribute
+- **Refresh Token Rotation:** Tokens hashed before database storage
+- **Rate Limiting:** Prevents brute force attacks (coming soon)
 
-## Database Tables for Auth
+---
 
-```sql
--- Users table
-CREATE TABLE users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    email TEXT UNIQUE NOT NULL,       -- Used for login
-    password_hash TEXT NOT NULL,      -- Bcrypt hash
-    name TEXT NOT NULL,
-    created_at TEXT DEFAULT CURRENT_TIMESTAMP
-);
+# 6. The Scoring System
 
--- Refresh Tokens (Stateful Auth)
-CREATE TABLE refresh_tokens (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
-    token_hash TEXT NOT NULL,         -- Store hash of the token
-    expires_at TEXT NOT NULL,
-    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-    user_agent TEXT,
-    ip_address TEXT,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-);
+This is the core algorithm that makes Reforge intelligent. It produces a score between 0 and 1, where **higher = more urgent to practice**.
+
+## Input Features
+
+For each problem, we compute these normalized features (all scaled to 0-1):
+
+| Feature | Formula | Description |
+|---------|---------|-------------|
+| `f_conf` | `(100 - confidence) / 100` | Lower confidence = higher urgency |
+| `f_days` | `min(days, cap) / cap` | Longer since practice = higher urgency |
+| `f_attempts` | `min(attempts, 10) / 10` | More attempts = persistent difficulty |
+| `f_time` | `min(avg_time, 3600) / 3600` | Longer solve time = complexity |
+| `f_difficulty` | Easy=0.2, Medium=0.5, Hard=1.0 | Harder problems get slight boost |
+| `f_failed` | 1 if last attempt failed, else 0 | Recent failure = urgent |
+| `f_pattern` | `1 - (pattern_avg_confidence/100)` | Weak patterns get boosted |
+
+## Weights (Configurable)
+
+Default weights (must sum to 1.0):
+
+```
+w_conf      = 0.30  (Confidence is strongest signal)
+w_days      = 0.20  (Time-based spacing)
+w_attempts  = 0.10  (Persistent difficulty)
+w_time      = 0.05  (Complexity indicator)
+w_difficulty = 0.15 (Difficulty boost)
+w_failed    = 0.10  (Recent failure priority)
+w_pattern   = 0.10  (Pattern weakness)
+```
+
+Users can customize these weights in Settings.
+
+## Final Score Calculation
+
+```
+score = w_conf * f_conf
+      + w_days * f_days
+      + w_attempts * f_attempts
+      + w_time * f_time
+      + w_difficulty * f_difficulty
+      + w_failed * f_failed
+      + w_pattern * f_pattern
+```
+
+## Score Interpretation
+
+| Score Range | Priority | Action |
+|-------------|----------|--------|
+| 0.7 - 1.0 | High | Practice immediately |
+| 0.4 - 0.7 | Medium | Include in regular sessions |
+| 0.0 - 0.4 | Low | Recently practiced or mastered |
+
+## Explainability
+
+The UI shows each factor's contribution:
+
+```
+Problem: "LRU Cache" — Score: 0.78
+
+Breakdown:
+• Confidence (45%) ........... +0.165  (Low confidence, needs practice)
+• Days since practice (18) ... +0.120  (Getting stale)
+• Failed last attempt ........ +0.100  (Need to retry)
+• Pattern weakness (Design) .. +0.085  (Weak in this pattern)
+• Difficulty (Hard) .......... +0.150  (Hard problem boost)
+• Attempts (3) ............... +0.030  
+• Average time ............... +0.025
 ```
 
 ---
 
-# 5. Deep dive — THE scoring formula
+# 7. Database Schema
 
-This is the heart of the system: a normalized, weighted feature aggregation producing a `score ∈ [0, 1]`, where higher = more urgent.
+## Overview
 
-## Goals for formula
+PostgreSQL with UUID primary keys and TIMESTAMPTZ for all timestamps.
 
-* Explainable (show contributions)
-* Tunable by weight config
-* Robust to missing data (defaults)
-* Mixes immediate personal signals (confidence, last failure) with temporal signals (age) and difficulty
+## Core Tables
 
-## Inputs (user_problem_stats + user_pattern_stats)
-
-For each problem (per-user):
-
-* `confidence` (0–100): self-reported confidence from the most recent attempt.
-* `avg_confidence` (0–100): average confidence across all attempts for a problem.
-* `last_attempt_at` (nullable timestamp)
-* `total_attempts` (integer)
-* `avg_time_seconds` (nullable number)
-* `last_outcome` (`passed` / `failed` / null)
-* `difficulty` (`easy` / `medium` / `hard`)
-* associated `patterns` (list) and their `avg_confidence` per user
-
-## Features (normalized to 0..1)
-
-All features are defined so that **higher → more urgent**.
-
-1. **f_conf** — confidence urgency
-
-   ```
-   f_conf = (100 - confidence) / 100
-   ```
-
-   Example: confidence 40 → f_conf = 0.60.
-
-2. **f_days** — age urgency (how long since last attempt, with exponential backoff)
-
-   To prevent mastered problems from appearing too frequently, the time-based urgency uses a dynamic cap that increases with mastery. A `mastery_multiplier` extends the revision period based on historical performance.
-
-   ```
-   // Based on total attempts and average confidence for the problem.
-   if total_attempts > 3 and avg_confidence > 90:
-       mastery_multiplier = 4.0
-   elif total_attempts > 1 and avg_confidence > 80:
-       mastery_multiplier = 2.0
-   else:
-       mastery_multiplier = 1.0
-
-   days = days_since_last_attempt (if null, use LARGE_DEFAULT e.g., 365)
-   dynamic_days_cap = 90 * mastery_multiplier // Cap becomes 90, 180, or 360 days
-   f_days = min(days, dynamic_days_cap) / dynamic_days_cap
-   ```
-
-   Recent attempts → small value. Old attempts → value close to 1. High mastery extends the time before a problem is considered "urgent" again.
-
-3. **f_attempts** — attempt-based signal
-
-   ```
-   f_attempts = min(total_attempts, ATTEMPT_CAP) / ATTEMPT_CAP   // ATTEMPT_CAP = 10
-   ```
-
-   More attempts indicates persistent difficulty; we treat that as higher urgency to revisit.
-
-4. **f_time** — time-based complexity (if available)
-
-   ```
-   f_time = min(avg_time_seconds, TIME_CAP) / TIME_CAP  // TIME_CAP = 3600 (1 hour)
-   ```
-
-   Longer avg time → higher urgency.
-
-5. **f_difficulty** — difficulty indicator
-
-   ```
-   easy -> 0.20
-   medium -> 0.50
-   hard -> 1.00
-   ```
-
-6. **f_failed** — last outcome failure flag
-
-   ```
-   f_failed = 1 if last_outcome == 'failed' else 0
-   ```
-
-7. **f_pattern** — pattern weakness (aggregated)
-   For a problem associated with multiple patterns:
-
-   ```
-   per-pattern weakness = 1 - (pattern_avg_confidence/100)
-   f_pattern = mean(per-pattern weakness)  // if no pattern stats, fallback 0.5
-   ```
-
-## Weights (default, sum to 1.0)
-
-These are our recommended starting weights — **configurable via Settings UI and stored in environment variables**.
-
-* `w_conf = 0.30`
-* `w_days = 0.20`
-* `w_attempts = 0.10`
-* `w_time = 0.05`
-* `w_difficulty = 0.15`
-* `w_failed = 0.10`
-* `w_pattern = 0.10`
-
-**(Sanity check)**
-0.30 + 0.20 + 0.10 + 0.05 + 0.15 + 0.10 + 0.10 = 1.00
-
-**Configuration:**
-- Default weights are loaded from environment variables (`DEFAULT_W_CONF`, `DEFAULT_W_DAYS`, etc.)
-- Users can customize weights via the Settings page (`/dashboard/settings`)
-- Weight changes are persisted to the database (`system_settings` table using UPSERT)
-- A "Reset to Defaults" button restores environment-configured values
-- The UI validates that weights sum to 1.00 for optimal scoring
-
-## Final score
-
-```
-score = w_conf*f_conf
-      + w_days*f_days
-      + w_attempts*f_attempts
-      + w_time*f_time
-      + w_difficulty*f_difficulty
-      + w_failed*f_failed
-      + w_pattern*f_pattern
-```
-
-**Interpretation**
-
-* `score ≈ 0.7-1.0`: high priority (pick for today unless time is tiny).
-* `score ≈ 0.4-0.7`: medium priority.
-* `score < 0.4`: low priority.
-
-## Reasoning & properties
-
-* **Confidence** is strongest signal because it encodes both self-knowledge and recent practice effects.
-* **Days** gives spacing: even confident items should be rechecked after long gaps.
-* **Attempts** and **failed** capture difficulty that may not be shown purely by confidence.
-* **Pattern-level** stats ensure we pay attention to systemic weaknesses (e.g., many problems in Sliding Window are low-confidence → recommend multiple pattern items).
-* **Difficulty** nudges heavier problems up so medium-to-hard weak areas get adequate attention.
-
-## Handling missing data
-
-* Missing `last_attempt_at` → treat as very old (use 365 days cap).
-* Missing `avg_time_seconds` → set `w_time = 0` and redistribute the 0.05 weight into `w_conf` or make `w_time` configurable at runtime.
-* Missing pattern stats → fallback `f_pattern = 0.5`.
-
-## Example (digit-by-digit)
-
-A worked example is included in the internal docs and shown dynamically in the UI per problem (the UI will show each contribution and the final score).
-
----
-
-# 6. Database schema (DDL + explanation)
-
-**Goal:** explicit, normalized, queryable. Avoid heavy JSON for important fields.
-
-> NOTE: This is the **implemented** SQLite schema. Uses `INTEGER PRIMARY KEY AUTOINCREMENT` for IDs and ISO timestamps.
-
-## System Configuration
+### Users & Authentication
 
 ```sql
--- System Settings (Global tuning parameters for scoring weights)
-CREATE TABLE system_settings (
-    key TEXT PRIMARY KEY,        -- e.g., 'w_conf'
-    value TEXT NOT NULL,         -- Stored as string, app casts to float/int
-    description TEXT,
-    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-);
-
--- Default scoring weights (loaded from environment variables)
--- DEFAULT_W_CONF=0.30, DEFAULT_W_DAYS=0.20, DEFAULT_W_ATTEMPTS=0.10, 
--- DEFAULT_W_TIME=0.05, DEFAULT_W_DIFFICULTY=0.15, DEFAULT_W_FAILED=0.10, 
--- DEFAULT_W_PATTERN=0.10
---
--- Note: Weights are persisted to system_settings table when changed via Settings UI.
--- The GetScoringWeights service method starts with defaults from env, then overrides
--- with any values stored in the database (using UPSERT for updates).
-```
-
-## Authentication Tables
-
-```sql
--- Users
 CREATE TABLE users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    email TEXT UNIQUE NOT NULL,       -- Used for login
-    password_hash TEXT NOT NULL,      -- Bcrypt/Argon2 hash
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    email TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
     name TEXT NOT NULL,
-    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    role TEXT DEFAULT 'user' CHECK (role IN ('user', 'admin')),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Refresh Tokens (Stateful Auth)
 CREATE TABLE refresh_tokens (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
-    token_hash TEXT NOT NULL,         -- Store hash of the token
-    expires_at TEXT NOT NULL,
-    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token_hash TEXT NOT NULL,
+    expires_at TIMESTAMPTZ NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
     user_agent TEXT,
-    ip_address TEXT,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    ip_address TEXT
 );
 ```
 
-## Core Domain Tables
+### Problems & Patterns
 
 ```sql
--- Problems
 CREATE TABLE problems (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     title TEXT NOT NULL,
-    source TEXT,                      -- e.g., "LeetCode", "NeetCode 150"
+    source TEXT,                    -- e.g., "LeetCode", "NeetCode 150"
     url TEXT,
     difficulty TEXT CHECK (difficulty IN ('easy','medium','hard')) DEFAULT 'medium',
-    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Patterns
 CREATE TABLE patterns (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    title TEXT NOT NULL,              -- Display name e.g., 'Sliding Window'
-    description TEXT
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    title TEXT NOT NULL,            -- e.g., "Sliding Window"
+    description TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Problem <-> Patterns (Many-to-Many)
 CREATE TABLE problem_patterns (
-    problem_id INTEGER NOT NULL,
-    pattern_id INTEGER NOT NULL,
-    PRIMARY KEY (problem_id, pattern_id),
-    FOREIGN KEY (problem_id) REFERENCES problems(id) ON DELETE CASCADE,
-    FOREIGN KEY (pattern_id) REFERENCES patterns(id) ON DELETE CASCADE
+    problem_id UUID NOT NULL REFERENCES problems(id) ON DELETE CASCADE,
+    pattern_id UUID NOT NULL REFERENCES patterns(id) ON DELETE CASCADE,
+    PRIMARY KEY (problem_id, pattern_id)
 );
 ```
 
-## User Progress & Stats Tables
+### User Progress
 
 ```sql
--- Revision Sessions (Study sessions history)
-CREATE TABLE revision_sessions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
-    template_key TEXT,                -- e.g., 'daily_revision'
-    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-    planned_duration_min INTEGER,
-    items_ordered TEXT,               -- JSON Array of planned problems
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-);
-
--- Attempts (The detailed log of every practice run)
--- NEW: This table captures every individual attempt for detailed analytics
-CREATE TABLE attempts (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
-    problem_id INTEGER NOT NULL,
-    session_id INTEGER,               -- Nullable (can solve outside a session)
-    confidence_score INTEGER CHECK (confidence_score BETWEEN 0 AND 100),
-    duration_seconds INTEGER,
-    outcome TEXT CHECK (outcome IN ('passed', 'failed')),
-    notes TEXT,                       -- Optional user reflection
-    performed_at TEXT DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    FOREIGN KEY (problem_id) REFERENCES problems(id) ON DELETE CASCADE,
-    FOREIGN KEY (session_id) REFERENCES revision_sessions(id) ON DELETE SET NULL
-);
-
--- User Problem Stats (The "Brain" of the scoring system)
--- This is an aggregate table updated after every attempt to make scoring fast.
 CREATE TABLE user_problem_stats (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
-    problem_id INTEGER NOT NULL,
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    problem_id UUID NOT NULL REFERENCES problems(id) ON DELETE CASCADE,
     status TEXT CHECK (status IN ('unsolved','solved','abandoned')) DEFAULT 'unsolved',
     confidence INTEGER CHECK (confidence BETWEEN 0 AND 100) DEFAULT 50,
     avg_confidence INTEGER CHECK (avg_confidence BETWEEN 0 AND 100) DEFAULT 50,
-    last_attempt_at TEXT,             -- ISO8601 Timestamp
+    last_attempt_at TIMESTAMPTZ,
     total_attempts INTEGER DEFAULT 0,
     avg_time_seconds INTEGER,
-    last_outcome TEXT,                -- 'passed' or 'failed'
-    recent_history_json TEXT,         -- JSON array of last 3-5 attempts for quick UI display
-    updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(user_id, problem_id),
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    FOREIGN KEY (problem_id) REFERENCES problems(id) ON DELETE CASCADE
+    last_outcome TEXT,              -- 'passed' or 'failed'
+    -- Spaced repetition fields
+    ease_factor REAL DEFAULT 2.5,
+    interval_days INTEGER DEFAULT 1,
+    next_review_at TIMESTAMPTZ,
+    UNIQUE(user_id, problem_id)
 );
 
--- User Pattern Stats (Aggregates for "weakness" analysis)
-CREATE TABLE user_pattern_stats (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
-    pattern_id INTEGER NOT NULL,
-    times_revised INTEGER DEFAULT 0,
-    avg_confidence INTEGER DEFAULT 50,
-    last_revised_at TEXT,
-    UNIQUE(user_id, pattern_id),
-    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    FOREIGN KEY (pattern_id) REFERENCES patterns(id) ON DELETE CASCADE
+CREATE TABLE attempts (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    problem_id UUID NOT NULL REFERENCES problems(id) ON DELETE CASCADE,
+    session_id UUID REFERENCES revision_sessions(id) ON DELETE SET NULL,
+    confidence_score INTEGER CHECK (confidence_score BETWEEN 0 AND 100),
+    duration_seconds INTEGER,
+    outcome TEXT CHECK (outcome IN ('passed', 'failed')),
+    notes TEXT,
+    performed_at TIMESTAMPTZ DEFAULT NOW()
 );
 ```
-
-## Indexes
-
-```sql
-CREATE INDEX idx_refresh_tokens_hash ON refresh_tokens(token_hash);
-CREATE INDEX idx_refresh_tokens_user ON refresh_tokens(user_id);
-CREATE INDEX idx_problem_patterns_pattern ON problem_patterns(pattern_id);
-CREATE INDEX idx_attempts_user_problem ON attempts(user_id, problem_id);
-CREATE INDEX idx_attempts_performed_at ON attempts(user_id, performed_at);
-CREATE INDEX idx_stats_user_lookup ON user_problem_stats(user_id);
-CREATE INDEX idx_stats_urgency ON user_problem_stats(user_id, last_attempt_at);
-```
-
-## Triggers
-
-```sql
--- Auto-update 'updated_at' when stats change
-CREATE TRIGGER update_user_problem_stats_timestamp
-AFTER UPDATE ON user_problem_stats
-BEGIN
-    UPDATE user_problem_stats SET updated_at = CURRENT_TIMESTAMP WHERE id = NEW.id;
-END;
-```
-
-## Schema Notes
-
-* **`attempts` table** (NEW): Captures every individual practice attempt with full details. This allows for detailed analytics, progress charts, and session replays. The `user_problem_stats` table is an aggregate/cache derived from this data.
-* **`recent_history_json`**: A lightweight JSON cache of recent attempts for quick UI display, avoiding the need to query the full `attempts` table for simple displays.
-* **`session_id` in attempts**: Nullable because users can practice problems outside of formal sessions.
-* **`system_settings`**: Stores scoring weights and other tunable parameters, allowing runtime adjustments without code changes.
-
----
-
-# 7. Selection & session-building algorithm
-
-We need to produce actionable sessions that:
-
-* respect time budget
-* include at least one quick win
-* limit pattern repetition
-* prefer high-score problems
-
-## Steps (high-level)
-
-1. **Resolve template** → get `planned_duration_min` and template constraints (`max_same_pattern`, `quick_win_cutoff_min`, `max_difficulty`, etc.).
-
-2. **Query & compute features** for all `user_problem_stats` for the user (join problem & pattern aggregates).
-
-3. **Compute `score`** for each problem using the formula.
-
-4. **Filter**: remove `status = abandoned`, apply template-level filters (e.g., if template says `max_difficulty = medium`).
-
-5. **Sort candidates by `score DESC`**.
-
-6. **Greedy session builder**:
-
-   * Start with sorted candidates.
-   * Maintain `remaining_time = planned_duration_min`.
-   * For each candidate:
-
-     * `est_min = ceil(avg_time_seconds / 60)` if present, else difficulty default (easy=12, medium=25, hard=45).
-     * If `est_min > remaining_time` → skip.
-     * If adding the problem breaks `max_same_pattern` constraint → skip.
-     * Add problem to session, decrement `remaining_time`.
-   * Post-check: ensure at least one `quick win` (planned_min <= `quick_win_cutoff_min`). If none, try to swap in an easy candidate.
-
-7. **Return session** as ordered list with reasons (each reason is a short string derived from the top contributing features, e.g., "Low confidence (40), failed last attempt, 17 days since last").
-
-## Greedy builder pseudocode (Go-flavored pseudocode)
-
-```go
-type Candidate struct {
-  ProblemID string
-  Score float64
-  Patterns []string
-  EstMin int
-  Difficulty string
-  Features map[string]float64
-}
-
-func BuildSession(candidates []Candidate, budgetMin int, constraints Constraints) []SessionItem {
-  // candidates already sorted by Score desc
-  var session []SessionItem
-  remaining := budgetMin
-  patternCounts := map[string]int{}
-
-  for _, c := range candidates {
-    if c.EstMin > remaining { continue }
-    if exceedsPatternLimit(c.Patterns, patternCounts, constraints.MaxSamePattern) { continue }
-    if !allowedDifficulty(c.Difficulty, constraints.MaxDifficulty) { continue }
-
-    // Accept
-    session = append(session, SessionItem{ProblemID: c.ProblemID, PlannedMin: c.EstMin, Reason: reasonFromTopFeatures(c)})
-    remaining -= c.EstMin
-
-    for _, p := range c.Patterns {
-      patternCounts[p]++
-    }
-    if remaining <= 0 { break }
-  }
-
-  // ensure quick win
-  if !hasQuickWin(session, constraints.QuickWinCutoffMin) {
-    // try to add/replace
-    for _, c := range candidates {
-      if c.EstMin <= constraints.QuickWinCutoffMin && !inSession(c.ProblemID, session) {
-         // find candidate to remove or skip substitution logic if no time
-         // simple approach: if remaining >= c.EstMin add; else try to replace a lower-score long item
-      }
-    }
-  }
-  return session
-}
-```
-
-**Why greedy?**
-Greedy is simple and deterministic and works well when candidate pool is pre-ranked and time budgets are moderate. If you want more optimal packing you can extend to knapsack-like algorithms later, but not necessary for MVP.
-
----
-
-# 8. Revision templates (catalog + when to use)
-
-Each template has:
-
-* `display_name`
-* `template_key` (internal)
-* `planned_duration_min`
-* filter constraints (max difficulty, patterns, min_confidence etc.)
-* session construction rules (min quick wins, max same pattern)
-
-Below is a recommended set tailored for interview prep. You can expand or edit these later.
-
-> Note: your existing human labels are preserved and used as display names — the system will map these to a machine spec. (Templates are inspired by your earlier list.)
-
-## Template definitions
-
-### 1. `daily_revision` — ⚡ Daily Revision (35 min)
-
-* **When to use:** Daily short sessions when you want consistent exposure to weak problems.
-* **Duration:** 35 min
-* **Filters:** difficulty ≤ medium
-* **Emphasis:** low confidence, failed attempts
-* **Constraints:** at least 2 quick wins (≤ 15 min); max 2 same pattern
-* **Goal:** keep streak, address immediate weaknesses
-
-### 2. `daily_mixed` — 📚 Daily Mixed Practice (55 min)
-
-* **When:** when you have more time and want to mix revision with slightly harder practice.
-* **Duration:** 55 min
-* **Filters:** difficulty ≤ hard (allow 1-2 hards)
-* **Emphasis:** blend of weak problems + 1 new/harder item
-* **Constraints:** at least 1 quick win; max 2 same pattern
-
-### 3. `weekend_comprehensive` — 🏖️ Weekend Comprehensive (150 min)
-
-* **When:** weekend deep session to consolidate patterns.
-* **Duration:** 150 min
-* **Filters:** no difficulty filter
-* **Emphasis:** pattern mastery; include 3-4 problems from weakest patterns
-* **Constraints:** max 3 same pattern; ensure at least one hard problem
-
-### 4. `weekend_weak_patterns` — 🚨 Weekend Weak Focus (120 min)
-
-* **When:** you want to attack your weakest patterns intensively.
-* **Duration:** 120 min
-* **Emphasis:** problems drawn from top-N weakest patterns (N=2)
-* **Constraints:** max 3 different patterns; allow multiple problems from same pattern by design
-
-### 5. `pattern_deep_dive` — 🎯 Pattern Deep Dive (90 min)
-
-* **When:** you need to master one pattern (e.g., Sliding Window).
-* **Duration:** 90 min
-* **Filters:** patterns == pattern_key (user selects)
-* **Emphasis:** same-pattern problems
-* **Constraints:** allow up to 5 problems from same pattern; include easy-to-medium mix
-
-### 6. `confidence_booster` — 💪 Confidence Booster (45 min)
-
-* **When:** you need a confidence lift (pre-interview warmup).
-* **Duration:** 45 min
-* **Emphasis:** include 3 quick wins (easy) and 1 medium
-* **Constraints:** difficulty <= medium; quick-win heavy
-
-### 7. `challenge_mode` — 🔥 Challenge Mode (100 min)
-
-* **When:** simulate interview stress / practice harder problems.
-* **Duration:** 100 min
-* **Filters:** difficulty >= medium (prefer hard)
-* **Emphasis:** hardest problems across weak patterns
-* **Constraints:** ensure at least 1 hard; max 2 easy
-
-## How to choose a template (UI guidance)
-
-* **Daily (short)**: choose `daily_revision` when tired or on a short break; `daily_mixed` when you have more time.
-* **Weekend (long)**: choose `weekend_comprehensive` or `weekend_weak_patterns` depending on whether you want breadth or depth.
-* **Pattern work**: `pattern_deep_dive` when you feel a specific pattern is weak.
-* **Confidence**: `confidence_booster` the day before an interview to get wins.
-* **Challenge**: `challenge_mode` for heavy practice and time-boxing.
-
----
-
-# 9. API surface & UX flow
-
-All endpoints are prefixed with `/api/v1`. Protected routes require a valid JWT access token (sent via HTTP-only cookie).
-
-## Implemented Endpoints ✅
-
-### Health Check
-* `GET /api/v1/health` — Health check (returns 200 OK)
-
-### Authentication
-* `POST /api/v1/auth/login` — Login with email/password → returns access token + refresh token (HTTP-only cookies)
-* `POST /api/v1/auth/logout` — Logout, invalidates refresh token
-* `POST /api/v1/auth/refresh` — Refresh access token using refresh token
-
-### Users
-* `POST /api/v1/users` — Create user (email, password, name) → returns user info (public registration)
-* `GET /api/v1/users/me` — Get current authenticated user *(protected)*
-
-## Required Endpoints (To Be Implemented) 🔧
-
-### Dashboard
-* `GET /api/v1/dashboard/stats` *(protected)* — Returns aggregate stats for dashboard home
-  ```json
-  {
-    "total_problems": 45,
-    "problems_solved": 32,
-    "patterns_covered": 12,
-    "avg_confidence": 72,
-    "current_streak": 5,
-    "total_sessions": 18,
-    "problems_due": 8
-  }
-  ```
-
-### Problems
-* `GET /api/v1/problems` *(protected)* — List all problems with user stats
-  ```json
-  {
-    "problems": [{
-      "id": 1,
-      "title": "Two Sum",
-      "source": "LeetCode",
-      "url": "https://...",
-      "difficulty": "easy",
-      "patterns": ["arrays", "hash-table"],
-      "confidence": 85,
-      "last_attempt_at": "2024-01-15T10:30:00Z",
-      "total_attempts": 3,
-      "status": "solved",
-      "score": 0.42
-    }]
-  }
-  ```
-* `GET /api/v1/problems/urgent` *(protected)* — Get top N problems needing revision (sorted by score desc)
-* `GET /api/v1/problems/:id` *(protected)* — Get single problem with full details
-* `POST /api/v1/problems` *(protected)* — Create new problem
-  ```json
-  {
-    "title": "Two Sum",
-    "source": "LeetCode",
-    "url": "https://...",
-    "difficulty": "easy",
-    "patterns": [1, 2]  // pattern IDs
-  }
-  ```
-* `PUT /api/v1/problems/:id` *(protected)* — Update problem
-* `DELETE /api/v1/problems/:id` *(protected)* — Delete problem
-
-### Patterns
-* `GET /api/v1/patterns` *(protected)* — List all patterns with user stats
-  ```json
-  {
-    "patterns": [{
-      "id": 1,
-      "title": "Sliding Window",
-      "description": "...",
-      "problem_count": 8,
-      "avg_confidence": 65,
-      "times_revised": 12
-    }]
-  }
-  ```
-* `POST /api/v1/patterns` *(protected)* — Create new pattern
-* `PUT /api/v1/patterns/:id` *(protected)* — Update pattern
-* `DELETE /api/v1/patterns/:id` *(protected)* — Delete pattern
 
 ### Sessions
-* `GET /api/v1/sessions` *(protected)* — List all revision sessions for user
-  ```json
-  {
-    "sessions": [{
-      "id": 1,
-      "template_key": "daily_revision",
-      "created_at": "2024-01-15T10:00:00Z",
-      "planned_duration_min": 35,
-      "problems_count": 5,
-      "completed": true
-    }]
-  }
-  ```
-* `GET /api/v1/sessions/:id` *(protected)* — Get session details with problems
-* `POST /api/v1/sessions/generate` *(protected)* — Generate session preview (does not save)
-  ```json
-  // Request
-  { "template_key": "daily_revision" }
-  // Response: preview of problems with reasons
-  {
-    "template_key": "daily_revision",
-    "planned_duration_min": 35,
-    "problems": [{
-      "problem_id": 1,
-      "title": "Two Sum",
-      "planned_min": 12,
-      "score": 0.82,
-      "reason": "Low confidence (40), failed last attempt, 17 days since last"
-    }]
-  }
-  ```
-* `POST /api/v1/sessions` *(protected)* — Create and start a session
-* `PUT /api/v1/sessions/:id/complete` *(protected)* — Mark session as complete
 
-### Attempts
-* `POST /api/v1/attempts` *(protected)* — Record a problem attempt
-  ```json
-  {
-    "problem_id": 1,
-    "session_id": 5,        // optional
-    "confidence_score": 75,
-    "duration_seconds": 1200,
-    "outcome": "passed",
-    "notes": "Got stuck on edge case initially"
-  }
-  ```
-  * Backend updates `user_problem_stats` aggregate table automatically
-* `GET /api/v1/attempts` *(protected)* — List recent attempts (with pagination)
-* `GET /api/v1/problems/:id/attempts` *(protected)* — Get attempts for a specific problem
-
-### User Settings
-* `GET /api/v1/users/settings` *(protected)* — Get user preferences
-* `PUT /api/v1/users/settings` *(protected)* — Update user preferences
-
-### Admin / Weights ✅
-* `GET /api/v1/settings/weights` *(protected)* — Get current scoring weights
-* `GET /api/v1/settings/weights/defaults` *(protected)* — Get default weights from environment config
-* `PUT /api/v1/settings/weights` *(protected)* — Update scoring weights (uses UPSERT to handle missing rows)
-
-### Export
-* `GET /api/v1/export/markdown` *(protected)* — Export all problems/notes to markdown (Obsidian-style)
-* `GET /api/v1/export/json` *(protected)* — Export all data as JSON backup
-
-## UI flows
-
-1. **Onboarding**: Register → Login → Add a few patterns (one-time) → Add problems as you solve them.
-2. **Home (Dashboard)**: Summary — weak patterns, suggested session (quick create), streaks, urgent problems.
-3. **Start session**: Choose template → preview (`/sessions/generate`) → `Create session` (`POST /sessions`) → shows items with reasons and estimated times → `Start`.
-4. **Do problem**: Click `Open` (opens URL in new tab), do problem, return to app, click `Record attempt` (`POST /attempts`).
-5. **Session summary**: show updated stats, changes in scores; option to export session to markdown.
-
-**UI requirement:** For each recommended problem, show an **explainability panel** that lists feature contributions (f_conf * w_conf = x, f_days * w_days = y, ...). This builds trust.
+```sql
+CREATE TABLE revision_sessions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    template_key TEXT,              -- e.g., 'daily_revision'
+    planned_duration_min INTEGER,
+    items_ordered JSONB,            -- Array of planned problems
+    started_at TIMESTAMPTZ,
+    completed_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+```
 
 ---
 
-# 10. Deployment, backup, security, migration notes
+# 8. Session Generation Algorithm
 
-## Deployment
+## Overview
 
-* Preferred: run the single Go binary:
+Given a time budget and optional constraints, generate an optimal practice session.
 
-  ```bash
-  ./dsa-sensei serve --data ./data
-  ```
+## Algorithm Steps
 
-  This will create `data/dsa.db` (SQLite), provide HTTP server on `localhost:9173` by default, and serve the React SPA.
+1. **Load User Stats** — Fetch all `user_problem_stats` with pattern aggregations
+2. **Compute Scores** — Apply scoring formula to each problem
+3. **Filter** — Apply template constraints (difficulty, patterns, etc.)
+4. **Sort** — Order by score descending
+5. **Greedy Selection** — Fill time budget while respecting constraints
+6. **Validate** — Ensure quick wins and pattern diversity
+7. **Return** — Session with problems and explanations
 
-* Docker (optional):
+## Greedy Builder Pseudocode
 
-  ```yaml
-  version: "3"
-  services:
-    dsa:
-      image: vasujain/dsa-sensei:latest
-      volumes:
-        - ./data:/app/data
-       ports:
-         - "9173:9173"
-  ```
+```go
+func BuildSession(candidates []Candidate, budgetMin int, constraints Constraints) []SessionItem {
+    sort.Slice(candidates, func(i, j int) bool {
+        return candidates[i].Score > candidates[j].Score
+    })
+    
+    var session []SessionItem
+    remaining := budgetMin
+    patternCounts := map[uuid.UUID]int{}
+    
+    for _, c := range candidates {
+        if c.EstimatedMinutes > remaining {
+            continue
+        }
+        if exceedsPatternLimit(c.Patterns, patternCounts, constraints.MaxSamePattern) {
+            continue
+        }
+        if !allowedDifficulty(c.Difficulty, constraints.MaxDifficulty) {
+            continue
+        }
+        
+        session = append(session, SessionItem{
+            ProblemID:   c.ProblemID,
+            PlannedMin:  c.EstimatedMinutes,
+            Score:       c.Score,
+            Reason:      generateReason(c),
+        })
+        remaining -= c.EstimatedMinutes
+        
+        for _, p := range c.PatternIDs {
+            patternCounts[p]++
+        }
+        
+        if remaining <= 0 {
+            break
+        }
+    }
+    
+    return ensureQuickWins(session, candidates, constraints)
+}
+```
+
+---
+
+# 9. Revision Templates
+
+Pre-configured session types for different needs:
+
+| Template | Duration | Focus | Best For |
+|----------|----------|-------|----------|
+| **Quick Review** | 15-30 min | Low confidence, quick wins | Short breaks, warm-up |
+| **Daily Practice** | 35-45 min | Balanced weak areas | Daily routine |
+| **Standard Session** | 55-60 min | Mix of review + challenge | Regular practice |
+| **Pattern Focus** | 60-90 min | Single pattern deep dive | Weak pattern mastery |
+| **Weekend Comprehensive** | 120-150 min | Full spectrum | Weekend study blocks |
+| **Interview Prep** | 45 min | Timed, medium-hard only | Interview simulation |
+
+Users can also create custom templates.
+
+---
+
+# 10. API Reference
+
+Base URL: `/api/v1`
+
+## Authentication
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/auth/register` | Create new account |
+| POST | `/auth/login` | Login, receive tokens |
+| POST | `/auth/logout` | Invalidate refresh token |
+| POST | `/auth/refresh` | Refresh access token |
+| GET | `/users/me` | Get current user |
+
+## Problems
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/problems` | List all problems with user stats |
+| GET | `/problems/:id` | Get single problem |
+| POST | `/problems` | Create new problem |
+| PUT | `/problems/:id` | Update problem |
+| DELETE | `/problems/:id` | Delete problem |
+| GET | `/problems/urgent` | Get problems needing review |
+
+## Sessions
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/sessions` | List user's sessions |
+| GET | `/sessions/:id` | Get session details |
+| POST | `/sessions/generate` | Generate session preview |
+| POST | `/sessions` | Create and start session |
+| PUT | `/sessions/:id/complete` | Mark session complete |
+
+## Attempts
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/attempts` | Record a problem attempt |
+| GET | `/attempts` | List recent attempts |
+| GET | `/problems/:id/attempts` | Get attempts for problem |
+
+## Patterns
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/patterns` | List all patterns with stats |
+| POST | `/patterns` | Create new pattern |
+| PUT | `/patterns/:id` | Update pattern |
+| DELETE | `/patterns/:id` | Delete pattern |
+
+## Settings
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/settings/weights` | Get scoring weights |
+| PUT | `/settings/weights` | Update scoring weights |
+| GET | `/settings/weights/defaults` | Get default weights |
+
+---
+
+# 11. Deployment
+
+## Docker Compose (Recommended)
+
+### Quick Start
+
+```bash
+# Clone the repository
+git clone https://github.com/your-org/reforge.git
+cd reforge
+
+# Copy environment template
+cp .env.example .env
+
+# Edit .env with your settings
+# - Set strong JWT_SECRET
+# - Set database password
+# - Configure allowed origins
+
+# Start the stack
+docker compose up -d
+
+# Run database migrations
+docker compose exec api task migrate
+
+# Access at http://localhost:3000
+```
+
+### Production docker-compose.yml
+
+```yaml
+version: '3.8'
+
+services:
+  api:
+    image: ghcr.io/your-org/reforge-api:latest
+    environment:
+      - DATABASE_URL=postgres://reforge:${DB_PASSWORD}@db:5432/reforge?sslmode=disable
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_ACCESS_EXPIRY=15m
+      - JWT_REFRESH_EXPIRY=168h
+      - CORS_ORIGINS=${CORS_ORIGINS}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  web:
+    image: ghcr.io/your-org/reforge-web:latest
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - api
+    volumes:
+      - ./certs:/etc/nginx/certs:ro  # For HTTPS
+    restart: unless-stopped
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_DB=reforge
+      - POSTGRES_USER=reforge
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U reforge"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+```
+
+### Environment Variables
+
+```bash
+# Database
+DATABASE_URL=postgres://user:pass@localhost:5432/reforge?sslmode=disable
+
+# Authentication
+JWT_SECRET=your-secret-key-min-32-chars
+JWT_ACCESS_EXPIRY=15m
+JWT_REFRESH_EXPIRY=168h
+
+# Server
+PORT=8080
+CORS_ORIGINS=https://your-domain.com
+
+# Scoring Weights (optional, defaults shown)
+DEFAULT_W_CONF=0.30
+DEFAULT_W_DAYS=0.20
+DEFAULT_W_ATTEMPTS=0.10
+DEFAULT_W_TIME=0.05
+DEFAULT_W_DIFFICULTY=0.15
+DEFAULT_W_FAILED=0.10
+DEFAULT_W_PATTERN=0.10
+```
 
 ## Backups
 
-* Backup the SQLite DB file `dsa.db` regularly. Provide `export` endpoints (JSON/Markdown) for portability.
-* Recommended: one-line backup script:
+```bash
+# Backup PostgreSQL
+docker compose exec db pg_dump -U reforge reforge > backup_$(date +%F).sql
 
-  ```bash
-  cp data/dsa.db backups/dsa.db.$(date +%F-%H%M)
-  ```
-
-## Security & privacy
-
-* Default listen only on `127.0.0.1`. To expose on LAN, require an explicit flag `--bind 0.0.0.0`.
-* No telemetry by default.
-* Optional: encrypt DB at rest (if user wants), or provide a guide to store DB on an encrypted filesystem.
-
-## Data migration & portability
-
-* `GET /api/v1/export/markdown` will map to your Problem & Pattern templates for Obsidian-style export. (Your problem & pattern templates are the canonical export format; see the pattern & problem templates you provided for structure.)
-* Future migration path to Postgres or PocketBase is straightforward because schema is normalized and small.
+# Restore
+docker compose exec -T db psql -U reforge reforge < backup_2024-01-15.sql
+```
 
 ---
 
-# 11. Roadmap & Progress
+# 12. Development Setup
 
-## Completed ✅
+## Prerequisites
 
-### Foundation
-* [x] Go backend skeleton with Chi router
-* [x] SQLite database with goose migrations
-* [x] Full database schema (11 tables including `attempts` for detailed logging)
-* [x] SQLC query generation setup
+- Go 1.23+
+- Node.js 20+ and pnpm
+- PostgreSQL 16+ (or Docker)
+- Task (go-task)
 
-### Authentication (Originally Post-MVP, Now Complete)
-* [x] User registration (email/password)
-* [x] JWT-based authentication with access tokens
-* [x] Stateful refresh tokens with database storage
-* [x] Login/Logout/Refresh endpoints
-* [x] Auth middleware for protected routes
-* [x] Password hashing with bcrypt
+## Backend Setup
 
-### Frontend Foundation
-* [x] React + Vite + TypeScript setup
-* [x] Shadcn UI component library
-* [x] Custom "Nerdy Linux" theme (see `STYLE-GUIDE.md`)
-* [x] Zustand state management for auth
-* [x] Axios API client with interceptors
-* [x] Protected routes with auth guards
-* [x] Landing page with login/register
-* [x] Dashboard layout with sidebar navigation
-* [x] All dashboard pages (Home, Problems, Sessions, Patterns, New Session, New Problem, Settings)
-* [x] API error handling components
-* [x] Settings page with scoring weights configuration
-* [x] Reset to defaults functionality with backend integration
+```bash
+cd api
 
-### Settings Management ✅
-* [x] Environment-based default weights configuration (`.env` file)
-* [x] `GetFloat()` helper in env package for parsing float environment variables
-* [x] Scoring weights config structure in main application config
-* [x] Settings service with injected default weights
-* [x] `GetScoringWeights` endpoint - returns DB weights or falls back to defaults
-* [x] `GetDefaultWeights` endpoint - returns environment-configured defaults
-* [x] `UpdateScoringWeights` endpoint - uses UPSERT to persist weight changes
-* [x] Settings page UI with sliders for all 7 weights
-* [x] Weight sum validation indicator (green when sum = 1.00)
-* [x] Reset to defaults button with confirmation dialog
+# Install Go dependencies
+go mod download
 
-## In Progress 🔧
+# Start PostgreSQL (if using Docker)
+docker run -d --name reforge-db \
+  -e POSTGRES_DB=reforge \
+  -e POSTGRES_USER=reforge \
+  -e POSTGRES_PASSWORD=devpass \
+  -p 5432:5432 \
+  postgres:16-alpine
 
-### Backend API Endpoints
-* [x] Dashboard stats endpoint (`GET /dashboard/stats`)
-* [x] Problems CRUD endpoints (list, get, create, update, delete)
-* [x] Patterns CRUD endpoints (list, get, create, update, delete)
-* [x] Sessions endpoints (list, get, create, generate)
-* [x] Attempts endpoint (`POST /attempts`, `GET /attempts`, `GET /problems/:id/attempts`)
-* [x] Settings/weights endpoints (get, get defaults, update)
-* [ ] User settings endpoints (preferences)
+# Copy environment file
+cp .env.example .env
+# Edit .env with your DATABASE_URL
 
-### Core Business Logic
-* [x] Scoring formula implementation in Go
-* [x] Session generation algorithm (greedy builder)
-* [x] Stats aggregation on attempt recording
-* [x] Score computation with explainability breakdown
+# Run migrations
+task migrate
 
-## Remaining (MVP)
+# Generate SQLC code (after changing queries)
+task sqlc:generate
 
-* [ ] Export endpoints (`/export/markdown`, `/export/json`)
-* [ ] Docker file and single binary distribution
-* [ ] User preferences/settings (non-scoring related)
+# Start development server with hot reload
+task dev
+```
 
-## Post-MVP (Quality of Life)
+## Frontend Setup
 
-* [ ] Add optional Electron/Tauri wrapper for native app experience
-* [ ] Add a "session replay" or "progress charts" dashboard
-* [ ] CSV/JSON import for bulk problem upload
-* [ ] Add an optional AI re-ranking plugin as a local Python micro-service (kept completely optional and disabled by default)
+```bash
+cd web
 
-## Future (Long-term)
+# Install dependencies (ALWAYS use pnpm)
+pnpm install
 
-* Generic plugin system for custom heuristics
-* Importers for other platforms
-* Team features (if you decide to support small teams)
+# Start development server
+pnpm dev
+
+# Build for production
+pnpm build
+
+# Lint
+pnpm lint
+
+# Add Shadcn component
+pnpm shadcn add <component-name>
+```
+
+## Task Commands (Backend)
+
+| Command | Description |
+|---------|-------------|
+| `task dev` | Start with hot reload |
+| `task build` | Build binary |
+| `task test` | Run all tests |
+| `task lint` | Run linter |
+| `task migrate` | Run pending migrations |
+| `task migrate:down` | Rollback last migration |
+| `task sqlc:generate` | Generate SQLC code |
 
 ---
 
-# Appendix A — Example problem entry (UI fields)
+# 13. Roadmap
 
-* Title (string)
-* ID (string, auto)
-* Source (string)
-* URL (string)
-* Difficulty (easy/medium/hard)
-* Patterns (multi-select; create new)
-* Confidence (0–100; default 50)
-* Avg time (minutes; optional)
-* Add initial `user_problem_stats` if this is a solved problem (last_attempt_at, total_attempts, last_outcome)
+## Completed
 
-**Note:** Problem & Pattern templates for markdown export/import follow the structure you already use — we will keep compatibility for that export.
+- [x] Core authentication (JWT + refresh tokens)
+- [x] Problem and pattern management
+- [x] Scoring algorithm with explainability
+- [x] Session generation
+- [x] Attempt tracking
+- [x] Spaced repetition (SM-2)
+- [x] Dashboard with progress stats
+- [x] Settings with weight customization
+- [x] Admin panel (user management, invites)
 
----
+## In Progress
 
-# Appendix B — Example session creation use-case (concrete)
+- [ ] PostgreSQL migration (from SQLite)
+- [ ] UUID primary keys
+- [ ] Docker Compose deployment
+- [ ] UI/UX modernization
 
-**User:** opens app, chooses `daily_revision` (35 min).
-**Backend flow:**
+## Planned
 
-1. Query user_problem_stats, join patterns → compute features.
-2. Compute score for 120 candidate problems.
-3. Filter to difficulty ≤ medium.
-4. Sort by score desc.
-5. Build session via greedy algorithm until 35 min budget filled (ensuring 2 quick wins and ≤ 2 same pattern).
-6. Return session JSON with each problem and explanation.
+- [ ] Export to Markdown/JSON
+- [ ] Import from CSV/JSON
+- [ ] Problem notes and solutions
+- [ ] Progress charts and analytics
+- [ ] Mobile-responsive design
+- [ ] Email notifications (session reminders)
+- [ ] Team/organization features
+- [ ] Public API with API keys
 
-**Result:** User sees 5–6 prioritized problems, each annotated with a human-readable reason like:
+## Future Considerations
 
-* “Problem A — score 0.82 — Low confidence (f_conf:0.8) + failed last time (f_failed:1.0) + 30 days since last (f_days:0.33)”
-
----
-
-# Closing notes — Philosophy & Why this will work
-
-* You asked for **clean, minimal, self-hostable**. This architecture maximizes all three.
-* The deterministic scoring is **explainable** and **iterable**; you can tune weights and see measurable effects.
-* Removing AI from the core is not conservative — it’s engineering discipline: AI would add cost and uncertainty without meaningful advantage for this problem.
-* Serving the React SPA from the Go binary gives a single artifact to run — perfect for personal, self-hosted usage.
-* **Authentication** was added early to support multi-user environments and protect personal practice data, even though it was originally planned for post-MVP.
+- Mobile apps (React Native)
+- Browser extension for LeetCode/HackerRank integration
+- AI-powered hint system (optional, privacy-preserving)
+- Community problem sets
 
 ---
 
-# Tech Stack Summary
+# License
 
-| Layer | Technology |
-|-------|------------|
-| Backend | Go (Chi router, goose migrations, SQLC) |
-| Database | SQLite |
-| Frontend | React + TypeScript + Vite |
-| State | Zustand |
-| UI | Shadcn UI + Tailwind CSS |
-| Auth | JWT (stateful refresh tokens, bcrypt) |
-| API Client | Axios with interceptors |
+MIT License — See [LICENSE](LICENSE) for details.
 
 ---
 
-*Last updated: Reflects current implementation state with auth, attempts table, and updated schema.*
+# Contributing
+
+We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+---
+
+*Last updated: January 2026*

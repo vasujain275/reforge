@@ -11,11 +11,12 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store/authStore";
+import { COPY } from "@/lib/copy";
 import {
-  Network,
-  FileText,
-  Grid3x3,
-  Terminal,
+  LayoutDashboard,
+  BookOpen,
+  Clock,
+  Layers,
   Settings,
   LogOut,
   User as UserIcon,
@@ -31,23 +32,23 @@ export default function DashboardLayout() {
   const { user, logout } = useAuthStore();
 
   const navItems = [
-    { path: "/dashboard", label: "Console", icon: Terminal, exact: true },
-    { path: "/dashboard/problems", label: "Problems", icon: Grid3x3 },
-    { path: "/dashboard/sessions", label: "Sessions", icon: FileText },
-    { path: "/dashboard/patterns", label: "Patterns", icon: Network },
-    { path: "/dashboard/settings", label: "Config", icon: Settings },
+    { path: "/dashboard", label: COPY.nav.dashboard, icon: LayoutDashboard, exact: true },
+    { path: "/dashboard/problems", label: COPY.nav.problems, icon: BookOpen },
+    { path: "/dashboard/sessions", label: COPY.nav.sessions, icon: Clock },
+    { path: "/dashboard/patterns", label: COPY.nav.patterns, icon: Layers },
+    { path: "/dashboard/settings", label: COPY.nav.settings, icon: Settings },
   ];
 
   // Admin-only nav items
   const adminNavItems = user?.role === 'admin' ? [
-    { path: "/dashboard/admin", label: "Admin", icon: ShieldAlert },
+    { path: "/dashboard/admin", label: COPY.nav.admin, icon: ShieldAlert },
   ] : [];
 
   const isActive = (path: string, exact?: boolean) => {
     if (exact) {
       return location.pathname === path;
     }
-    // Special case: /settings/security should NOT highlight Config
+    // Special case: /settings/security should NOT highlight Settings
     if (path === "/dashboard/settings" && location.pathname === "/dashboard/settings/security") {
       return false;
     }
@@ -57,20 +58,16 @@ export default function DashboardLayout() {
   return (
     <div className="flex h-screen bg-background">
       {/* Left Sidebar */}
-      <aside className="w-64 border-r border-border bg-card/30 backdrop-blur-sm flex flex-col">
+      <aside className="w-64 border-r border-border bg-sidebar flex flex-col">
         {/* Logo Section */}
-        <div className="h-16 p-4 border-b border-border flex items-center">
-          <div className="flex items-center gap-2 font-mono text-sm">
-            <Terminal className="h-4 w-4 text-primary" />
-            <span className="font-bold tracking-tighter text-primary uppercase">
-              Reforge
-            </span>
-            <span className="text-xs text-muted-foreground">{getAppVersion()}</span>
-          </div>
+        <div className="h-16 px-4 border-b border-border flex items-center">
+          <Link to="/dashboard" className="flex items-center space-x-2 font-bold text-xl tracking-tighter">
+            <span className="text-primary">{COPY.brand.name}.</span>
+          </Link>
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 p-4 space-y-1">
+        <nav className="flex-1 p-3 space-y-1">
           {navItems.map((item) => {
             const Icon = item.icon;
             const active = isActive(item.path, item.exact);
@@ -78,19 +75,14 @@ export default function DashboardLayout() {
               <Link key={item.path} to={item.path}>
                 <div
                   className={cn(
-                    "flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-all font-mono",
+                    "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors",
                     active
-                      ? "bg-primary/10 text-primary font-medium border border-primary/20 shadow-[0_0_15px_-3px_var(--primary)]"
-                      : "text-muted-foreground hover:text-foreground hover:bg-accent hover:border hover:border-border"
+                      ? "bg-secondary text-foreground font-medium"
+                      : "text-muted-foreground hover:text-foreground hover:bg-accent"
                   )}
                 >
-                  {active && (
-                    <div className="w-1 h-1 rounded-full bg-primary animate-pulse" />
-                  )}
-                  <Icon className="h-4 w-4" />
-                  <span className="uppercase tracking-wider text-xs">
-                    {item.label}
-                  </span>
+                  <Icon className="h-5 w-5" />
+                  <span>{item.label}</span>
                 </div>
               </Link>
             );
@@ -99,7 +91,7 @@ export default function DashboardLayout() {
           {/* Admin Section */}
           {adminNavItems.length > 0 && (
             <>
-              <div className="pt-4 pb-2 px-3">
+              <div className="pt-4 pb-2">
                 <div className="h-px bg-border" />
               </div>
               {adminNavItems.map((item) => {
@@ -109,19 +101,14 @@ export default function DashboardLayout() {
                   <Link key={item.path} to={item.path}>
                     <div
                       className={cn(
-                        "flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-all font-mono",
+                        "flex items-center gap-3 px-3 py-2.5 rounded-md text-sm transition-colors",
                         active
-                          ? "bg-primary/10 text-primary font-medium border border-primary/20 shadow-[0_0_15px_-3px_var(--primary)]"
-                          : "text-muted-foreground hover:text-foreground hover:bg-accent hover:border hover:border-border"
+                          ? "bg-secondary text-foreground font-medium"
+                          : "text-muted-foreground hover:text-foreground hover:bg-accent"
                       )}
                     >
-                      {active && (
-                        <div className="w-1 h-1 rounded-full bg-primary animate-pulse" />
-                      )}
-                      <Icon className="h-4 w-4" />
-                      <span className="uppercase tracking-wider text-xs">
-                        {item.label}
-                      </span>
+                      <Icon className="h-5 w-5" />
+                      <span>{item.label}</span>
                     </div>
                   </Link>
                 );
@@ -131,24 +118,24 @@ export default function DashboardLayout() {
         </nav>
 
         {/* User Profile & Theme Toggle */}
-        <div className="p-4 border-t border-border bg-muted/20">
+        <div className="p-3 border-t border-border">
           <div className="flex items-center justify-between gap-2">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
                   variant="ghost"
-                  className="flex-1 justify-start gap-2 px-2 h-10 hover:bg-accent"
+                  className="flex-1 justify-start gap-3 px-3 h-12 hover:bg-accent"
                 >
-                  <Avatar className="h-6 w-6">
-                    <AvatarFallback className="bg-primary/10 text-primary text-xs">
-                      <UserIcon className="h-3 w-3" />
+                  <Avatar className="h-8 w-8">
+                    <AvatarFallback className="bg-primary/10 text-primary text-sm">
+                      {user?.name?.charAt(0).toUpperCase() || <UserIcon className="h-4 w-4" />}
                     </AvatarFallback>
                   </Avatar>
                   <div className="flex flex-col items-start flex-1 min-w-0">
-                    <span className="text-xs font-mono font-semibold truncate w-full">
+                    <span className="text-sm font-medium truncate w-full text-left">
                       {user?.name || "User"}
                     </span>
-                    <span className="text-xs text-muted-foreground font-mono truncate w-full">
+                    <span className="text-xs text-muted-foreground truncate w-full text-left">
                       {user?.email || "user@example.com"}
                     </span>
                   </div>
@@ -164,9 +151,9 @@ export default function DashboardLayout() {
                       {user?.email || "user@example.com"}
                     </p>
                     {user?.role === 'admin' && (
-                      <span className="inline-flex items-center gap-1 w-fit px-1.5 py-0.5 rounded text-[10px] font-mono font-semibold bg-primary/10 text-primary border border-primary/20 mt-1">
-                        <ShieldAlert className="h-2.5 w-2.5" />
-                        ADMIN
+                      <span className="inline-flex items-center gap-1 w-fit px-1.5 py-0.5 rounded text-xs font-medium bg-primary/10 text-primary mt-1">
+                        <ShieldAlert className="h-3 w-3" />
+                        Admin
                       </span>
                     )}
                   </div>
@@ -175,7 +162,7 @@ export default function DashboardLayout() {
                 <DropdownMenuItem asChild>
                   <Link to="/dashboard/settings/security" className="flex items-center w-full cursor-pointer">
                     <KeyRound className="mr-2 h-4 w-4" />
-                    <span>Security</span>
+                    <span>{COPY.nav.security}</span>
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
@@ -184,14 +171,21 @@ export default function DashboardLayout() {
                     await logout();
                     navigate("/");
                   }}
-                  className="cursor-pointer text-red-500 focus:text-red-500"
+                  className="cursor-pointer text-destructive focus:text-destructive"
                 >
                   <LogOut className="mr-2 h-4 w-4" />
-                  <span>Log out</span>
+                  <span>{COPY.auth.signOut}</span>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
             <ModeToggle />
+          </div>
+          
+          {/* Version - subtle at bottom */}
+          <div className="mt-3 text-center">
+            <span className="text-xs text-muted-foreground">
+              {getAppVersion()}
+            </span>
           </div>
         </div>
       </aside>

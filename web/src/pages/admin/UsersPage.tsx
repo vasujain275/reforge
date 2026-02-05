@@ -46,7 +46,7 @@ export default function UsersPage() {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
-  const [actionLoading, setActionLoading] = useState<number | null>(null);
+  const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   const loadUsers = async () => {
     setIsLoading(true);
@@ -65,7 +65,7 @@ export default function UsersPage() {
     loadUsers();
   }, []);
 
-  const handleRoleChange = async (userId: number, newRole: 'user' | 'admin') => {
+  const handleRoleChange = async (userId: string, newRole: 'user' | 'admin') => {
     setActionLoading(userId);
     try {
       await adminApi.updateUserRole(userId, newRole);
@@ -78,7 +78,7 @@ export default function UsersPage() {
     }
   };
 
-  const handleToggleActive = async (userId: number, isActive: boolean) => {
+  const handleToggleActive = async (userId: string, isActive: boolean) => {
     setActionLoading(userId);
     try {
       if (isActive) {
@@ -96,7 +96,7 @@ export default function UsersPage() {
     }
   };
 
-  const handleDelete = async (userId: number, userName: string) => {
+  const handleDelete = async (userId: string, userName: string) => {
     if (!confirm(`Are you sure you want to permanently delete user "${userName}"? This action cannot be undone.`)) {
       return;
     }
@@ -112,7 +112,7 @@ export default function UsersPage() {
     }
   };
 
-  const handlePasswordReset = async (userId: number, userName: string) => {
+  const handlePasswordReset = async (userId: string, userName: string) => {
     setActionLoading(userId);
     try {
       const result = await adminApi.initiatePasswordReset(userId);

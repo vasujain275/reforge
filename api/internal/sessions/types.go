@@ -5,18 +5,18 @@ package sessions
 // ============================================================================
 
 type CreateSessionBody struct {
-	TemplateKey        string  `json:"template_key"`
-	SessionName        *string `json:"session_name"`
-	PlannedDurationMin int64   `json:"planned_duration_min" validate:"required,gte=1"`
-	ProblemIDs         []int64 `json:"problem_ids"          validate:"required,min=1,dive,gte=1"`
-	IsCustom           bool    `json:"is_custom"`
-	CustomConfig       *string `json:"custom_config"` // JSON string of CustomSessionConfig
+	TemplateKey        string   `json:"template_key"`
+	SessionName        *string  `json:"session_name"`
+	PlannedDurationMin int64    `json:"planned_duration_min" validate:"required,gte=1"`
+	ProblemIDs         []string `json:"problem_ids"          validate:"required,min=1"`
+	IsCustom           bool     `json:"is_custom"`
+	CustomConfig       *string  `json:"custom_config"` // JSON string of CustomSessionConfig
 }
 
 type GenerateSessionBody struct {
-	TemplateKey string `json:"template_key" validate:"required"`
-	DurationMin *int64 `json:"duration_min" validate:"omitempty,gte=1"`
-	PatternID   *int64 `json:"pattern_id" validate:"omitempty,gte=1"` // For pattern-specific templates
+	TemplateKey string  `json:"template_key" validate:"required"`
+	DurationMin *int64  `json:"duration_min" validate:"omitempty,gte=1"`
+	PatternID   *string `json:"pattern_id" validate:"omitempty"` // For pattern-specific templates
 }
 
 type GenerateCustomSessionBody struct {
@@ -24,8 +24,8 @@ type GenerateCustomSessionBody struct {
 }
 
 type SessionResponse struct {
-	ID                 int64            `json:"id"`
-	UserID             int64            `json:"user_id"`
+	ID                 string           `json:"id"`
+	UserID             string           `json:"user_id"`
 	TemplateKey        *string          `json:"template_key"`
 	SessionName        *string          `json:"session_name"`
 	IsCustom           bool             `json:"is_custom"`
@@ -44,11 +44,11 @@ type UpdateSessionTimerBody struct {
 }
 
 type ReorderSessionBody struct {
-	ProblemIDs []int64 `json:"problem_ids" validate:"required,min=1,dive,gte=1"`
+	ProblemIDs []string `json:"problem_ids" validate:"required,min=1"`
 }
 
 type SessionProblem struct {
-	ID            int64   `json:"id"`
+	ID            string  `json:"id"`
 	Title         string  `json:"title"`
 	Difficulty    string  `json:"difficulty"`
 	Source        *string `json:"source"`
@@ -87,7 +87,7 @@ type CustomSessionConfig struct {
 	DifficultyDist       DifficultyDistribution `json:"difficulty_distribution"`
 	RequireQuickWin      bool                   `json:"require_quick_win"`
 	PatternMode          string                 `json:"pattern_mode" validate:"required,oneof=all specific exclude weakest"`
-	PatternIDs           []int64                `json:"pattern_ids,omitempty"`
+	PatternIDs           []string               `json:"pattern_ids,omitempty"`
 	MaxSamePattern       int                    `json:"max_same_pattern" validate:"required,gte=1,lte=10"`
 	ScoringEmphasis      string                 `json:"scoring_emphasis" validate:"required,oneof=standard confidence time failure"`
 	ConfidenceRange      *ConfidenceRange       `json:"confidence_range,omitempty"`
@@ -129,9 +129,9 @@ type TemplateConfig struct {
 	MinDifferentPatterns int `json:"min_different_patterns"` // Ensure pattern diversity
 
 	// Pattern focus
-	PatternMode  string `json:"pattern_mode"`         // "all", "weakest", "specific", "multi_pattern"
-	PatternCount int    `json:"pattern_count"`        // For "weakest" mode
-	PatternID    *int64 `json:"pattern_id,omitempty"` // For "specific" mode (user-provided)
+	PatternMode  string  `json:"pattern_mode"`         // "all", "weakest", "specific", "multi_pattern"
+	PatternCount int     `json:"pattern_count"`        // For "weakest" mode
+	PatternID    *string `json:"pattern_id,omitempty"` // For "specific" mode (user-provided) - now string UUID
 
 	// Scoring adjustments
 	ScoringEmphasis string `json:"scoring_emphasis"` // "standard", "confidence", "time", "failure"
@@ -151,8 +151,8 @@ type TemplateConfig struct {
 // ============================================================================
 
 type UserSessionTemplate struct {
-	ID           int64               `json:"id"`
-	UserID       int64               `json:"user_id"`
+	ID           string              `json:"id"`
+	UserID       string              `json:"user_id"`
 	TemplateName string              `json:"template_name"`
 	TemplateKey  *string             `json:"template_key,omitempty"`
 	Config       CustomSessionConfig `json:"config"`
@@ -200,14 +200,14 @@ type TemplateInfo struct {
 type SearchSessionsParams struct {
 	Query        string
 	StatusFilter string // "active", "completed", or ""
-	Limit        int64
-	Offset       int64
+	Limit        int32
+	Offset       int32
 }
 
 type PaginatedSessions struct {
 	Data       []SessionResponse `json:"data"`
 	Total      int64             `json:"total"`
-	Page       int64             `json:"page"`
-	PageSize   int64             `json:"page_size"`
-	TotalPages int64             `json:"total_pages"`
+	Page       int32             `json:"page"`
+	PageSize   int32             `json:"page_size"`
+	TotalPages int32             `json:"total_pages"`
 }

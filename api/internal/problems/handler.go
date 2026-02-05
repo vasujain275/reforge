@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"github.com/vasujain275/reforge/internal/auth"
 	"github.com/vasujain275/reforge/internal/utils"
 )
@@ -24,7 +25,7 @@ func (h *handler) CreateProblem(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
 	// Get user ID from context
-	userID, ok := r.Context().Value(auth.UserKey).(int64)
+	userID, ok := r.Context().Value(auth.UserKey).(uuid.UUID)
 	if !ok {
 		utils.InternalServerError(w, "User ID is missing from context")
 		return
@@ -49,9 +50,9 @@ func (h *handler) CreateProblem(w http.ResponseWriter, r *http.Request) {
 
 func (h *handler) GetProblem(w http.ResponseWriter, r *http.Request) {
 	problemIDStr := chi.URLParam(r, "id")
-	problemID, err := strconv.ParseInt(problemIDStr, 10, 64)
+	problemID, err := uuid.Parse(problemIDStr)
 	if err != nil {
-		utils.BadRequest(w, "Invalid problem ID", nil)
+		utils.BadRequest(w, "Invalid problem ID format", nil)
 		return
 	}
 
@@ -69,9 +70,9 @@ func (h *handler) UpdateProblem(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
 	problemIDStr := chi.URLParam(r, "id")
-	problemID, err := strconv.ParseInt(problemIDStr, 10, 64)
+	problemID, err := uuid.Parse(problemIDStr)
 	if err != nil {
-		utils.BadRequest(w, "Invalid problem ID", nil)
+		utils.BadRequest(w, "Invalid problem ID format", nil)
 		return
 	}
 
@@ -94,9 +95,9 @@ func (h *handler) UpdateProblem(w http.ResponseWriter, r *http.Request) {
 
 func (h *handler) DeleteProblem(w http.ResponseWriter, r *http.Request) {
 	problemIDStr := chi.URLParam(r, "id")
-	problemID, err := strconv.ParseInt(problemIDStr, 10, 64)
+	problemID, err := uuid.Parse(problemIDStr)
 	if err != nil {
-		utils.BadRequest(w, "Invalid problem ID", nil)
+		utils.BadRequest(w, "Invalid problem ID format", nil)
 		return
 	}
 
@@ -111,7 +112,7 @@ func (h *handler) DeleteProblem(w http.ResponseWriter, r *http.Request) {
 
 func (h *handler) ListProblemsForUser(w http.ResponseWriter, r *http.Request) {
 	// Get user ID from context
-	userID, ok := r.Context().Value(auth.UserKey).(int64)
+	userID, ok := r.Context().Value(auth.UserKey).(uuid.UUID)
 	if !ok {
 		utils.InternalServerError(w, "User ID is missing from context")
 		return
@@ -141,7 +142,7 @@ func (h *handler) ListProblemsForUser(w http.ResponseWriter, r *http.Request) {
 	utils.WriteSuccess(w, http.StatusOK, problems)
 }
 
-func (h *handler) searchProblemsForUser(w http.ResponseWriter, r *http.Request, userID int64, query, difficulty, status, pageStr, pageSizeStr string) {
+func (h *handler) searchProblemsForUser(w http.ResponseWriter, r *http.Request, userID uuid.UUID, query, difficulty, status, pageStr, pageSizeStr string) {
 	// Parse pagination params
 	page := int64(1)
 	pageSize := int64(20)
@@ -164,8 +165,8 @@ func (h *handler) searchProblemsForUser(w http.ResponseWriter, r *http.Request, 
 		Query:      query,
 		Difficulty: difficulty,
 		Status:     status,
-		Limit:      pageSize,
-		Offset:     offset,
+		Limit:      int32(pageSize),
+		Offset:     int32(offset),
 	}
 
 	result, err := h.service.SearchProblemsForUser(r.Context(), userID, params)
@@ -180,7 +181,7 @@ func (h *handler) searchProblemsForUser(w http.ResponseWriter, r *http.Request, 
 
 func (h *handler) GetUrgentProblems(w http.ResponseWriter, r *http.Request) {
 	// Get user ID from context
-	userID, ok := r.Context().Value(auth.UserKey).(int64)
+	userID, ok := r.Context().Value(auth.UserKey).(uuid.UUID)
 	if !ok {
 		utils.InternalServerError(w, "User ID is missing from context")
 		return
@@ -194,7 +195,7 @@ func (h *handler) GetUrgentProblems(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	problems, err := h.service.GetUrgentProblems(r.Context(), userID, limit)
+	problems, err := h.service.GetUrgentProblems(r.Context(), userID, int32(limit))
 	if err != nil {
 		slog.Error("Failed to get urgent problems", "error", err)
 		utils.InternalServerError(w, "Failed to get urgent problems")

@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"github.com/vasujain275/reforge/internal/auth"
 	"github.com/vasujain275/reforge/internal/utils"
 )
@@ -25,7 +26,7 @@ func (h *handler) CreateSession(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
 	// Get user ID from context
-	userID, ok := r.Context().Value(auth.UserKey).(int64)
+	userID, ok := r.Context().Value(auth.UserKey).(uuid.UUID)
 	if !ok {
 		utils.InternalServerError(w, "User ID is missing from context")
 		return
@@ -50,16 +51,16 @@ func (h *handler) CreateSession(w http.ResponseWriter, r *http.Request) {
 
 func (h *handler) GetSession(w http.ResponseWriter, r *http.Request) {
 	// Get user ID from context
-	userID, ok := r.Context().Value(auth.UserKey).(int64)
+	userID, ok := r.Context().Value(auth.UserKey).(uuid.UUID)
 	if !ok {
 		utils.InternalServerError(w, "User ID is missing from context")
 		return
 	}
 
 	sessionIDStr := chi.URLParam(r, "id")
-	sessionID, err := strconv.ParseInt(sessionIDStr, 10, 64)
+	sessionID, err := uuid.Parse(sessionIDStr)
 	if err != nil {
-		utils.BadRequest(w, "Invalid session ID", nil)
+		utils.BadRequest(w, "Invalid session ID format", nil)
 		return
 	}
 
@@ -75,7 +76,7 @@ func (h *handler) GetSession(w http.ResponseWriter, r *http.Request) {
 
 func (h *handler) ListSessionsForUser(w http.ResponseWriter, r *http.Request) {
 	// Get user ID from context
-	userID, ok := r.Context().Value(auth.UserKey).(int64)
+	userID, ok := r.Context().Value(auth.UserKey).(uuid.UUID)
 	if !ok {
 		utils.InternalServerError(w, "User ID is missing from context")
 		return
@@ -109,7 +110,7 @@ func (h *handler) ListSessionsForUser(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	sessions, err := h.service.ListSessionsForUser(r.Context(), userID, limit, offset)
+	sessions, err := h.service.ListSessionsForUser(r.Context(), userID, int32(limit), int32(offset))
 	if err != nil {
 		slog.Error("Failed to list sessions", "error", err)
 		utils.InternalServerError(w, "Failed to list sessions")
@@ -119,7 +120,7 @@ func (h *handler) ListSessionsForUser(w http.ResponseWriter, r *http.Request) {
 	utils.WriteSuccess(w, http.StatusOK, sessions)
 }
 
-func (h *handler) searchSessionsForUser(w http.ResponseWriter, r *http.Request, userID int64, query, statusFilter, pageStr, pageSizeStr string) {
+func (h *handler) searchSessionsForUser(w http.ResponseWriter, r *http.Request, userID uuid.UUID, query, statusFilter, pageStr, pageSizeStr string) {
 	// Parse pagination params
 	page := int64(1)
 	pageSize := int64(20)
@@ -141,8 +142,8 @@ func (h *handler) searchSessionsForUser(w http.ResponseWriter, r *http.Request, 
 	params := SearchSessionsParams{
 		Query:        query,
 		StatusFilter: statusFilter,
-		Limit:        pageSize,
-		Offset:       offset,
+		Limit:        int32(pageSize),
+		Offset:       int32(offset),
 	}
 
 	result, err := h.service.SearchSessionsForUser(r.Context(), userID, params)
@@ -159,7 +160,7 @@ func (h *handler) GenerateSession(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
 	// Get user ID from context
-	userID, ok := r.Context().Value(auth.UserKey).(int64)
+	userID, ok := r.Context().Value(auth.UserKey).(uuid.UUID)
 	if !ok {
 		utils.InternalServerError(w, "User ID is missing from context")
 		return
@@ -228,16 +229,16 @@ func (h *handler) GenerateCustomSession(w http.ResponseWriter, r *http.Request) 
 
 func (h *handler) CompleteSession(w http.ResponseWriter, r *http.Request) {
 	// Get user ID from context
-	userID, ok := r.Context().Value(auth.UserKey).(int64)
+	userID, ok := r.Context().Value(auth.UserKey).(uuid.UUID)
 	if !ok {
 		utils.InternalServerError(w, "User ID is missing from context")
 		return
 	}
 
 	sessionIDStr := chi.URLParam(r, "id")
-	sessionID, err := strconv.ParseInt(sessionIDStr, 10, 64)
+	sessionID, err := uuid.Parse(sessionIDStr)
 	if err != nil {
-		utils.BadRequest(w, "Invalid session ID", nil)
+		utils.BadRequest(w, "Invalid session ID format", nil)
 		return
 	}
 
@@ -255,16 +256,16 @@ func (h *handler) CompleteSession(w http.ResponseWriter, r *http.Request) {
 
 func (h *handler) DeleteSession(w http.ResponseWriter, r *http.Request) {
 	// Get user ID from context
-	userID, ok := r.Context().Value(auth.UserKey).(int64)
+	userID, ok := r.Context().Value(auth.UserKey).(uuid.UUID)
 	if !ok {
 		utils.InternalServerError(w, "User ID is missing from context")
 		return
 	}
 
 	sessionIDStr := chi.URLParam(r, "id")
-	sessionID, err := strconv.ParseInt(sessionIDStr, 10, 64)
+	sessionID, err := uuid.Parse(sessionIDStr)
 	if err != nil {
-		utils.BadRequest(w, "Invalid session ID", nil)
+		utils.BadRequest(w, "Invalid session ID format", nil)
 		return
 	}
 
@@ -283,16 +284,16 @@ func (h *handler) DeleteSession(w http.ResponseWriter, r *http.Request) {
 func (h *handler) UpdateSessionTimer(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
-	userID, ok := r.Context().Value(auth.UserKey).(int64)
+	userID, ok := r.Context().Value(auth.UserKey).(uuid.UUID)
 	if !ok {
 		utils.InternalServerError(w, "User ID is missing from context")
 		return
 	}
 
 	sessionIDStr := chi.URLParam(r, "id")
-	sessionID, err := strconv.ParseInt(sessionIDStr, 10, 64)
+	sessionID, err := uuid.Parse(sessionIDStr)
 	if err != nil {
-		utils.BadRequest(w, "Invalid session ID", nil)
+		utils.BadRequest(w, "Invalid session ID format", nil)
 		return
 	}
 
@@ -318,16 +319,16 @@ func (h *handler) UpdateSessionTimer(w http.ResponseWriter, r *http.Request) {
 func (h *handler) ReorderSession(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
-	userID, ok := r.Context().Value(auth.UserKey).(int64)
+	userID, ok := r.Context().Value(auth.UserKey).(uuid.UUID)
 	if !ok {
 		utils.InternalServerError(w, "User ID is missing from context")
 		return
 	}
 
 	sessionIDStr := chi.URLParam(r, "id")
-	sessionID, err := strconv.ParseInt(sessionIDStr, 10, 64)
+	sessionID, err := uuid.Parse(sessionIDStr)
 	if err != nil {
-		utils.BadRequest(w, "Invalid session ID", nil)
+		utils.BadRequest(w, "Invalid session ID format", nil)
 		return
 	}
 

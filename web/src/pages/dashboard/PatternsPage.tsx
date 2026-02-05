@@ -130,7 +130,7 @@ export default function PatternsPage() {
     }
   };
 
-  const handleDelete = async (patternId: number) => {
+  const handleDelete = async (patternId: string) => {
     if (!confirm("Are you sure you want to delete this pattern?")) return;
 
     try {

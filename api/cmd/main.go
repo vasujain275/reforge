@@ -6,11 +6,12 @@ import (
 	"log/slog"
 	"os"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
-	_ "modernc.org/sqlite"
 
 	"github.com/go-playground/validator/v10"
-	migrations "github.com/vasujain275/reforge/internal/adapters/sqlite/migrations"
+	migrations "github.com/vasujain275/reforge/internal/adapters/postgres/migrations"
 	"github.com/vasujain275/reforge/internal/env"
 )
 
@@ -28,8 +29,8 @@ func main() {
 		env:  env.GetString("ENV", "dev"),
 		db: dbConfig{
 			dsn: env.GetString(
-				"GOOSE_DBSTRING",
-				"file:./data/reforge.db?_pragma=journal_mode(WAL)&_pragma=foreign_keys(ON)",
+				"DATABASE_URL",
+				"postgres://reforge:password@localhost:5432/reforge?sslmode=disable",
 			),
 		},
 		auth: authConfig{
@@ -51,28 +52,35 @@ func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	slog.SetDefault(logger)
 
-	db, err := sql.Open("sqlite", cfg.db.dsn)
+	// Create pgxpool for native pgx usage (better performance)
+	pool, err := pgxpool.New(ctx, cfg.db.dsn)
 	if err != nil {
-		panic(err)
+		slog.Error("Failed to create connection pool", "error", err)
+		os.Exit(1)
 	}
-	defer db.Close()
+	defer pool.Close()
 
-	// IMPORTANT for SQLite
-	db.SetMaxOpenConns(1)
-	db.SetMaxIdleConns(1)
-
-	if err := db.PingContext(ctx); err != nil {
-		panic(err)
+	// Ping the database
+	if err := pool.Ping(ctx); err != nil {
+		slog.Error("Failed to ping database", "error", err)
+		os.Exit(1)
 	}
 
-	// Run database migrations automatically on startup
+	// Run database migrations using stdlib adapter (goose requires database/sql)
 	slog.Info("Running database migrations...")
+	dbForMigrations, err := sql.Open("pgx", cfg.db.dsn)
+	if err != nil {
+		slog.Error("Failed to open database for migrations", "error", err)
+		os.Exit(1)
+	}
+	defer dbForMigrations.Close()
+
 	goose.SetBaseFS(migrations.EmbeddedMigrations)
-	if err := goose.SetDialect("sqlite3"); err != nil {
+	if err := goose.SetDialect("postgres"); err != nil {
 		slog.Error("Failed to set goose dialect", "error", err)
 		os.Exit(1)
 	}
-	if err := goose.Up(db, "."); err != nil {
+	if err := goose.Up(dbForMigrations, "."); err != nil {
 		slog.Error("Failed to run migrations", "error", err)
 		os.Exit(1)
 	}
@@ -82,7 +90,7 @@ func main() {
 
 	api := application{
 		config:   cfg,
-		db:       db,
+		pool:     pool,
 		validate: validator.New(),
 	}
 

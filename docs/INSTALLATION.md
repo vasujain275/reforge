@@ -11,11 +11,11 @@ This guide covers installing and running Reforge on your system.
 mkdir reforge && cd reforge
 
 # Download docker-compose
-curl -O https://raw.githubusercontent.com/vasujain275/reforge/main/infra/docker-compose.yaml
-curl -O https://raw.githubusercontent.com/vasujain275/reforge/main/infra/.env.sample
+curl -O https://raw.githubusercontent.com/vasujain275/reforge/main/docker-compose.yaml
+curl -O https://raw.githubusercontent.com/vasujain275/reforge/main/.env.example
 
 # Configure
-cp .env.sample .env
+cp .env.example .env
 # Edit .env and set JWT_SECRET (required)
 
 # Create data directory
@@ -25,146 +25,120 @@ mkdir data
 docker compose up -d
 
 # Access
-open http://localhost:9173
+# Backend API: http://localhost:8080
+# Frontend: http://localhost:5173 (in development) or serve /web/dist for production
 ```
 
-### Option 2: Pre-built Binary
+### Option 2: From Source
 
-Download the latest release from [GitHub Releases](https://github.com/vasujain275/reforge/releases).
+#### Prerequisites
 
-#### Linux
+- Go 1.23+
+- Node.js 20+
+- pnpm
+- go-task
+
+#### Backend Setup
 
 ```bash
-# Download binary
-wget https://github.com/vasujain275/reforge/releases/latest/download/reforge-linux-amd64.tar.gz
-tar -xzf reforge-linux-amd64.tar.gz
-
-# Download and configure environment
-curl -O https://raw.githubusercontent.com/vasujain275/reforge/main/infra/.env.sample
-cp .env.sample .env
-# Edit .env and set JWT_SECRET (required) - use: openssl rand -base64 32
-
-# Create data directory
-mkdir data
-
-# Run (loads .env automatically, or source it)
-source .env && ./reforge-linux-amd64
-
-# Access http://localhost:9173
-```
-
-#### macOS
-
-```bash
-# Intel Mac
-wget https://github.com/vasujain275/reforge/releases/latest/download/reforge-darwin-amd64.tar.gz
-tar -xzf reforge-darwin-amd64.tar.gz
-
-# Apple Silicon (M1/M2/M3)
-wget https://github.com/vasujain275/reforge/releases/latest/download/reforge-darwin-arm64.tar.gz
-tar -xzf reforge-darwin-arm64.tar.gz
-
-# Download and configure environment
-curl -O https://raw.githubusercontent.com/vasujain275/reforge/main/infra/.env.sample
-cp .env.sample .env
-# Edit .env and set JWT_SECRET (required) - use: openssl rand -base64 32
-
-# Create data directory
-mkdir data
-
-# Run
-source .env && ./reforge-darwin-*
-
-# Access http://localhost:9173
-```
-
-#### Windows
-
-```powershell
-# Download from releases page
-# Extract reforge-windows-amd64.zip
-
-# Download environment template
-Invoke-WebRequest -Uri "https://raw.githubusercontent.com/vasujain275/reforge/main/infra/.env.sample" -OutFile ".env.sample"
-Copy-Item .env.sample .env
-# Edit .env and set JWT_SECRET (required)
-
-# Create data directory
-mkdir data
-
-# Load environment and run
-Get-Content .env | ForEach-Object {
-    if ($_ -match "^([^=]+)=(.*)$") {
-        [Environment]::SetEnvironmentVariable($matches[1], $matches[2], "Process")
-    }
-}
-.\reforge-windows-amd64.exe
-
-# Access http://localhost:9173
-```
-
-### Option 3: Build from Source
-
-```bash
-# Clone
+# Clone repository
 git clone https://github.com/vasujain275/reforge.git
 cd reforge
 
-# Install dependencies
-cd web && pnpm install && pnpm build && cd ..
+# Set up backend
+cd api
+cp .env.example .env
+# Edit .env and set JWT_SECRET (use: openssl rand -base64 32)
 
-# Copy frontend to api
-cp -r web/dist api/web/
+# Install tools
+task install:tools
 
-# Build
-cd api && go build -o reforge ./cmd
+# Run backend
+task dev
+# Backend runs on http://localhost:8080
+```
 
-# Run
-JWT_SECRET="your-secret-key" ./reforge
+#### Frontend Setup
+
+```bash
+# In a new terminal
+cd web
+pnpm install
+
+# Development mode
+pnpm dev
+# Frontend runs on http://localhost:5173 with API proxy to :8080
+
+# Production build
+pnpm build
+# Serve the dist/ folder with any static file server
 ```
 
 ## Configuration
 
 ### Required Environment Variables
 
+**Backend (`api/.env`)**
+
 | Variable | Description | Example |
 |----------|-------------|---------|
 | `JWT_SECRET` | Secret key for JWT tokens | `openssl rand -base64 32` |
+| `ADDR` | Server address | `0.0.0.0:8080` |
+| `ENV` | Environment | `dev` or `prod` |
 
 ### Optional Environment Variables
 
+**Backend**
+
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `ADDR` | `:9173` | Server address |
-| `ENV` | `dev` | Environment (`dev` or `prod`) |
-| `GOOSE_DBSTRING` | `file:./data/reforge.db?...` | SQLite connection |
+| `CORS_ALLOWED_ORIGINS` | (empty) | Comma-separated origins for CORS |
+| `GOOSE_DBSTRING` | `file:./data/reforge.db?...` | Database connection |
+
+**Frontend (`web/.env`)** - Optional
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `VITE_API_URL` | `/api` | Backend API URL (uses proxy in dev) |
+
+### CORS Configuration
+
+- **Development:** CORS is relaxed (allows all origins when `ENV=dev`)
+- **Production:** Set `CORS_ALLOWED_ORIGINS` to your frontend domain(s)
+
+```bash
+# Example for production
+CORS_ALLOWED_ORIGINS='https://reforge.yourcompany.com,https://app.reforge.com'
+```
 
 ### Generate JWT Secret
 
 ```bash
 # Linux/macOS
 openssl rand -base64 32
-
-# Or use any random string generator
 ```
 
 ## First-Time Setup
 
-1. **Start Reforge** using any method above
-2. **Database migrations run automatically** on first startup
-3. **Open** `http://localhost:9173` in your browser
-4. **Complete Onboarding** - Create your admin account
-5. **Import Problems** (optional) - Use bundled datasets or add manually
+1. **Start Backend** - API runs on `:8080`
+2. **Start Frontend** - Dev server on `:5173` (or serve built files)
+3. **Database migrations run automatically** on backend startup
+4. **Open** `http://localhost:5173` in your browser
+5. **Complete Onboarding** - Create your admin account
+6. **Import Problems** - Go to Settings → Data Management to import datasets
+
+## Architecture
+
+Reforge now runs as **separate backend and frontend services**:
+
+- **Backend (Go):** REST API on port 8080
+- **Frontend (React):** Vite dev server on port 5173 (development) or static files (production)
+
+In development, Vite proxies `/api/*` requests to the backend at `:8080`.
 
 ## Database Migrations
 
-Reforge automatically runs database migrations on every startup. This means:
-
-- **Fresh installs**: The database schema is created automatically
-- **Updates**: New migrations are applied when you update Docker images or binaries
-- **No manual steps**: You never need to run migration commands manually
-
-Migration logs appear during startup:
+Migrations run automatically on backend startup:
 
 ```
 INFO Running database migrations...
@@ -173,109 +147,91 @@ INFO Database migrations completed successfully
 
 ## Data Storage
 
-Reforge uses SQLite. Your data is stored in:
+Your data is stored in PostgreSQL (or SQLite in development):
 
-- **Docker**: `./data/reforge.db` (bind mount)
-- **Binary**: `./data/reforge.db` (relative to binary)
+- **Docker:** `./data/reforge.db` (bind mount)
+- **Local:** `./api/data/reforge.db`
 
 ### Backup
 
 ```bash
-# Simple backup
-cp data/reforge.db backups/reforge-$(date +%Y%m%d).db
+# SQLite backup
+sqlite3 api/data/reforge.db ".backup backups/reforge-$(date +%Y%m%d).db"
 
-# SQLite backup (while running)
-sqlite3 data/reforge.db ".backup backups/reforge-$(date +%Y%m%d).db"
+# PostgreSQL backup
+pg_dump -h localhost -U reforge reforge > backup.sql
 ```
 
 ## Updating
 
-Reforge applies database migrations automatically on startup, so updates are seamless.
-
-### Docker
+### Backend
 
 ```bash
-docker compose pull
-docker compose up -d
-# Migrations run automatically when container starts
+cd api
+git pull
+task dev
+# Migrations run automatically
 ```
 
-### Binary
-
-Download the latest release and replace the binary. Your data is preserved in `./data/`.
+### Frontend
 
 ```bash
-# Stop current instance
-pkill reforge  # or ctrl+c
-
-# Download new version
-wget https://github.com/vasujain275/reforge/releases/latest/download/reforge-linux-amd64.tar.gz
-tar -xzf reforge-linux-amd64.tar.gz
-
-# Start (migrations run automatically)
-source .env && ./reforge-linux-amd64
+cd web
+git pull
+pnpm install
+pnpm dev  # or pnpm build for production
 ```
+
+## Production Deployment
+
+See [Docker Deployment](../docker-compose.yaml) for production setup with:
+
+- Nginx reverse proxy
+- PostgreSQL database
+- Docker Compose orchestration
 
 ## Troubleshooting
 
 ### Port already in use
 
-Change the port:
+Change the backend port in `api/.env`:
 ```bash
-export ADDR=":3000"
-./reforge-linux-amd64
+ADDR='0.0.0.0:3000'
 ```
 
-Or in Docker:
-```yaml
-ports:
-  - "3000:9173"
-```
-
-### Permission denied
-
+Change the frontend port:
 ```bash
-chmod +x reforge-linux-amd64
+cd web
+pnpm dev --port 3001
 ```
+
+### CORS errors
+
+- **Development:** Ensure `ENV=dev` in `api/.env`
+- **Production:** Set `CORS_ALLOWED_ORIGINS` with your frontend domain
 
 ### Database locked
 
-Ensure only one instance is running.
+Ensure only one backend instance is running.
 
 ### JWT_SECRET not set
 
 ```bash
-export JWT_SECRET="your-secret-key"
-# Or in Docker, set in .env file
+# In api/.env
+JWT_SECRET="your-secret-key"
 ```
 
 ## System Requirements
 
 - **OS**: Linux, macOS, or Windows
-- **Memory**: 128MB+ RAM
-- **Disk**: 100MB+ for app + database
-- **Ports**: 9173 (configurable)
-
-## Uninstall
-
-### Docker
-
-```bash
-docker compose down
-rm -rf data/  # Remove data (optional)
-```
-
-### Binary
-
-```bash
-rm reforge-*
-rm -rf data/  # Remove data (optional)
-```
+- **Memory**: 256MB+ RAM (backend), 512MB+ (development with hot reload)
+- **Disk**: 200MB+ for app + database
+- **Ports**: 8080 (backend), 5173 (frontend dev)
 
 ## Related Documentation
 
-- [BACKUP.md](./BACKUP.md) - Database backup strategies
 - [DEVELOPMENT.md](./DEVELOPMENT.md) - Development setup
+- [BACKUP.md](./BACKUP.md) - Database backup strategies
 
 ## Support
 

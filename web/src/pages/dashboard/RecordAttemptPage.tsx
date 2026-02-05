@@ -133,8 +133,8 @@ export default function RecordAttemptPage() {
   const startNewAttempt = async () => {
     try {
       const response = await api.post("/attempts/start", {
-        problem_id: parseInt(problemId!),
-        session_id: sessionId ? parseInt(sessionId) : undefined,
+        problem_id: problemId!,
+        session_id: sessionId || undefined,
       });
       setAttempt(response.data.data);
       setPhase("timer");

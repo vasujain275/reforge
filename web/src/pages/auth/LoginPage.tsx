@@ -1,14 +1,14 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { COPY } from "@/lib/copy";
 import { loginSchema } from "@/lib/schemas";
 import { useAuthStore } from "@/store/authStore";
 import { motion, AnimatePresence } from "framer-motion";
-import { AlertCircle, ArrowRight, Check, Loader2, Terminal } from "lucide-react";
+import { AlertCircle, ArrowRight, Check, Loader2, LayoutDashboard } from "lucide-react";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { getApiErrorMessage } from "@/types/api";
-import { getAppVersion } from "@/lib/version";
 
 export default function LoginPage() {
   const { login } = useAuthStore();
@@ -48,10 +48,10 @@ export default function LoginPage() {
   return (
     <div className="min-h-[calc(100vh-4rem)] bg-background relative overflow-hidden flex items-center justify-center p-6">
       {/* Subtle Grid Background */}
-      <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none" />
+      <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808008_1px,transparent_1px),linear-gradient(to_bottom,#80808008_1px,transparent_1px)] bg-[size:32px_32px] pointer-events-none" />
       
       {/* Gradient Orb */}
-      <div className="absolute top-1/3 left-1/2 -translate-x-1/2 w-[500px] h-[500px] bg-primary/10 rounded-full blur-3xl opacity-30 pointer-events-none" />
+      <div className="absolute top-1/3 left-1/2 -translate-x-1/2 w-[500px] h-[500px] bg-primary/5 rounded-full blur-3xl pointer-events-none" />
 
       {/* Success Animation Overlay */}
       <AnimatePresence>
@@ -99,7 +99,7 @@ export default function LoginPage() {
                 transition={{ delay: 0.4 }}
                 className="space-y-2"
               >
-                <h2 className="text-2xl font-bold text-foreground">Welcome back!</h2>
+                <h2 className="text-2xl font-bold text-foreground">{COPY.dashboard.welcome}!</h2>
                 <p className="text-muted-foreground">Redirecting to dashboard...</p>
               </motion.div>
 
@@ -139,39 +139,40 @@ export default function LoginPage() {
           {/* Logo */}
           <div className="flex items-center gap-3">
             <div className="p-3 rounded-xl bg-primary/10 border border-primary/20">
-              <Terminal className="h-8 w-8 text-primary" />
+              <LayoutDashboard className="h-8 w-8 text-primary" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-foreground">Reforge</h1>
-              <p className="text-xs font-mono text-muted-foreground">{getAppVersion()}</p>
+              <h1 className="text-2xl font-bold text-foreground">{COPY.brand.name}</h1>
+              <p className="text-sm text-muted-foreground">{COPY.brand.tagline}</p>
             </div>
           </div>
 
           {/* Description */}
           <div className="space-y-4">
             <h2 className="text-3xl font-bold tracking-tight text-foreground">
-              Welcome back to your
-              <span className="text-primary block">command center.</span>
+              {COPY.dashboard.welcome} to
+              <span className="text-primary block">{COPY.brand.name}.</span>
             </h2>
             <p className="text-muted-foreground leading-relaxed">
-              Your local-first DSA revision system is ready. Access your dashboard to continue building your coding interview preparation.
+              {COPY.brand.description}. Sign in to continue your preparation.
             </p>
           </div>
 
-          {/* Terminal Preview */}
-          <div className="bg-card/50 backdrop-blur-sm border border-border rounded-lg p-4">
-            <div className="flex items-center gap-2 mb-3 pb-2 border-b border-border">
-              <div className="w-3 h-3 rounded-full bg-red-500/50" />
-              <div className="w-3 h-3 rounded-full bg-yellow-500/50" />
-              <div className="w-3 h-3 rounded-full bg-green-500/50" />
-              <span className="text-xs font-mono text-muted-foreground ml-2">terminal</span>
-            </div>
-            <div className="font-mono text-sm space-y-1">
-              <p className="text-muted-foreground">$ reforge status</p>
-              <p className="text-green-500">✔ Database mounted (SQLite)</p>
-              <p className="text-green-500">✔ Spaced repetition active</p>
-              <p className="text-muted-foreground/70">Awaiting authentication...</p>
-            </div>
+          {/* Features Preview */}
+          <div className="bg-card/50 border border-border rounded-xl p-5 space-y-4">
+            <h3 className="text-sm font-medium text-foreground">What you'll get:</h3>
+            <ul className="space-y-3">
+              {[
+                "Smart spaced repetition scheduling",
+                "Pattern-based problem organization",
+                "Progress tracking and analytics",
+              ].map((feature, i) => (
+                <li key={i} className="flex items-center gap-3 text-sm text-muted-foreground">
+                  <div className="h-1.5 w-1.5 rounded-full bg-primary" />
+                  {feature}
+                </li>
+              ))}
+            </ul>
           </div>
         </motion.div>
 
@@ -182,25 +183,25 @@ export default function LoginPage() {
           transition={{ duration: 0.5, delay: 0.1 }}
           className="w-full max-w-md mx-auto lg:mx-0"
         >
-          <div className="bg-card/50 backdrop-blur-sm border border-border rounded-xl p-8 shadow-xl">
+          <div className="bg-card/50 backdrop-blur-sm border border-border rounded-xl p-8 shadow-lg">
             {/* Mobile Logo */}
             <div className="lg:hidden flex items-center gap-3 mb-6">
               <div className="p-2 rounded-lg bg-primary/10 border border-primary/20">
-                <Terminal className="h-6 w-6 text-primary" />
+                <LayoutDashboard className="h-6 w-6 text-primary" />
               </div>
               <div>
-                <h1 className="text-xl font-bold text-foreground">Reforge</h1>
-                <p className="text-xs font-mono text-muted-foreground">{getAppVersion()}</p>
+                <h1 className="text-xl font-bold text-foreground">{COPY.brand.name}</h1>
+                <p className="text-xs text-muted-foreground">{COPY.brand.tagline}</p>
               </div>
             </div>
 
             {/* Header */}
             <div className="space-y-2 mb-6">
               <h2 className="text-2xl font-bold tracking-tight text-foreground">
-                Access Console
+                {COPY.auth.signIn}
               </h2>
               <p className="text-sm text-muted-foreground">
-                Enter your credentials to access the system
+                {COPY.auth.signInToAccount}
               </p>
             </div>
 
@@ -219,7 +220,7 @@ export default function LoginPage() {
 
               <div className="space-y-2">
                 <Label htmlFor="email" className="text-sm font-medium">
-                  Email
+                  {COPY.auth.email}
                 </Label>
                 <Input
                   id="email"
@@ -236,19 +237,19 @@ export default function LoginPage() {
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <Label htmlFor="password" className="text-sm font-medium">
-                    Password
+                    {COPY.auth.password}
                   </Label>
                   <Link
                     to="/forgot-password"
                     className="text-xs text-muted-foreground hover:text-primary transition-colors"
                   >
-                    Forgot password?
+                    {COPY.auth.forgotPassword}
                   </Link>
                 </div>
                 <Input
                   id="password"
                   type="password"
-                  placeholder="••••••••"
+                  placeholder="Enter your password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
@@ -260,16 +261,16 @@ export default function LoginPage() {
               <Button
                 type="submit"
                 disabled={isSubmitting}
-                className="w-full h-12 text-base font-medium rounded-lg bg-primary hover:bg-primary/90 text-primary-foreground transition-all shadow-md hover:shadow-primary/20"
+                className="w-full h-12 text-base font-medium rounded-lg"
               >
                 {isSubmitting ? (
                   <>
                     <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                    Authenticating...
+                    {COPY.status.loading}
                   </>
                 ) : (
                   <>
-                    Access Dashboard
+                    {COPY.auth.signIn}
                     <ArrowRight className="ml-2 h-5 w-5" />
                   </>
                 )}
@@ -279,31 +280,16 @@ export default function LoginPage() {
             {/* Footer Link */}
             <div className="mt-6 pt-6 border-t border-border text-center">
               <p className="text-sm text-muted-foreground">
-                Don't have an account?{" "}
+                {COPY.auth.noAccount}{" "}
                 <Link
                   to="/register"
                   className="text-primary font-medium hover:underline underline-offset-4 transition-colors"
                 >
-                  Create account
+                  {COPY.auth.signUp}
                 </Link>
               </p>
             </div>
           </div>
-
-          {/* Status Badge */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.4 }}
-            className="flex justify-center mt-6"
-          >
-            <div className="inline-flex items-center gap-2 bg-card/50 backdrop-blur-sm border border-border rounded-full px-4 py-2">
-              <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
-              <span className="text-xs font-mono text-muted-foreground uppercase tracking-wider">
-                System Online
-              </span>
-            </div>
-          </motion.div>
         </motion.div>
       </div>
     </div>

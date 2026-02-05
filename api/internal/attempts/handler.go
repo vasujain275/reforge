@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"github.com/vasujain275/reforge/internal/auth"
 	"github.com/vasujain275/reforge/internal/utils"
 )
@@ -24,7 +25,7 @@ func (h *handler) CreateAttempt(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
 	// Get user ID from context
-	userID, ok := r.Context().Value(auth.UserKey).(int64)
+	userID, ok := r.Context().Value(auth.UserKey).(uuid.UUID)
 	if !ok {
 		utils.InternalServerError(w, "User ID is missing from context")
 		return
@@ -49,7 +50,7 @@ func (h *handler) CreateAttempt(w http.ResponseWriter, r *http.Request) {
 
 func (h *handler) ListAttemptsForUser(w http.ResponseWriter, r *http.Request) {
 	// Get user ID from context
-	userID, ok := r.Context().Value(auth.UserKey).(int64)
+	userID, ok := r.Context().Value(auth.UserKey).(uuid.UUID)
 	if !ok {
 		utils.InternalServerError(w, "User ID is missing from context")
 		return
@@ -71,7 +72,7 @@ func (h *handler) ListAttemptsForUser(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	attempts, err := h.service.ListAttemptsForUser(r.Context(), userID, limit, offset)
+	attempts, err := h.service.ListAttemptsForUser(r.Context(), userID, int32(limit), int32(offset))
 	if err != nil {
 		slog.Error("Failed to list attempts", "error", err)
 		utils.InternalServerError(w, "Failed to list attempts")
@@ -83,16 +84,16 @@ func (h *handler) ListAttemptsForUser(w http.ResponseWriter, r *http.Request) {
 
 func (h *handler) ListAttemptsForProblem(w http.ResponseWriter, r *http.Request) {
 	// Get user ID from context
-	userID, ok := r.Context().Value(auth.UserKey).(int64)
+	userID, ok := r.Context().Value(auth.UserKey).(uuid.UUID)
 	if !ok {
 		utils.InternalServerError(w, "User ID is missing from context")
 		return
 	}
 
 	problemIDStr := chi.URLParam(r, "id")
-	problemID, err := strconv.ParseInt(problemIDStr, 10, 64)
+	problemID, err := uuid.Parse(problemIDStr)
 	if err != nil {
-		utils.BadRequest(w, "Invalid problem ID", nil)
+		utils.BadRequest(w, "Invalid problem ID format", nil)
 		return
 	}
 
@@ -114,7 +115,7 @@ func (h *handler) ListAttemptsForProblem(w http.ResponseWriter, r *http.Request)
 func (h *handler) StartAttempt(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
-	userID, ok := r.Context().Value(auth.UserKey).(int64)
+	userID, ok := r.Context().Value(auth.UserKey).(uuid.UUID)
 	if !ok {
 		utils.InternalServerError(w, "User ID is missing from context")
 		return
@@ -139,7 +140,7 @@ func (h *handler) StartAttempt(w http.ResponseWriter, r *http.Request) {
 
 // GetInProgressAttempt retrieves an existing in-progress attempt for a problem
 func (h *handler) GetInProgressAttempt(w http.ResponseWriter, r *http.Request) {
-	userID, ok := r.Context().Value(auth.UserKey).(int64)
+	userID, ok := r.Context().Value(auth.UserKey).(uuid.UUID)
 	if !ok {
 		utils.InternalServerError(w, "User ID is missing from context")
 		return
@@ -151,9 +152,9 @@ func (h *handler) GetInProgressAttempt(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	problemID, err := strconv.ParseInt(problemIDStr, 10, 64)
+	problemID, err := uuid.Parse(problemIDStr)
 	if err != nil {
-		utils.BadRequest(w, "Invalid problem_id", nil)
+		utils.BadRequest(w, "Invalid problem_id format", nil)
 		return
 	}
 
@@ -174,16 +175,16 @@ func (h *handler) GetInProgressAttempt(w http.ResponseWriter, r *http.Request) {
 
 // GetAttemptByID retrieves an attempt by its ID
 func (h *handler) GetAttemptByID(w http.ResponseWriter, r *http.Request) {
-	userID, ok := r.Context().Value(auth.UserKey).(int64)
+	userID, ok := r.Context().Value(auth.UserKey).(uuid.UUID)
 	if !ok {
 		utils.InternalServerError(w, "User ID is missing from context")
 		return
 	}
 
 	attemptIDStr := chi.URLParam(r, "id")
-	attemptID, err := strconv.ParseInt(attemptIDStr, 10, 64)
+	attemptID, err := uuid.Parse(attemptIDStr)
 	if err != nil {
-		utils.BadRequest(w, "Invalid attempt ID", nil)
+		utils.BadRequest(w, "Invalid attempt ID format", nil)
 		return
 	}
 
@@ -201,16 +202,16 @@ func (h *handler) GetAttemptByID(w http.ResponseWriter, r *http.Request) {
 func (h *handler) UpdateAttemptTimer(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
-	userID, ok := r.Context().Value(auth.UserKey).(int64)
+	userID, ok := r.Context().Value(auth.UserKey).(uuid.UUID)
 	if !ok {
 		utils.InternalServerError(w, "User ID is missing from context")
 		return
 	}
 
 	attemptIDStr := chi.URLParam(r, "id")
-	attemptID, err := strconv.ParseInt(attemptIDStr, 10, 64)
+	attemptID, err := uuid.Parse(attemptIDStr)
 	if err != nil {
-		utils.BadRequest(w, "Invalid attempt ID", nil)
+		utils.BadRequest(w, "Invalid attempt ID format", nil)
 		return
 	}
 
@@ -236,16 +237,16 @@ func (h *handler) UpdateAttemptTimer(w http.ResponseWriter, r *http.Request) {
 func (h *handler) CompleteAttempt(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
-	userID, ok := r.Context().Value(auth.UserKey).(int64)
+	userID, ok := r.Context().Value(auth.UserKey).(uuid.UUID)
 	if !ok {
 		utils.InternalServerError(w, "User ID is missing from context")
 		return
 	}
 
 	attemptIDStr := chi.URLParam(r, "id")
-	attemptID, err := strconv.ParseInt(attemptIDStr, 10, 64)
+	attemptID, err := uuid.Parse(attemptIDStr)
 	if err != nil {
-		utils.BadRequest(w, "Invalid attempt ID", nil)
+		utils.BadRequest(w, "Invalid attempt ID format", nil)
 		return
 	}
 
@@ -268,16 +269,16 @@ func (h *handler) CompleteAttempt(w http.ResponseWriter, r *http.Request) {
 
 // AbandonAttempt marks an in-progress attempt as abandoned
 func (h *handler) AbandonAttempt(w http.ResponseWriter, r *http.Request) {
-	userID, ok := r.Context().Value(auth.UserKey).(int64)
+	userID, ok := r.Context().Value(auth.UserKey).(uuid.UUID)
 	if !ok {
 		utils.InternalServerError(w, "User ID is missing from context")
 		return
 	}
 
 	attemptIDStr := chi.URLParam(r, "id")
-	attemptID, err := strconv.ParseInt(attemptIDStr, 10, 64)
+	attemptID, err := uuid.Parse(attemptIDStr)
 	if err != nil {
-		utils.BadRequest(w, "Invalid attempt ID", nil)
+		utils.BadRequest(w, "Invalid attempt ID format", nil)
 		return
 	}
 

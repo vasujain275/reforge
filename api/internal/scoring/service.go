@@ -6,7 +6,9 @@ import (
 	"math"
 	"time"
 
-	repo "github.com/vasujain275/reforge/internal/adapters/sqlite/sqlc"
+	"github.com/google/uuid"
+
+	repo "github.com/vasujain275/reforge/internal/adapters/postgres/sqlc"
 )
 
 // ScoringWeights holds the configurable weights for the scoring formula
@@ -22,7 +24,7 @@ type ScoringWeights struct {
 
 // ProblemScore contains the computed score and feature breakdown
 type ProblemScore struct {
-	ProblemID int64
+	ProblemID uuid.UUID
 	Score     float64
 	Features  FeatureBreakdown
 	Reason    string
@@ -41,10 +43,10 @@ type FeatureBreakdown struct {
 
 type Service interface {
 	GetWeights(ctx context.Context) (*ScoringWeights, error)
-	ComputeScore(ctx context.Context, userID int64, problemID int64) (*ProblemScore, error)
-	ComputeScoreWithEmphasis(ctx context.Context, userID int64, problemID int64, emphasis string) (*ProblemScore, error)
-	ComputeScoresForUser(ctx context.Context, userID int64) ([]ProblemScore, error)
-	ComputeScoresForUserWithEmphasis(ctx context.Context, userID int64, emphasis string) ([]ProblemScore, error)
+	ComputeScore(ctx context.Context, userID uuid.UUID, problemID uuid.UUID) (*ProblemScore, error)
+	ComputeScoreWithEmphasis(ctx context.Context, userID uuid.UUID, problemID uuid.UUID, emphasis string) (*ProblemScore, error)
+	ComputeScoresForUser(ctx context.Context, userID uuid.UUID) ([]ProblemScore, error)
+	ComputeScoresForUserWithEmphasis(ctx context.Context, userID uuid.UUID, emphasis string) ([]ProblemScore, error)
 	CalculateNextReview(outcome string, confidence int, currentInterval int, easeFactor float64, reviewCount int) (int, float64, time.Time)
 }
 
@@ -140,11 +142,11 @@ func (s *scoringService) applyEmphasis(weights *ScoringWeights, emphasis string)
 	return w
 }
 
-func (s *scoringService) ComputeScore(ctx context.Context, userID int64, problemID int64) (*ProblemScore, error) {
+func (s *scoringService) ComputeScore(ctx context.Context, userID uuid.UUID, problemID uuid.UUID) (*ProblemScore, error) {
 	return s.ComputeScoreWithEmphasis(ctx, userID, problemID, "standard")
 }
 
-func (s *scoringService) ComputeScoreWithEmphasis(ctx context.Context, userID int64, problemID int64, emphasis string) (*ProblemScore, error) {
+func (s *scoringService) ComputeScoreWithEmphasis(ctx context.Context, userID uuid.UUID, problemID uuid.UUID, emphasis string) (*ProblemScore, error) {
 	// Get weights
 	weights, err := s.GetWeights(ctx)
 	if err != nil {
@@ -201,11 +203,11 @@ func (s *scoringService) ComputeScoreWithEmphasis(ctx context.Context, userID in
 	}, nil
 }
 
-func (s *scoringService) ComputeScoresForUser(ctx context.Context, userID int64) ([]ProblemScore, error) {
+func (s *scoringService) ComputeScoresForUser(ctx context.Context, userID uuid.UUID) ([]ProblemScore, error) {
 	return s.ComputeScoresForUserWithEmphasis(ctx, userID, "standard")
 }
 
-func (s *scoringService) ComputeScoresForUserWithEmphasis(ctx context.Context, userID int64, emphasis string) ([]ProblemScore, error) {
+func (s *scoringService) ComputeScoresForUserWithEmphasis(ctx context.Context, userID uuid.UUID, emphasis string) ([]ProblemScore, error) {
 	// Get all user problem stats
 	statsList, err := s.repo.ListUserProblemStats(ctx, userID)
 	if err != nil {
@@ -232,7 +234,7 @@ func (s *scoringService) ComputeScoresForUserWithEmphasis(ctx context.Context, u
 		// Get problem details
 		problem, err := s.repo.GetProblem(ctx, stats.ProblemID)
 		if err != nil {
-			fmt.Printf("Warning: failed to get problem %d: %v\n", stats.ProblemID, err)
+			fmt.Printf("Warning: failed to get problem %s: %v\n", stats.ProblemID, err)
 			continue
 		}
 
@@ -270,13 +272,13 @@ func (s *scoringService) ComputeScoresForUserWithEmphasis(ctx context.Context, u
 
 // getPatternStatsMap fetches all pattern stats for a user and returns a map
 // This fixes the N+1 query problem when computing scores for many problems
-func (s *scoringService) getPatternStatsMap(ctx context.Context, userID int64) map[int64]repo.UserPatternStat {
+func (s *scoringService) getPatternStatsMap(ctx context.Context, userID uuid.UUID) map[uuid.UUID]repo.UserPatternStat {
 	patternStats, err := s.repo.ListUserPatternStats(ctx, userID)
 	if err != nil {
-		return make(map[int64]repo.UserPatternStat)
+		return make(map[uuid.UUID]repo.UserPatternStat)
 	}
 
-	statsMap := make(map[int64]repo.UserPatternStat, len(patternStats))
+	statsMap := make(map[uuid.UUID]repo.UserPatternStat, len(patternStats))
 	for _, ps := range patternStats {
 		statsMap[ps.PatternID] = ps
 	}
@@ -287,7 +289,7 @@ func (s *scoringService) computeFeatures(
 	stats repo.UserProblemStat,
 	problem repo.Problem,
 	patterns []repo.Pattern,
-	patternStatsMap map[int64]repo.UserPatternStat,
+	patternStatsMap map[uuid.UUID]repo.UserPatternStat,
 ) FeatureBreakdown {
 	features := FeatureBreakdown{}
 
@@ -295,7 +297,7 @@ func (s *scoringService) computeFeatures(
 	// Lower confidence = higher urgency for revision
 	confidence := float64(50) // default
 	if stats.Confidence.Valid {
-		confidence = float64(stats.Confidence.Int64)
+		confidence = float64(stats.Confidence.Int32)
 	}
 	features.FConf = (100.0 - confidence) / 100.0
 
@@ -306,17 +308,17 @@ func (s *scoringService) computeFeatures(
 	// 3. f_attempts - INVERTED: fewer attempts = higher priority for building familiarity
 	// This encourages practicing newer/less-practiced problems
 	const attemptCap = 10.0
-	totalAttempts := int64(0)
+	totalAttempts := int32(0)
 	if stats.TotalAttempts.Valid {
-		totalAttempts = stats.TotalAttempts.Int64
+		totalAttempts = stats.TotalAttempts.Int32
 	}
 	// Invert: more attempts = lower score, fewer attempts = higher score
 	features.FAttempts = 1.0 - (math.Min(float64(totalAttempts), attemptCap) / attemptCap)
 
 	// 4. f_time - time-based complexity
-	if stats.AvgTimeSeconds.Valid && stats.AvgTimeSeconds.Int64 > 0 {
+	if stats.AvgTimeSeconds.Valid && stats.AvgTimeSeconds.Int32 > 0 {
 		const timeCap = 3600.0 // 1 hour
-		features.FTime = math.Min(float64(stats.AvgTimeSeconds.Int64), timeCap) / timeCap
+		features.FTime = math.Min(float64(stats.AvgTimeSeconds.Int32), timeCap) / timeCap
 	} else {
 		features.FTime = 0.0
 	}
@@ -350,20 +352,18 @@ func (s *scoringService) computeFeatures(
 // calculateDaysUrgency computes f_days using SM-2 due dates when available
 func (s *scoringService) calculateDaysUrgency(stats repo.UserProblemStat) float64 {
 	// Use SM-2 next_review_at if available
-	if stats.NextReviewAt.Valid && stats.NextReviewAt.String != "" {
-		dueDate, err := time.Parse(time.RFC3339, stats.NextReviewAt.String)
-		if err == nil {
-			daysOverdue := time.Since(dueDate).Hours() / 24.0
+	if stats.NextReviewAt.Valid {
+		dueDate := stats.NextReviewAt.Time
+		daysOverdue := time.Since(dueDate).Hours() / 24.0
 
-			if daysOverdue > 0 {
-				// Overdue: urgency increases exponentially
-				// 7 days overdue = ~0.86, 14 days = ~0.95, 30 days = ~0.99
-				return math.Min(1.0, 0.5+0.5*(1-math.Exp(-daysOverdue/7.0)))
-			}
-			// Not due yet: low urgency that increases as due date approaches
-			// -30 days = ~0.0, -7 days = ~0.23, 0 days = 0.5
-			return math.Max(0.0, 0.5*(1.0+daysOverdue/30.0))
+		if daysOverdue > 0 {
+			// Overdue: urgency increases exponentially
+			// 7 days overdue = ~0.86, 14 days = ~0.95, 30 days = ~0.99
+			return math.Min(1.0, 0.5+0.5*(1-math.Exp(-daysOverdue/7.0)))
 		}
+		// Not due yet: low urgency that increases as due date approaches
+		// -30 days = ~0.0, -7 days = ~0.23, 0 days = 0.5
+		return math.Max(0.0, 0.5*(1.0+daysOverdue/30.0))
 	}
 
 	// Fallback: legacy calculation based on last_attempt_at
@@ -374,20 +374,18 @@ func (s *scoringService) calculateDaysUrgency(stats repo.UserProblemStat) float6
 func (s *scoringService) calculateLegacyDaysUrgency(stats repo.UserProblemStat) float64 {
 	daysSinceLast := 365.0 // default for never attempted
 	if stats.LastAttemptAt.Valid {
-		lastAttempt, err := time.Parse(time.RFC3339, stats.LastAttemptAt.String)
-		if err == nil {
-			daysSinceLast = time.Since(lastAttempt).Hours() / 24.0
-		}
+		lastAttempt := stats.LastAttemptAt.Time
+		daysSinceLast = time.Since(lastAttempt).Hours() / 24.0
 	}
 
 	// Calculate mastery multiplier
 	avgConfidence := float64(50)
 	if stats.AvgConfidence.Valid {
-		avgConfidence = float64(stats.AvgConfidence.Int64)
+		avgConfidence = float64(stats.AvgConfidence.Int32)
 	}
-	totalAttempts := int64(0)
+	totalAttempts := int32(0)
 	if stats.TotalAttempts.Valid {
-		totalAttempts = stats.TotalAttempts.Int64
+		totalAttempts = stats.TotalAttempts.Int32
 	}
 
 	masteryMultiplier := 1.0
@@ -410,13 +408,11 @@ func (s *scoringService) calculateFailedUrgency(stats repo.UserProblemStat) floa
 
 	// If we have a timestamp, apply exponential decay
 	if stats.LastAttemptAt.Valid {
-		lastAttempt, err := time.Parse(time.RFC3339, stats.LastAttemptAt.String)
-		if err == nil {
-			daysSinceFailure := time.Since(lastAttempt).Hours() / 24.0
-			// Exponential decay: half-life of ~20 days
-			// 0 days = 1.0, 20 days = 0.5, 40 days = 0.25
-			return math.Exp(-daysSinceFailure / 30.0)
-		}
+		lastAttempt := stats.LastAttemptAt.Time
+		daysSinceFailure := time.Since(lastAttempt).Hours() / 24.0
+		// Exponential decay: half-life of ~20 days
+		// 0 days = 1.0, 20 days = 0.5, 40 days = 0.25
+		return math.Exp(-daysSinceFailure / 30.0)
 	}
 
 	// No timestamp, assume recent failure
@@ -424,7 +420,7 @@ func (s *scoringService) calculateFailedUrgency(stats repo.UserProblemStat) floa
 }
 
 // calculatePatternWeakness computes f_pattern using pre-fetched pattern stats
-func (s *scoringService) calculatePatternWeakness(patterns []repo.Pattern, patternStatsMap map[int64]repo.UserPatternStat) float64 {
+func (s *scoringService) calculatePatternWeakness(patterns []repo.Pattern, patternStatsMap map[uuid.UUID]repo.UserPatternStat) float64 {
 	if len(patterns) == 0 {
 		return 0.5 // fallback for problems without patterns
 	}
@@ -432,7 +428,7 @@ func (s *scoringService) calculatePatternWeakness(patterns []repo.Pattern, patte
 	totalWeakness := 0.0
 	for _, pattern := range patterns {
 		if ps, exists := patternStatsMap[pattern.ID]; exists && ps.AvgConfidence.Valid {
-			patternWeakness := 1.0 - (float64(ps.AvgConfidence.Int64) / 100.0)
+			patternWeakness := 1.0 - (float64(ps.AvgConfidence.Int32) / 100.0)
 			totalWeakness += patternWeakness
 		} else {
 			totalWeakness += 0.5 // fallback for missing pattern stats
@@ -538,7 +534,7 @@ func (s *scoringService) buildReason(features FeatureBreakdown, weights *Scoring
 			switch c.name {
 			case "Low confidence":
 				if stats.Confidence.Valid {
-					reason += fmt.Sprintf("confidence %d%%", stats.Confidence.Int64)
+					reason += fmt.Sprintf("confidence %d%%", stats.Confidence.Int32)
 				} else {
 					reason += "low confidence"
 				}
@@ -550,31 +546,25 @@ func (s *scoringService) buildReason(features FeatureBreakdown, weights *Scoring
 				}
 			case "Due for review":
 				if stats.NextReviewAt.Valid {
-					dueDate, err := time.Parse(time.RFC3339, stats.NextReviewAt.String)
-					if err == nil {
-						daysOverdue := int(time.Since(dueDate).Hours() / 24)
-						if daysOverdue > 0 {
-							reason += fmt.Sprintf("%d days overdue", daysOverdue)
-						} else if daysOverdue == 0 {
-							reason += "due today"
-						} else {
-							reason += fmt.Sprintf("due in %d days", -daysOverdue)
-						}
+					dueDate := stats.NextReviewAt.Time
+					daysOverdue := int(time.Since(dueDate).Hours() / 24)
+					if daysOverdue > 0 {
+						reason += fmt.Sprintf("%d days overdue", daysOverdue)
+					} else if daysOverdue == 0 {
+						reason += "due today"
 					} else {
-						reason += "due for review"
+						reason += fmt.Sprintf("due in %d days", -daysOverdue)
 					}
 				} else if stats.LastAttemptAt.Valid {
-					lastAttempt, err := time.Parse(time.RFC3339, stats.LastAttemptAt.String)
-					if err == nil {
-						days := int(time.Since(lastAttempt).Hours() / 24)
-						reason += fmt.Sprintf("%d days since last", days)
-					}
+					lastAttempt := stats.LastAttemptAt.Time
+					days := int(time.Since(lastAttempt).Hours() / 24)
+					reason += fmt.Sprintf("%d days since last", days)
 				} else {
 					reason += "never attempted"
 				}
 			case "Needs more practice":
-				if stats.TotalAttempts.Valid && stats.TotalAttempts.Int64 < 3 {
-					reason += fmt.Sprintf("only %d attempts", stats.TotalAttempts.Int64)
+				if stats.TotalAttempts.Valid && stats.TotalAttempts.Int32 < 3 {
+					reason += fmt.Sprintf("only %d attempts", stats.TotalAttempts.Int32)
 				} else {
 					reason += "needs practice"
 				}

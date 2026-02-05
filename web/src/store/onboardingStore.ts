@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { api } from "@/lib/api";
 import { toast } from "sonner";
 
-type OnboardingStep = "welcome" | "features" | "setup" | "data";
+type OnboardingStep = "welcome" | "features" | "setup" | "complete";
 
 interface OnboardingFormData {
   name: string;
@@ -87,7 +87,7 @@ export const useOnboardingStore = create<OnboardingState>((set, get) => ({
       });
 
       toast.success("Admin account created!");
-      set({ step: "data", isSubmitting: false });
+      set({ step: "complete", isSubmitting: false });
       return true;
     } catch (err: unknown) {
       const errorMsg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message || "Failed to initialize system";

@@ -10,7 +10,7 @@ let pendingSave = false;
 
 interface SessionTimerState {
   // State
-  sessionId: number | null;
+  sessionId: string | null;
   elapsedSeconds: number;
   timerState: TimerState;
   plannedDurationMin: number;
@@ -19,7 +19,7 @@ interface SessionTimerState {
 
   // Actions
   initialize: (
-    sessionId: number,
+    sessionId: string,
     elapsedSeconds: number,
     timerState: TimerState,
     plannedDurationMin: number

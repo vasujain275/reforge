@@ -18,7 +18,7 @@ interface FocusModeViewProps {
   problems: SessionProblem[];
   onExit: () => void;
   onProblemComplete: () => void;
-  onSkip: (problemId: number) => void;
+  onSkip: (problemId: string) => void;
 }
 
 export function FocusModeView({
@@ -36,7 +36,7 @@ export function FocusModeView({
 
   const [currentIndex, setCurrentIndex] = useState(getFirstIncompleteIndex);
   const [activeTimerProblemId, setActiveTimerProblemId] = useState<
-    number | null
+    string | null
   >(null);
 
   const currentProblem = problems[currentIndex];

@@ -75,7 +75,7 @@ export function PriorityBadge({
     <Badge
       variant="outline"
       className={cn(
-        "font-mono text-[10px] uppercase tracking-wider",
+        "font-mono text-[10px]",
         config.className,
         config.textClass,
         className

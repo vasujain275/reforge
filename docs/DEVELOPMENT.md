@@ -7,7 +7,7 @@ This guide covers setting up your development environment for Reforge.
 - **Go** 1.23+ ([install](https://go.dev/doc/install))
 - **Node.js** 20+ ([install](https://nodejs.org/))
 - **pnpm** ([install](https://pnpm.io/installation))
-- **go-task** ([install](https://taskfile.dev/installation/))
+- **go-task** ([install](https://taskfile.dev/installation))
 
 ## Quick Start
 
@@ -25,31 +25,34 @@ cd api && task install:tools && cd ..
 
 ## Development Workflow
 
-You need two terminals - one for frontend, one for backend:
+Reforge runs as **separate backend and frontend services**. You need two terminals:
 
-### Terminal 1: Frontend (React + Vite)
+### Terminal 1: Backend (Go + Air)
+
+```bash
+cd api
+cp .env.example .env  # First time only
+# Edit .env if needed (defaults are fine for development)
+task dev
+```
+
+Backend runs on `http://localhost:8080` with hot reload via Air.
+
+### Terminal 2: Frontend (React + Vite)
 
 ```bash
 cd web
 pnpm dev
 ```
 
-This starts the Vite dev server on `http://localhost:5173` with hot reload.
-API requests are proxied to the backend at `http://localhost:9173`.
-
-### Terminal 2: Backend (Go + Air)
-
-```bash
-cd api
-cp .env.example .env  # First time only
-task dev
-```
-
-This starts the Go server on `http://localhost:9173` with hot reload via Air.
+Frontend runs on `http://localhost:5173` with hot reload. Vite proxies `/api/*` requests to `:8080`.
 
 ### Access the App
 
-Open `http://localhost:5173` in your browser. The frontend dev server proxies `/api/*` requests to the backend.
+Open `http://localhost:5173` in your browser.
+
+- Frontend: Served by Vite dev server (port 5173)
+- API calls: Proxied to backend (port 8080)
 
 ## Project Structure
 
@@ -58,7 +61,7 @@ reforge/
 ├── api/                    # Go backend
 │   ├── cmd/                # Application entrypoint
 │   ├── internal/           # Business logic (hexagonal architecture)
-│   │   ├── adapters/       # Database adapters (SQLite)
+│   │   ├── adapters/       # Database adapters (SQLite/PostgreSQL)
 │   │   ├── auth/           # Authentication service
 │   │   ├── problems/       # Problems domain
 │   │   ├── patterns/       # Patterns domain
@@ -66,7 +69,6 @@ reforge/
 │   │   ├── attempts/       # Attempts domain
 │   │   ├── scoring/        # Scoring algorithm
 │   │   └── ...
-│   ├── web/                # Embedded frontend (production only)
 │   ├── sample-datasets/    # Bundled problem datasets
 │   └── Taskfile.yaml       # Task commands
 ├── web/                    # React frontend
@@ -75,10 +77,9 @@ reforge/
 │   │   ├── pages/          # Route pages
 │   │   ├── store/          # Zustand stores
 │   │   ├── hooks/          # Custom hooks
-│   │   ├── lib/            # Utilities
+│   │   ├── lib/            # Utilities (API client, copy, etc.)
 │   │   └── types/          # TypeScript types
 │   └── package.json
-├── infra/                  # Docker deployment
 ├── docs/                   # Documentation
 └── Reforge.md              # Technical specification
 ```
@@ -88,11 +89,11 @@ reforge/
 All commands run from the `api/` directory:
 
 ```bash
-# Run server (production mode)
-task run
-
-# Development with hot reload
+# Development server with hot reload
 task dev
+
+# Run server (no hot reload)
+task run
 
 # Run tests
 task test
@@ -100,34 +101,35 @@ task test
 # Run linter
 task lint
 
-# Database migrations (development only)
+# Database migrations
 task goose:up         # Apply migrations
 task goose:down       # Rollback
 task goose:status     # Show status
+task goose:create NAME  # Create new migration
 
-# Generate SQLC code
+# Generate SQLC code (after modifying queries)
 task sqlc:generate
 
 # Build binary
 task build
 ```
 
-### Note on Migrations
-
-In **development**, you can use `task goose:up` and `task goose:down` to manage migrations manually.
-
-In **production** (Docker or binary releases), migrations run **automatically on startup** via embedded migrations. No manual steps are required. See [INSTALLATION.md](./INSTALLATION.md) for details.
-
 ## Frontend Commands
 
 All commands run from the `web/` directory:
 
 ```bash
-# Development server
+# Development server (with API proxy)
 pnpm dev
 
 # Build for production
 pnpm build
+
+# Preview production build
+pnpm preview
+
+# Type check
+pnpm type-check
 
 # Lint code
 pnpm lint
@@ -141,13 +143,22 @@ pnpm shadcn add <component-name>
 ### Backend (`api/.env`)
 
 ```env
-ADDR=':9173'
-ENV='dev'
+# Server Configuration
+ADDR='0.0.0.0:8080'
+ENV='dev'  # 'dev' or 'prod'
+
+# CORS - Development: relaxed, Production: specify origins
+CORS_ALLOWED_ORIGINS='http://localhost:5173,http://localhost:4173'
+
+# Database (SQLite for development)
 GOOSE_DBSTRING='file:./data/reforge.db?_pragma=journal_mode(WAL)&_pragma=foreign_keys(ON)'
 GOOSE_DRIVER='sqlite'
-JWT_SECRET='your-secret-key'
+GOOSE_MIGRATION_DIR='./internal/adapters/sqlite/migrations'
 
-# Scoring weights (optional)
+# Authentication
+JWT_SECRET='super-secret-default-key'  # CHANGE IN PRODUCTION!
+
+# Default Scoring Weights (must sum to 1.0)
 DEFAULT_W_CONF='0.30'
 DEFAULT_W_DAYS='0.20'
 DEFAULT_W_ATTEMPTS='0.10'
@@ -155,6 +166,41 @@ DEFAULT_W_TIME='0.05'
 DEFAULT_W_DIFFICULTY='0.15'
 DEFAULT_W_FAILED='0.10'
 DEFAULT_W_PATTERN='0.10'
+
+# Admin Seeding (only used if no admin exists)
+SEED_ADMIN_EMAIL='admin@reforge.local'
+SEED_ADMIN_NAME='System Administrator'
+SEED_ADMIN_PASSWORD='ChangeMeImmediately123!'
+
+# Signup Settings
+DEFAULT_SIGNUP_ENABLED='true'
+DEFAULT_INVITE_CODES_ENABLED='true'
+```
+
+### Frontend (`web/.env`) - Optional
+
+```env
+# API URL (uses Vite proxy in dev, set for production)
+VITE_API_URL='/api'
+```
+
+## CORS Configuration
+
+The backend includes CORS middleware with environment-based behavior:
+
+- **Development (`ENV=dev`)**: Allows all origins for easier testing
+- **Production (`ENV=prod`)**: Only allows origins specified in `CORS_ALLOWED_ORIGINS`
+
+### Development CORS
+
+No configuration needed - all origins are allowed when `ENV=dev`.
+
+### Production CORS
+
+Set `CORS_ALLOWED_ORIGINS` to your frontend domain(s):
+
+```env
+CORS_ALLOWED_ORIGINS='https://reforge.yourcompany.com,https://app.reforge.com'
 ```
 
 ## Code Conventions
@@ -166,21 +212,26 @@ DEFAULT_W_PATTERN='0.10'
 - Error wrapping: `fmt.Errorf("context: %w", err)`
 - Files: `snake_case.go`
 - Exported: `PascalCase`
+- UUIDs for all entity IDs
 
 ### TypeScript (Frontend)
 
 - Functional components only
 - Zustand for state management
-- Tailwind CSS for styling
+- Tailwind CSS for styling (no CSS modules)
+- Use `COPY` constants from `lib/copy.ts` for all text
 - Components: `PascalCase.tsx`
 - Variables: `camelCase`
+- All entity IDs are `string` (UUIDs)
 
 ### Database
 
-- Use goose for migrations
+- PostgreSQL 16+ for production, SQLite for development
+- Use Goose for migrations
 - Tables/columns: `snake_case`
+- UUID primary keys
+- `TIMESTAMPTZ` for timestamps
 - Run `task sqlc:generate` after changing queries
-- Migrations are embedded in the binary for production (see `api/internal/adapters/sqlite/migrations/embed.go`)
 
 ## Testing
 
@@ -188,33 +239,166 @@ DEFAULT_W_PATTERN='0.10'
 # Backend tests
 cd api && task test
 
+# Backend test with coverage
+cd api && task test:coverage
+
 # Single test
 cd api && go test -v ./internal/auth -run TestLogin
+
+# Frontend type check
+cd web && pnpm type-check
 
 # Frontend lint
 cd web && pnpm lint
 ```
 
-## Building for Production
+## API Development
+
+The backend exposes a REST API on port 8080:
+
+- Base URL: `http://localhost:8080/api/v1`
+- Health check: `GET /api/v1/health`
+- Auth: JWT tokens in HTTP-only cookies
+- All requests/responses use JSON
+
+### Testing API Endpoints
 
 ```bash
-# 1. Build frontend
-cd web && pnpm build
+# Health check
+curl http://localhost:8080/api/v1/health
 
-# 2. Copy dist to api for embedding
-cp -r dist ../api/web/
+# Register user
+curl -X POST http://localhost:8080/api/v1/users \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Test User","email":"test@example.com","password":"password123"}'
 
-# 3. Build Go binary
-cd ../api && task build
+# Login
+curl -X POST http://localhost:8080/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"test@example.com","password":"password123"}' \
+  -c cookies.txt
 
-# 4. Run
-JWT_SECRET="secret" ./bin/kiro-api
-# Server runs on http://localhost:9173
+# Get problems (authenticated)
+curl http://localhost:8080/api/v1/problems -b cookies.txt
+```
+
+## Database Migrations
+
+### Development Workflow
+
+```bash
+cd api
+
+# Create a new migration
+task goose:create add_new_table
+
+# Edit the migration file in internal/adapters/sqlite/migrations/
+
+# Apply migration
+task goose:up
+
+# Check status
+task goose:status
+
+# Rollback if needed
+task goose:down
+```
+
+### Production
+
+Migrations run **automatically on backend startup** via embedded migrations. No manual steps required.
+
+## Common Tasks
+
+### Adding a New Shadcn Component
+
+```bash
+cd web
+pnpm shadcn add button
+pnpm shadcn add dialog
+```
+
+### Modifying Database Queries
+
+```bash
+# 1. Edit SQL files in api/internal/adapters/sqlite/queries/
+
+# 2. Regenerate Go code
+cd api && task sqlc:generate
+
+# 3. Use the generated functions in your services
+```
+
+### Adding a New API Endpoint
+
+```bash
+# 1. Add route in api/cmd/api.go
+# 2. Create handler in api/internal/<domain>/handler.go
+# 3. Implement service logic in api/internal/<domain>/service.go
+# 4. Add SQLC queries if needed
+# 5. Update frontend API client in web/src/lib/api.ts
+```
+
+## Troubleshooting
+
+### Backend won't start
+
+```bash
+# Check if port 8080 is in use
+lsof -i :8080
+
+# Check .env file exists
+ls -la api/.env
+
+# Check database file
+ls -la api/data/reforge.db
+```
+
+### Frontend API calls failing
+
+```bash
+# Ensure backend is running on :8080
+curl http://localhost:8080/api/v1/health
+
+# Check Vite proxy configuration in web/vite.config.ts
+
+# Check browser console for CORS errors
+```
+
+### CORS errors
+
+```bash
+# Ensure ENV=dev in api/.env for development
+# Check CORS_ALLOWED_ORIGINS includes http://localhost:5173
+```
+
+### Database migrations failed
+
+```bash
+cd api
+
+# Check migration status
+task goose:status
+
+# Manual rollback
+task goose:down
+
+# Re-apply
+task goose:up
 ```
 
 ## Related Documentation
 
-- [AGENTS.md](../AGENTS.md) - AI agent guidelines
-- [STYLE-GUIDE.md](../STYLE-GUIDE.md) - Frontend design patterns
+- [AGENTS.md](../AGENTS.md) - AI agent guidelines  
+- [STYLE-GUIDE.md](../STYLE-GUIDE.md) - Frontend design system
 - [Reforge.md](../Reforge.md) - Complete technical specification
-- [infra/README.md](../infra/README.md) - Deployment guide
+- [INSTALLATION.md](./INSTALLATION.md) - Installation guide
+
+## Pro Tips
+
+1. **Use Air for hot reload**: Backend automatically recompiles on file changes
+2. **Use Vite HMR**: Frontend updates instantly without full page reload
+3. **Check logs**: Backend logs appear in the terminal running `task dev`
+4. **Use browser DevTools**: React DevTools and Network tab are your friends
+5. **Test SQLC changes**: Run `task sqlc:generate` and check for errors
+6. **Commit migrations**: Always commit both `.sql` files and generated code

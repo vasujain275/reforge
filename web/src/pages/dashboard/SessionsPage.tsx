@@ -19,7 +19,7 @@ import {
   Check,
   Clock,
   Play,
-  Terminal,
+  Sparkles,
   Zap,
   BookOpen,
   Target,
@@ -31,7 +31,7 @@ import { Link, useNavigate } from "react-router-dom";
 
 export default function SessionsPage() {
   const navigate = useNavigate();
-  const [repeatingSessionId, setRepeatingSessionId] = useState<number | null>(
+  const [repeatingSessionId, setRepeatingSessionId] = useState<string | null>(
     null
   );
 
@@ -56,14 +56,14 @@ export default function SessionsPage() {
     status: statusFilter,
   });
 
-  const handleRepeatSession = async (sessionId: number) => {
+  const handleRepeatSession = async (sessionId: string) => {
     setRepeatingSessionId(sessionId);
     try {
       const sessionResponse = await api.get(`/sessions/${sessionId}`);
       const sessionData = sessionResponse.data.data;
 
       const problemIds =
-        sessionData.problems?.map((p: { id: number }) => p.id) || [];
+        sessionData.problems?.map((p: { id: string }) => p.id) || [];
 
       if (problemIds.length === 0) {
         alert(
@@ -94,7 +94,7 @@ export default function SessionsPage() {
       morning_momentum: { icon: Zap, name: "Morning Momentum Builder" },
       weakness_crusher: { icon: Target, name: "Weakness Crusher" },
       daily_mixed: { icon: BookOpen, name: "Daily Mixed Grind" },
-      pattern_deep_dive: { icon: Terminal, name: "Pattern Deep Dive" },
+      pattern_deep_dive: { icon: Sparkles, name: "Pattern Deep Dive" },
       pattern_rotation: { icon: Calendar, name: "Pattern Rotation" },
       pattern_combo: { icon: Target, name: "Pattern Combo Chains" },
       pattern_graduation: { icon: Check, name: "Pattern Graduation" },
@@ -103,12 +103,12 @@ export default function SessionsPage() {
       challenge_gauntlet: { icon: Zap, name: "Challenge Gauntlet" },
     };
     if (!key) {
-      return { icon: Terminal, name: "Custom Session" };
+      return { icon: Sparkles, name: "Custom Session" };
     }
     return (
       templates[key] || {
-        icon: Terminal,
-        name: key.replace(/_/g, " ").toUpperCase(),
+        icon: Sparkles,
+        name: key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
       }
     );
   };
@@ -157,23 +157,23 @@ export default function SessionsPage() {
 
   return (
     <div className="flex-1 space-y-6 p-6">
-      {/* Header - HUD Style */}
+      {/* Header */}
       <div className="flex items-start justify-between border-b border-border pb-4">
         <div className="space-y-1">
           <div className="flex items-center gap-3">
-            <Terminal className="h-6 w-6 text-primary" />
-            <h2 className="text-2xl font-bold tracking-tight font-mono uppercase">
-              Session Registry
+            <Clock className="h-6 w-6 text-primary" />
+            <h2 className="text-2xl font-bold">
+              Sessions
             </h2>
           </div>
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Clock className="h-3 w-3" />
-            <span className="font-mono">{data?.total || 0} total sessions</span>
+            <span>{data?.total || 0} total sessions</span>
           </div>
         </div>
         <Link to="/dashboard/sessions/new">
-          <Button className="font-mono rounded-md shadow-[0_0_15px_-3px_var(--primary)]">
-            <Play className="h-4 w-4 mr-2" />+ Initialize Session
+          <Button>
+            <Play className="h-4 w-4 mr-2" />
+            New Session
           </Button>
         </Link>
       </div>
@@ -199,14 +199,14 @@ export default function SessionsPage() {
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
               <SelectContent className="rounded-md">
-                <SelectItem value="all" className="font-mono">
-                  ALL SESSIONS
+                <SelectItem value="all">
+                  All Sessions
                 </SelectItem>
-                <SelectItem value="active" className="font-mono">
-                  ACTIVE
+                <SelectItem value="active">
+                  Active
                 </SelectItem>
-                <SelectItem value="completed" className="font-mono">
-                  COMPLETED
+                <SelectItem value="completed">
+                  Completed
                 </SelectItem>
               </SelectContent>
             </Select>
@@ -216,7 +216,7 @@ export default function SessionsPage() {
 
       {/* Results Summary */}
       {data && (
-        <div className="flex items-center justify-between text-sm font-mono text-muted-foreground">
+        <div className="flex items-center justify-between text-sm text-muted-foreground">
           <span>
             Showing {sessions.length > 0 ? (page - 1) * pageSize + 1 : 0} -{" "}
             {Math.min(page * pageSize, data.total)} of {data.total} sessions
@@ -245,21 +245,21 @@ export default function SessionsPage() {
                 <CardContent className="py-12">
                   <div className="text-center space-y-4">
                     <div className="mx-auto h-12 w-12 rounded-md border border-border flex items-center justify-center">
-                      <Terminal className="h-6 w-6 text-muted-foreground" />
+                      <Clock className="h-6 w-6 text-muted-foreground" />
                     </div>
                     <div className="space-y-1">
-                      <p className="font-mono text-sm uppercase tracking-wider text-muted-foreground">
+                      <p className="text-sm text-muted-foreground">
                         No Sessions Found
                       </p>
-                      <p className="text-xs text-muted-foreground font-mono">
+                      <p className="text-xs text-muted-foreground">
                         {localSearchQuery || statusFilter !== "all"
                           ? "Try adjusting your search filters"
-                          : "Initialize first session to begin tracking"}
+                          : "Start your first session to begin tracking"}
                       </p>
                     </div>
                     <Link to="/dashboard/sessions/new" className="inline-block">
-                      <Button className="font-mono rounded-md">
-                        + Initialize Session
+                      <Button>
+                        New Session
                       </Button>
                     </Link>
                   </div>
@@ -272,7 +272,7 @@ export default function SessionsPage() {
                 return (
                   <Card
                     key={session.id}
-                    className="border border-border hover:border-primary/50 hover:shadow-[0_0_15px_-3px_var(--primary)] transition-all rounded-md"
+                    className="border border-border hover:border-primary/50 transition-all rounded-md"
                   >
                     <CardContent className="p-4">
                       <div className="flex items-start gap-4">
@@ -291,11 +291,11 @@ export default function SessionsPage() {
                           {/* Top Row - Title & Status */}
                           <div className="flex items-center justify-between">
                             <div className="space-y-1">
-                              <h3 className="font-mono font-semibold uppercase tracking-wider text-sm">
+                              <h3 className="font-semibold text-sm">
                                 {template.name}
                               </h3>
-                              <div className="flex items-center gap-3 text-xs font-mono text-muted-foreground">
-                                <span>
+                              <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                                <span className="font-mono">
                                   SESSION_{String(session.id).padStart(4, "0")}
                                 </span>
                                 <span className="text-muted-foreground/50">
@@ -305,7 +305,7 @@ export default function SessionsPage() {
                               </div>
                             </div>
                             <div
-                              className={`px-2 py-1 rounded-md border font-mono text-xs uppercase tracking-wider ${
+                              className={`px-2 py-1 rounded-md border text-xs ${
                                 session.completed
                                   ? "bg-green-500/10 border-green-500/20 text-green-500"
                                   : "bg-orange-400/10 border-orange-400/20 text-orange-400"
@@ -314,12 +314,12 @@ export default function SessionsPage() {
                               {session.completed ? (
                                 <span className="flex items-center gap-1">
                                   <Check className="h-3 w-3" />
-                                  COMPLETE
+                                  Complete
                                 </span>
                               ) : (
                                 <span className="flex items-center gap-1">
                                   <Play className="h-3 w-3" />
-                                  ACTIVE
+                                  Active
                                 </span>
                               )}
                             </div>
@@ -341,35 +341,35 @@ export default function SessionsPage() {
 
                             <div className="flex items-center gap-2">
                               <Clock className="h-3 w-3 text-muted-foreground" />
-                              <div className="space-y-0">
-                                <div className="font-mono">
-                                  {String(session.planned_duration_min).padStart(
-                                    3,
-                                    "0"
-                                  )}{" "}
-                                  min
+                                <div className="space-y-0">
+                                  <div className="font-mono">
+                                    {String(session.planned_duration_min).padStart(
+                                      3,
+                                      "0"
+                                    )}{" "}
+                                    min
+                                  </div>
+                                  <div className="text-[10px] text-muted-foreground">
+                                    planned duration
+                                  </div>
                                 </div>
-                                <div className="font-mono text-[10px] text-muted-foreground">
-                                  planned duration
-                                </div>
-                              </div>
                             </div>
 
                             {session.problems && session.problems.length > 0 && (
                               <div className="flex items-center gap-2">
                                 <Target className="h-3 w-3 text-muted-foreground" />
-                                <div className="space-y-0">
-                                  <div className="font-mono">
-                                    {String(session.problems.length).padStart(
-                                      2,
-                                      "0"
-                                    )}{" "}
-                                    problems
+                                  <div className="space-y-0">
+                                    <div className="font-mono">
+                                      {String(session.problems.length).padStart(
+                                        2,
+                                        "0"
+                                      )}{" "}
+                                      problems
+                                    </div>
+                                    <div className="text-[10px] text-muted-foreground">
+                                      in queue
+                                    </div>
                                   </div>
-                                  <div className="font-mono text-[10px] text-muted-foreground">
-                                    in queue
-                                  </div>
-                                </div>
                               </div>
                             )}
                           </div>
@@ -380,9 +380,9 @@ export default function SessionsPage() {
                               <Button
                                 variant="outline"
                                 size="sm"
-                                className="font-mono text-xs rounded-md"
+                                className="text-xs rounded-md"
                               >
-                                <Terminal className="h-3 w-3 mr-1.5" />
+                                <Sparkles className="h-3 w-3 mr-1.5" />
                                 View Details
                               </Button>
                             </Link>
@@ -390,7 +390,7 @@ export default function SessionsPage() {
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                className="font-mono text-xs rounded-md"
+                                className="text-xs rounded-md"
                                 onClick={() => handleRepeatSession(session.id)}
                                 disabled={repeatingSessionId === session.id}
                               >

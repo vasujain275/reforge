@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { useSessionTimerStore } from "@/store/sessionTimerStore";
 
 interface SessionTimerDisplayProps {
-  sessionId: number;
+  sessionId: string;
   plannedDurationMin: number;
   initialElapsedSeconds: number;
   initialTimerState: "idle" | "running" | "paused";

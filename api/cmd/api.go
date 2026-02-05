@@ -1,17 +1,15 @@
 package main
 
 import (
-	"database/sql"
-	"io/fs"
 	"log/slog"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-playground/validator/v10"
-	repo "github.com/vasujain275/reforge/internal/adapters/sqlite/sqlc"
+	"github.com/jackc/pgx/v5/pgxpool"
+	repo "github.com/vasujain275/reforge/internal/adapters/postgres/sqlc"
 	"github.com/vasujain275/reforge/internal/admin"
 	"github.com/vasujain275/reforge/internal/attempts"
 	"github.com/vasujain275/reforge/internal/auth"
@@ -25,7 +23,6 @@ import (
 	"github.com/vasujain275/reforge/internal/settings"
 	"github.com/vasujain275/reforge/internal/users"
 	"github.com/vasujain275/reforge/internal/utils"
-	"github.com/vasujain275/reforge/web"
 )
 
 func (app *application) mount() http.Handler {
@@ -35,10 +32,11 @@ func (app *application) mount() http.Handler {
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
+	r.Use(app.CORSMiddleware)
 
 	r.Use(middleware.Timeout(60 * time.Second))
 
-	repoInstance := repo.New(app.db)
+	repoInstance := repo.New(app.pool)
 
 	// Determine production status from config
 	isProd := app.config.env == "prod"
@@ -66,7 +64,7 @@ func (app *application) mount() http.Handler {
 	settingsService := settings.NewService(repoInstance, defaultWeights)
 	adminService := admin.NewService(repoInstance)
 	onboardingService := onboarding.NewService(repoInstance)
-	importService := dataimport.NewService(repoInstance, app.db, app.config.datasetPath)
+	importService := dataimport.NewService(repoInstance, app.pool, app.config.datasetPath)
 
 	// Handlers
 	userHandler := users.NewHandler(userService, adminService)
@@ -223,62 +221,13 @@ func (app *application) mount() http.Handler {
 
 	})
 
-	// Serve embedded static files (React SPA) in production
-	staticFiles, err := web.GetStaticFiles()
-	if err != nil {
-		slog.Error("Failed to get static files", "error", err)
-	}
-
-	if staticFiles != nil {
-		slog.Info("Serving embedded static files for SPA")
-
-		// Create file server for static assets
-		fileServer := http.FileServer(http.FS(staticFiles))
-
-		// Serve static files and handle SPA routing
-		r.Get("/*", func(w http.ResponseWriter, req *http.Request) {
-			// Try to serve the exact file first
-			path := strings.TrimPrefix(req.URL.Path, "/")
-			if path == "" {
-				path = "index.html"
-			}
-
-			// Check if the file exists
-			if file, err := staticFiles.Open(path); err == nil {
-				file.Close()
-				fileServer.ServeHTTP(w, req)
-				return
-			}
-
-			// For SPA routing: serve index.html for non-existent paths
-			// (React Router will handle the routing client-side)
-			indexFile, err := staticFiles.Open("index.html")
-			if err != nil {
-				http.NotFound(w, req)
-				return
-			}
-			defer indexFile.Close()
-
-			// Get file info for content length
-			stat, err := indexFile.Stat()
-			if err != nil {
-				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-				return
-			}
-
-			// Read index.html content
-			content := make([]byte, stat.Size())
-			if _, err := indexFile.(fs.File).Read(content); err != nil {
-				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-				return
-			}
-
-			w.Header().Set("Content-Type", "text/html; charset=utf-8")
-			w.Write(content)
+	// Health check endpoint for API
+	r.Get("/", func(w http.ResponseWriter, req *http.Request) {
+		utils.Write(w, http.StatusOK, map[string]string{
+			"message": "Reforge API is running",
+			"version": "v1",
 		})
-	} else {
-		slog.Info("No embedded static files - running in API-only mode (development)")
-	}
+	})
 
 	return r
 }
@@ -299,7 +248,7 @@ func (app *application) run(h http.Handler) error {
 
 type application struct {
 	config   config
-	db       *sql.DB
+	pool     *pgxpool.Pool
 	validate *validator.Validate
 }
 

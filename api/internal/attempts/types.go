@@ -2,8 +2,8 @@ package attempts
 
 // CreateAttemptBody is used for creating a completed attempt directly (legacy flow)
 type CreateAttemptBody struct {
-	ProblemID       int64   `json:"problem_id"       validate:"required,gte=1"`
-	SessionID       *int64  `json:"session_id"       validate:"omitempty,gte=1"`
+	ProblemID       string  `json:"problem_id"       validate:"required,uuid"`
+	SessionID       *string `json:"session_id"       validate:"omitempty,uuid"`
 	ConfidenceScore int64   `json:"confidence_score" validate:"required,gte=0,lte=100"`
 	DurationSeconds *int64  `json:"duration_seconds" validate:"omitempty,gte=0"`
 	Outcome         string  `json:"outcome"          validate:"required,oneof=passed failed"`
@@ -13,10 +13,10 @@ type CreateAttemptBody struct {
 
 // AttemptResponse is the standard response for completed attempts
 type AttemptResponse struct {
-	ID                int64   `json:"id"`
-	UserID            int64   `json:"user_id"`
-	ProblemID         int64   `json:"problem_id"`
-	SessionID         *int64  `json:"session_id"`
+	ID                string  `json:"id"`
+	UserID            string  `json:"user_id"`
+	ProblemID         string  `json:"problem_id"`
+	SessionID         *string `json:"session_id"`
 	ConfidenceScore   int64   `json:"confidence_score"`
 	DurationSeconds   *int64  `json:"duration_seconds"`
 	Outcome           string  `json:"outcome"`
@@ -32,8 +32,8 @@ type AttemptResponse struct {
 
 // StartAttemptBody is the request body for starting a new in-progress attempt
 type StartAttemptBody struct {
-	ProblemID int64  `json:"problem_id" validate:"required,gte=1"`
-	SessionID *int64 `json:"session_id" validate:"omitempty,gte=1"`
+	ProblemID string  `json:"problem_id" validate:"required,uuid"`
+	SessionID *string `json:"session_id" validate:"omitempty,uuid"`
 }
 
 // UpdateAttemptTimerBody is the request body for updating attempt timer state
@@ -52,10 +52,10 @@ type CompleteAttemptBody struct {
 
 // InProgressAttemptResponse is the response for in-progress attempts (timer page)
 type InProgressAttemptResponse struct {
-	ID                 int64   `json:"id"`
-	UserID             int64   `json:"user_id"`
-	ProblemID          int64   `json:"problem_id"`
-	SessionID          *int64  `json:"session_id,omitempty"`
+	ID                 string  `json:"id"`
+	UserID             string  `json:"user_id"`
+	ProblemID          string  `json:"problem_id"`
+	SessionID          *string `json:"session_id,omitempty"`
 	Status             string  `json:"status"`
 	ElapsedTimeSeconds int64   `json:"elapsed_time_seconds"`
 	TimerState         string  `json:"timer_state"`

@@ -3,7 +3,7 @@ import { api } from "@/lib/api";
 // ============= Types =============
 
 export interface AdminUser {
-    id: number;
+    id: string;
     name: string;
     email: string;
     role: 'user' | 'admin';
@@ -19,9 +19,9 @@ export interface UserListResponse {
 }
 
 export interface InviteCode {
-    id: number;
+    id: string;
     code: string;
-    created_by_admin_id: number;
+    created_by_admin_id: string;
     created_at: string;
     expires_at: string | null;
     max_uses: number;
@@ -61,27 +61,27 @@ export const adminApi = {
     },
 
     // Update user role
-    updateUserRole: async (userId: number, role: 'user' | 'admin'): Promise<void> => {
+    updateUserRole: async (userId: string, role: 'user' | 'admin'): Promise<void> => {
         await api.post(`/admin/users/${userId}/role`, { role });
     },
 
     // Deactivate user
-    deactivateUser: async (userId: number): Promise<void> => {
+    deactivateUser: async (userId: string): Promise<void> => {
         await api.post(`/admin/users/${userId}/deactivate`);
     },
 
     // Reactivate user
-    reactivateUser: async (userId: number): Promise<void> => {
+    reactivateUser: async (userId: string): Promise<void> => {
         await api.post(`/admin/users/${userId}/reactivate`);
     },
 
     // Delete user permanently
-    deleteUser: async (userId: number): Promise<void> => {
+    deleteUser: async (userId: string): Promise<void> => {
         await api.delete(`/admin/users/${userId}`);
     },
 
     // Initiate password reset for user
-    initiatePasswordReset: async (userId: number): Promise<PasswordResetResponse> => {
+    initiatePasswordReset: async (userId: string): Promise<PasswordResetResponse> => {
         const response = await api.post(`/admin/users/${userId}/reset-password`);
         return response.data.data;
     },
@@ -104,7 +104,7 @@ export const adminApi = {
     },
 
     // Delete invite code
-    deleteInviteCode: async (inviteId: number): Promise<void> => {
+    deleteInviteCode: async (inviteId: string): Promise<void> => {
         await api.delete(`/admin/invites/${inviteId}`);
     },
 

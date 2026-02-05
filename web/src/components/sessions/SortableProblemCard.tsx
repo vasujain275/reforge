@@ -22,7 +22,7 @@ interface SortableProblemCardProps {
   onCancelTimer: () => void;
   onSkip: () => void;
   onTimerComplete: () => void;
-  sessionId: number;
+  sessionId: string;
   isSessionCompleted: boolean;
 }
 
@@ -63,7 +63,7 @@ export function SortableProblemCard({
       } ${
         problem.completed
           ? "bg-green-500/5 border-green-500/20"
-          : "border-border hover:border-primary/40 hover:shadow-[0_0_15px_-3px_var(--primary)]"
+          : "border-border hover:border-primary/40"
       }`}
     >
       <div className="p-4 flex items-start gap-4">
@@ -80,7 +80,7 @@ export function SortableProblemCard({
 
         {/* Problem Number/Status Icon */}
         <div
-          className={`flex items-center justify-center w-10 h-10 rounded-md font-bold font-mono text-sm border shrink-0 ${
+          className={`flex items-center justify-center w-10 h-10 rounded-md font-bold text-sm border shrink-0 ${
             problem.completed
               ? "bg-green-500/10 text-green-500 border-green-500/20"
               : "bg-primary/10 text-primary border-primary/20"
@@ -96,11 +96,11 @@ export function SortableProblemCard({
         {/* Problem Info */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-3 mb-2 flex-wrap">
-            <h4 className="font-semibold font-mono text-lg">
+            <h4 className="font-semibold text-lg">
               {problem.title}
             </h4>
             <span
-              className={`text-xs px-2 py-1 rounded-md font-mono uppercase tracking-wider border ${
+              className={`text-xs px-2 py-1 rounded-md border ${
                 problem.difficulty === "hard"
                   ? "bg-red-500/10 text-red-500 border-red-500/20"
                   : problem.difficulty === "medium"
@@ -119,7 +119,7 @@ export function SortableProblemCard({
                 href={problem.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 text-xs text-primary hover:text-primary/80 transition-colors font-mono uppercase tracking-wider"
+                className="inline-flex items-center gap-1.5 text-xs text-primary hover:text-primary/80 transition-colors"
               >
                 <ExternalLink className="h-3.5 w-3.5" />
                 Open Problem
@@ -155,7 +155,7 @@ export function SortableProblemCard({
           {problem.completed && problem.outcome && (
             <div className="mt-3 flex items-center gap-2">
               <span
-                className={`inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded-md font-mono uppercase tracking-wider border ${
+                className={`inline-flex items-center gap-1.5 text-xs px-2 py-1 rounded-md border ${
                   problem.outcome === "passed"
                     ? "bg-green-500/10 text-green-500 border-green-500/20"
                     : "bg-red-500/10 text-red-500 border-red-500/20"
@@ -180,7 +180,6 @@ export function SortableProblemCard({
                 variant="outline"
                 size="sm"
                 onClick={onCancelTimer}
-                className="font-mono uppercase tracking-wider"
               >
                 Cancel
               </Button>
@@ -190,7 +189,6 @@ export function SortableProblemCard({
                   size="sm"
                   variant={problem.completed ? "outline" : "default"}
                   onClick={onStartTimer}
-                  className="font-mono uppercase tracking-wider"
                 >
                   <PlayCircle className="h-4 w-4 mr-2" />
                   {problem.completed ? "Retry" : "Start"}
@@ -200,7 +198,7 @@ export function SortableProblemCard({
                     size="sm"
                     variant="ghost"
                     onClick={onSkip}
-                    className="font-mono uppercase tracking-wider text-muted-foreground hover:text-foreground"
+                    className="text-muted-foreground hover:text-foreground"
                     title="Move to end of list"
                   >
                     <SkipForward className="h-4 w-4" />

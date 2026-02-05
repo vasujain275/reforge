@@ -2,20 +2,22 @@ package patterns
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"sort"
+	"time"
 
-	repo "github.com/vasujain275/reforge/internal/adapters/sqlite/sqlc"
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
+	repo "github.com/vasujain275/reforge/internal/adapters/postgres/sqlc"
 )
 
 type Service interface {
 	CreatePattern(ctx context.Context, body CreatePatternBody) (*repo.Pattern, error)
-	GetPattern(ctx context.Context, patternID int64) (*repo.Pattern, error)
-	UpdatePattern(ctx context.Context, patternID int64, body UpdatePatternBody) (*repo.Pattern, error)
-	DeletePattern(ctx context.Context, patternID int64) error
-	ListPatternsWithStats(ctx context.Context, userID int64) ([]PatternWithStats, error)
-	SearchPatternsWithStats(ctx context.Context, userID int64, params SearchPatternsParams) (*PaginatedPatterns, error)
+	GetPattern(ctx context.Context, patternID uuid.UUID) (*repo.Pattern, error)
+	UpdatePattern(ctx context.Context, patternID uuid.UUID, body UpdatePatternBody) (*repo.Pattern, error)
+	DeletePattern(ctx context.Context, patternID uuid.UUID) error
+	ListPatternsWithStats(ctx context.Context, userID uuid.UUID) ([]PatternWithStats, error)
+	SearchPatternsWithStats(ctx context.Context, userID uuid.UUID, params SearchPatternsParams) (*PaginatedPatterns, error)
 	ListPatterns(ctx context.Context) ([]repo.Pattern, error)
 }
 
@@ -32,7 +34,7 @@ func NewService(repo repo.Querier) Service {
 func (s *patternService) CreatePattern(ctx context.Context, body CreatePatternBody) (*repo.Pattern, error) {
 	pattern, err := s.repo.CreatePattern(ctx, repo.CreatePatternParams{
 		Title:       body.Title,
-		Description: sqlNullString(body.Description),
+		Description: pgtypeText(body.Description),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create pattern: %w", err)
@@ -40,7 +42,7 @@ func (s *patternService) CreatePattern(ctx context.Context, body CreatePatternBo
 	return &pattern, nil
 }
 
-func (s *patternService) GetPattern(ctx context.Context, patternID int64) (*repo.Pattern, error) {
+func (s *patternService) GetPattern(ctx context.Context, patternID uuid.UUID) (*repo.Pattern, error) {
 	pattern, err := s.repo.GetPattern(ctx, patternID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get pattern: %w", err)
@@ -48,11 +50,11 @@ func (s *patternService) GetPattern(ctx context.Context, patternID int64) (*repo
 	return &pattern, nil
 }
 
-func (s *patternService) UpdatePattern(ctx context.Context, patternID int64, body UpdatePatternBody) (*repo.Pattern, error) {
+func (s *patternService) UpdatePattern(ctx context.Context, patternID uuid.UUID, body UpdatePatternBody) (*repo.Pattern, error) {
 	pattern, err := s.repo.UpdatePattern(ctx, repo.UpdatePatternParams{
 		ID:          patternID,
 		Title:       body.Title,
-		Description: sqlNullString(body.Description),
+		Description: pgtypeText(body.Description),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to update pattern: %w", err)
@@ -60,11 +62,11 @@ func (s *patternService) UpdatePattern(ctx context.Context, patternID int64, bod
 	return &pattern, nil
 }
 
-func (s *patternService) DeletePattern(ctx context.Context, patternID int64) error {
+func (s *patternService) DeletePattern(ctx context.Context, patternID uuid.UUID) error {
 	return s.repo.DeletePattern(ctx, patternID)
 }
 
-func (s *patternService) ListPatternsWithStats(ctx context.Context, userID int64) ([]PatternWithStats, error) {
+func (s *patternService) ListPatternsWithStats(ctx context.Context, userID uuid.UUID) ([]PatternWithStats, error) {
 	rows, err := s.repo.GetPatternsWithStats(ctx, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list patterns with stats: %w", err)
@@ -79,20 +81,20 @@ func (s *patternService) ListPatternsWithStats(ctx context.Context, userID int64
 		}
 
 		pattern := PatternWithStats{
-			ID:           row.ID,
+			ID:           row.ID.String(),
 			Title:        row.Title,
-			Description:  nullStringToPtr(row.Description),
+			Description:  textToPtr(row.Description),
 			ProblemCount: problemCount,
 		}
 
 		// Add stats if they exist
 		if row.TimesRevised.Valid {
 			pattern.Stats = &PatternUserStats{
-				UserID:        userID,
-				PatternID:     row.ID,
-				TimesRevised:  row.TimesRevised.Int64,
-				AvgConfidence: row.AvgConfidence.Int64,
-				LastRevisedAt: nullStringToPtr(row.LastRevisedAt),
+				UserID:        userID.String(),
+				PatternID:     row.ID.String(),
+				TimesRevised:  int64(row.TimesRevised.Int32),
+				AvgConfidence: int64(row.AvgConfidence.Int32),
+				LastRevisedAt: timestamptzToPtr(row.LastRevisedAt),
 			}
 		}
 
@@ -102,7 +104,7 @@ func (s *patternService) ListPatternsWithStats(ctx context.Context, userID int64
 	return patterns, nil
 }
 
-func (s *patternService) SearchPatternsWithStats(ctx context.Context, userID int64, params SearchPatternsParams) (*PaginatedPatterns, error) {
+func (s *patternService) SearchPatternsWithStats(ctx context.Context, userID uuid.UUID, params SearchPatternsParams) (*PaginatedPatterns, error) {
 	// Get total count
 	countRow, err := s.repo.CountSearchPatternsWithStats(ctx, params.Query)
 	if err != nil {
@@ -120,8 +122,8 @@ func (s *patternService) SearchPatternsWithStats(ctx context.Context, userID int
 	rows, err := s.repo.SearchPatternsWithStats(ctx, repo.SearchPatternsWithStatsParams{
 		UserID:      userID,
 		SearchQuery: params.Query,
-		LimitVal:    params.Limit,
-		OffsetVal:   params.Offset,
+		LimitVal:    int32(params.Limit),
+		OffsetVal:   int32(params.Offset),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to search patterns: %w", err)
@@ -130,20 +132,20 @@ func (s *patternService) SearchPatternsWithStats(ctx context.Context, userID int
 	results := make([]PatternWithStats, 0, len(rows))
 	for _, row := range rows {
 		pattern := PatternWithStats{
-			ID:           row.ID,
+			ID:           row.ID.String(),
 			Title:        row.Title,
-			Description:  nullStringToPtr(row.Description),
+			Description:  textToPtr(row.Description),
 			ProblemCount: row.ProblemCount,
 		}
 
 		// Add stats if they exist (times_revised > 0 indicates stats exist)
 		if row.TimesRevised > 0 || row.AvgConfidence > 0 {
 			pattern.Stats = &PatternUserStats{
-				UserID:        userID,
-				PatternID:     row.ID,
-				TimesRevised:  row.TimesRevised,
-				AvgConfidence: row.AvgConfidence,
-				LastRevisedAt: nullStringToPtr(row.LastRevisedAt),
+				UserID:        userID.String(),
+				PatternID:     row.ID.String(),
+				TimesRevised:  int64(row.TimesRevised),
+				AvgConfidence: int64(row.AvgConfidence),
+				LastRevisedAt: timestamptzToPtr(row.LastRevisedAt),
 			}
 		}
 
@@ -179,18 +181,26 @@ func (s *patternService) ListPatterns(ctx context.Context) ([]repo.Pattern, erro
 }
 
 // Helper functions
-func sqlNullString(s *string) sql.NullString {
+func pgtypeText(s *string) pgtype.Text {
 	if s == nil {
-		return sql.NullString{}
+		return pgtype.Text{}
 	}
-	return sql.NullString{String: *s, Valid: true}
+	return pgtype.Text{String: *s, Valid: true}
 }
 
-func nullStringToPtr(ns sql.NullString) *string {
-	if !ns.Valid {
+func textToPtr(t pgtype.Text) *string {
+	if !t.Valid {
 		return nil
 	}
-	return &ns.String
+	return &t.String
+}
+
+func timestamptzToPtr(ts pgtype.Timestamptz) *string {
+	if !ts.Valid {
+		return nil
+	}
+	s := ts.Time.Format(time.RFC3339)
+	return &s
 }
 
 // sortPatterns sorts patterns based on the provided sort_by parameter

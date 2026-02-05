@@ -2,23 +2,24 @@ package problems
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"time"
 
-	repo "github.com/vasujain275/reforge/internal/adapters/sqlite/sqlc"
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
+	repo "github.com/vasujain275/reforge/internal/adapters/postgres/sqlc"
 	"github.com/vasujain275/reforge/internal/scoring"
 )
 
 type Service interface {
-	CreateProblem(ctx context.Context, userID int64, body CreateProblemBody) (*ProblemWithStats, error)
-	GetProblem(ctx context.Context, problemID int64) (*ProblemWithStats, error)
-	UpdateProblem(ctx context.Context, problemID int64, body UpdateProblemBody) (*ProblemWithStats, error)
-	DeleteProblem(ctx context.Context, problemID int64) error
-	ListProblemsForUser(ctx context.Context, userID int64) ([]ProblemWithStats, error)
-	SearchProblemsForUser(ctx context.Context, userID int64, params SearchProblemsParams) (*PaginatedProblems, error)
-	GetUrgentProblems(ctx context.Context, userID int64, limit int64) ([]UrgentProblem, error)
-	LinkProblemToPatterns(ctx context.Context, problemID int64, patternIDs []int64) error
+	CreateProblem(ctx context.Context, userID uuid.UUID, body CreateProblemBody) (*ProblemWithStats, error)
+	GetProblem(ctx context.Context, problemID uuid.UUID) (*ProblemWithStats, error)
+	UpdateProblem(ctx context.Context, problemID uuid.UUID, body UpdateProblemBody) (*ProblemWithStats, error)
+	DeleteProblem(ctx context.Context, problemID uuid.UUID) error
+	ListProblemsForUser(ctx context.Context, userID uuid.UUID) ([]ProblemWithStats, error)
+	SearchProblemsForUser(ctx context.Context, userID uuid.UUID, params SearchProblemsParams) (*PaginatedProblems, error)
+	GetUrgentProblems(ctx context.Context, userID uuid.UUID, limit int32) ([]UrgentProblem, error)
+	LinkProblemToPatterns(ctx context.Context, problemID uuid.UUID, patternIDs []uuid.UUID) error
 }
 
 type problemService struct {
@@ -33,13 +34,13 @@ func NewService(repo repo.Querier, scoringService scoring.Service) Service {
 	}
 }
 
-func (s *problemService) CreateProblem(ctx context.Context, userID int64, body CreateProblemBody) (*ProblemWithStats, error) {
+func (s *problemService) CreateProblem(ctx context.Context, userID uuid.UUID, body CreateProblemBody) (*ProblemWithStats, error) {
 	// Create the problem
 	problem, err := s.repo.CreateProblem(ctx, repo.CreateProblemParams{
 		Title:      body.Title,
-		Source:     sqlNullString(body.Source),
-		Url:        sqlNullString(body.URL),
-		Difficulty: sqlNullString(&body.Difficulty),
+		Source:     pgtypeText(body.Source),
+		Url:        pgtypeText(body.URL),
+		Difficulty: pgtypeText(&body.Difficulty),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create problem: %w", err)
@@ -47,7 +48,11 @@ func (s *problemService) CreateProblem(ctx context.Context, userID int64, body C
 
 	// Link patterns if provided
 	if len(body.PatternIDs) > 0 {
-		if err := s.LinkProblemToPatterns(ctx, problem.ID, body.PatternIDs); err != nil {
+		patternUUIDs, err := parseUUIDs(body.PatternIDs)
+		if err != nil {
+			return nil, fmt.Errorf("invalid pattern ID: %w", err)
+		}
+		if err := s.LinkProblemToPatterns(ctx, problem.ID, patternUUIDs); err != nil {
 			return nil, fmt.Errorf("failed to link patterns: %w", err)
 		}
 	}
@@ -56,14 +61,14 @@ func (s *problemService) CreateProblem(ctx context.Context, userID int64, body C
 	_, err = s.repo.UpsertUserProblemStats(ctx, repo.UpsertUserProblemStatsParams{
 		UserID:            userID,
 		ProblemID:         problem.ID,
-		Status:            sqlNullString(strPtr("unsolved")),
-		Confidence:        sql.NullInt64{Int64: 50, Valid: true},
-		AvgConfidence:     sql.NullInt64{Int64: 50, Valid: true},
-		LastAttemptAt:     sql.NullString{},
-		TotalAttempts:     sql.NullInt64{Int64: 0, Valid: true},
-		AvgTimeSeconds:    sql.NullInt64{},
-		LastOutcome:       sql.NullString{},
-		RecentHistoryJson: sql.NullString{String: "[]", Valid: true},
+		Status:            pgtypeText(strPtr("unsolved")),
+		Confidence:        pgtype.Int4{Int32: 50, Valid: true},
+		AvgConfidence:     pgtype.Int4{Int32: 50, Valid: true},
+		LastAttemptAt:     pgtype.Timestamptz{},
+		TotalAttempts:     pgtype.Int4{Int32: 0, Valid: true},
+		AvgTimeSeconds:    pgtype.Int4{},
+		LastOutcome:       pgtype.Text{},
+		RecentHistoryJson: pgtype.Text{String: "[]", Valid: true},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize stats: %w", err)
@@ -76,15 +81,15 @@ func (s *problemService) CreateProblem(ctx context.Context, userID int64, body C
 	}
 
 	return &ProblemWithStats{
-		ID:         problem.ID,
+		ID:         problem.ID.String(),
 		Title:      problem.Title,
-		Source:     nullStringToPtr(problem.Source),
-		URL:        nullStringToPtr(problem.Url),
-		Difficulty: nullStringToStr(problem.Difficulty, "medium"),
-		CreatedAt:  problem.CreatedAt.String,
+		Source:     pgtypeTextToPtr(problem.Source),
+		URL:        pgtypeTextToPtr(problem.Url),
+		Difficulty: pgtypeTextToStr(problem.Difficulty, "medium"),
+		CreatedAt:  problem.CreatedAt.Time.Format(time.RFC3339),
 		Stats: &Stats{
-			UserID:        userID,
-			ProblemID:     problem.ID,
+			UserID:        userID.String(),
+			ProblemID:     problem.ID.String(),
 			Status:        "unsolved",
 			Confidence:    50,
 			AvgConfidence: 50,
@@ -94,7 +99,7 @@ func (s *problemService) CreateProblem(ctx context.Context, userID int64, body C
 	}, nil
 }
 
-func (s *problemService) GetProblem(ctx context.Context, problemID int64) (*ProblemWithStats, error) {
+func (s *problemService) GetProblem(ctx context.Context, problemID uuid.UUID) (*ProblemWithStats, error) {
 	problem, err := s.repo.GetProblem(ctx, problemID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get problem: %w", err)
@@ -107,23 +112,23 @@ func (s *problemService) GetProblem(ctx context.Context, problemID int64) (*Prob
 	}
 
 	return &ProblemWithStats{
-		ID:         problem.ID,
+		ID:         problem.ID.String(),
 		Title:      problem.Title,
-		Source:     nullStringToPtr(problem.Source),
-		URL:        nullStringToPtr(problem.Url),
-		Difficulty: nullStringToStr(problem.Difficulty, "medium"),
-		CreatedAt:  problem.CreatedAt.String,
+		Source:     pgtypeTextToPtr(problem.Source),
+		URL:        pgtypeTextToPtr(problem.Url),
+		Difficulty: pgtypeTextToStr(problem.Difficulty, "medium"),
+		CreatedAt:  problem.CreatedAt.Time.Format(time.RFC3339),
 		Patterns:   convertPatternsFromRepo(patterns),
 	}, nil
 }
 
-func (s *problemService) UpdateProblem(ctx context.Context, problemID int64, body UpdateProblemBody) (*ProblemWithStats, error) {
+func (s *problemService) UpdateProblem(ctx context.Context, problemID uuid.UUID, body UpdateProblemBody) (*ProblemWithStats, error) {
 	problem, err := s.repo.UpdateProblem(ctx, repo.UpdateProblemParams{
 		ID:         problemID,
 		Title:      body.Title,
-		Source:     sqlNullString(body.Source),
-		Url:        sqlNullString(body.URL),
-		Difficulty: sqlNullString(&body.Difficulty),
+		Source:     pgtypeText(body.Source),
+		Url:        pgtypeText(body.URL),
+		Difficulty: pgtypeText(&body.Difficulty),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to update problem: %w", err)
@@ -135,7 +140,11 @@ func (s *problemService) UpdateProblem(ctx context.Context, problemID int64, bod
 	}
 
 	if len(body.PatternIDs) > 0 {
-		if err := s.LinkProblemToPatterns(ctx, problemID, body.PatternIDs); err != nil {
+		patternUUIDs, err := parseUUIDs(body.PatternIDs)
+		if err != nil {
+			return nil, fmt.Errorf("invalid pattern ID: %w", err)
+		}
+		if err := s.LinkProblemToPatterns(ctx, problemID, patternUUIDs); err != nil {
 			return nil, fmt.Errorf("failed to link patterns: %w", err)
 		}
 	}
@@ -147,21 +156,21 @@ func (s *problemService) UpdateProblem(ctx context.Context, problemID int64, bod
 	}
 
 	return &ProblemWithStats{
-		ID:         problem.ID,
+		ID:         problem.ID.String(),
 		Title:      problem.Title,
-		Source:     nullStringToPtr(problem.Source),
-		URL:        nullStringToPtr(problem.Url),
-		Difficulty: nullStringToStr(problem.Difficulty, "medium"),
-		CreatedAt:  problem.CreatedAt.String,
+		Source:     pgtypeTextToPtr(problem.Source),
+		URL:        pgtypeTextToPtr(problem.Url),
+		Difficulty: pgtypeTextToStr(problem.Difficulty, "medium"),
+		CreatedAt:  problem.CreatedAt.Time.Format(time.RFC3339),
 		Patterns:   convertPatternsFromRepo(patterns),
 	}, nil
 }
 
-func (s *problemService) DeleteProblem(ctx context.Context, problemID int64) error {
+func (s *problemService) DeleteProblem(ctx context.Context, problemID uuid.UUID) error {
 	return s.repo.DeleteProblem(ctx, problemID)
 }
 
-func (s *problemService) ListProblemsForUser(ctx context.Context, userID int64) ([]ProblemWithStats, error) {
+func (s *problemService) ListProblemsForUser(ctx context.Context, userID uuid.UUID) ([]ProblemWithStats, error) {
 	rows, err := s.repo.GetProblemsForUser(ctx, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list problems: %w", err)
@@ -176,27 +185,27 @@ func (s *problemService) ListProblemsForUser(ctx context.Context, userID int64) 
 		}
 
 		problem := ProblemWithStats{
-			ID:         row.ID,
+			ID:         row.ID.String(),
 			Title:      row.Title,
-			Source:     nullStringToPtr(row.Source),
-			URL:        nullStringToPtr(row.Url),
-			Difficulty: nullStringToStr(row.Difficulty, "medium"),
-			CreatedAt:  row.CreatedAt.String,
+			Source:     pgtypeTextToPtr(row.Source),
+			URL:        pgtypeTextToPtr(row.Url),
+			Difficulty: pgtypeTextToStr(row.Difficulty, "medium"),
+			CreatedAt:  row.CreatedAt.Time.Format(time.RFC3339),
 			Patterns:   convertPatternsFromRepo(patterns),
 		}
 
 		// Add stats if they exist
 		if row.Status.Valid {
 			problem.Stats = &Stats{
-				UserID:        userID,
-				ProblemID:     row.ID,
+				UserID:        userID.String(),
+				ProblemID:     row.ID.String(),
 				Status:        row.Status.String,
-				Confidence:    row.Confidence.Int64,
-				AvgConfidence: row.AvgConfidence.Int64,
-				LastAttemptAt: nullStringToPtr(row.LastAttemptAt),
-				TotalAttempts: row.TotalAttempts.Int64,
-				LastOutcome:   nullStringToPtr(row.LastOutcome),
-				UpdatedAt:     row.UpdatedAt.String,
+				Confidence:    row.Confidence.Int32,
+				AvgConfidence: row.AvgConfidence.Int32,
+				LastAttemptAt: pgtypeTimestamptzToPtr(row.LastAttemptAt),
+				TotalAttempts: row.TotalAttempts.Int32,
+				LastOutcome:   pgtypeTextToPtr(row.LastOutcome),
+				UpdatedAt:     row.UpdatedAt.Time.Format(time.RFC3339),
 			}
 		}
 
@@ -206,7 +215,7 @@ func (s *problemService) ListProblemsForUser(ctx context.Context, userID int64) 
 	return problems, nil
 }
 
-func (s *problemService) SearchProblemsForUser(ctx context.Context, userID int64, params SearchProblemsParams) (*PaginatedProblems, error) {
+func (s *problemService) SearchProblemsForUser(ctx context.Context, userID uuid.UUID, params SearchProblemsParams) (*PaginatedProblems, error) {
 	// Get total count
 	countRow, err := s.repo.CountProblemsForUser(ctx, repo.CountProblemsForUserParams{
 		UserID:      userID,
@@ -240,27 +249,27 @@ func (s *problemService) SearchProblemsForUser(ctx context.Context, userID int64
 		}
 
 		problem := ProblemWithStats{
-			ID:         row.ID,
+			ID:         row.ID.String(),
 			Title:      row.Title,
-			Source:     nullStringToPtr(row.Source),
-			URL:        nullStringToPtr(row.Url),
-			Difficulty: nullStringToStr(row.Difficulty, "medium"),
-			CreatedAt:  row.CreatedAt.String,
+			Source:     pgtypeTextToPtr(row.Source),
+			URL:        pgtypeTextToPtr(row.Url),
+			Difficulty: pgtypeTextToStr(row.Difficulty, "medium"),
+			CreatedAt:  row.CreatedAt.Time.Format(time.RFC3339),
 			Patterns:   convertPatternsFromRepo(patterns),
 		}
 
 		// Add stats if they exist
 		if row.Status.Valid {
 			problem.Stats = &Stats{
-				UserID:        userID,
-				ProblemID:     row.ID,
+				UserID:        userID.String(),
+				ProblemID:     row.ID.String(),
 				Status:        row.Status.String,
-				Confidence:    row.Confidence.Int64,
-				AvgConfidence: row.AvgConfidence.Int64,
-				LastAttemptAt: nullStringToPtr(row.LastAttemptAt),
-				TotalAttempts: row.TotalAttempts.Int64,
-				LastOutcome:   nullStringToPtr(row.LastOutcome),
-				UpdatedAt:     row.UpdatedAt.String,
+				Confidence:    row.Confidence.Int32,
+				AvgConfidence: row.AvgConfidence.Int32,
+				LastAttemptAt: pgtypeTimestamptzToPtr(row.LastAttemptAt),
+				TotalAttempts: row.TotalAttempts.Int32,
+				LastOutcome:   pgtypeTextToPtr(row.LastOutcome),
+				UpdatedAt:     row.UpdatedAt.Time.Format(time.RFC3339),
 			}
 		}
 
@@ -272,7 +281,7 @@ func (s *problemService) SearchProblemsForUser(ctx context.Context, userID int64
 	if params.Offset == 0 {
 		page = 1
 	}
-	totalPages := (countRow + params.Limit - 1) / params.Limit
+	totalPages := (int32(countRow) + params.Limit - 1) / params.Limit
 
 	return &PaginatedProblems{
 		Data:       problems,
@@ -283,7 +292,7 @@ func (s *problemService) SearchProblemsForUser(ctx context.Context, userID int64
 	}, nil
 }
 
-func (s *problemService) GetUrgentProblems(ctx context.Context, userID int64, limit int64) ([]UrgentProblem, error) {
+func (s *problemService) GetUrgentProblems(ctx context.Context, userID uuid.UUID, limit int32) ([]UrgentProblem, error) {
 	// Get all scored problems using the scoring service
 	scores, err := s.scoringService.ComputeScoresForUser(ctx, userID)
 	if err != nil {
@@ -322,74 +331,91 @@ func (s *problemService) GetUrgentProblems(ctx context.Context, userID int64, li
 		// Calculate days since last attempt
 		var daysSinceLast *int
 		if stats.LastAttemptAt.Valid {
-			lastAttempt, err := time.Parse(time.RFC3339, stats.LastAttemptAt.String)
-			if err == nil {
-				days := int(time.Since(lastAttempt).Hours() / 24)
-				daysSinceLast = &days
-			}
+			days := int(time.Since(stats.LastAttemptAt.Time).Hours() / 24)
+			daysSinceLast = &days
 		}
 
 		problems = append(problems, UrgentProblem{
-			ID:            problem.ID,
+			ID:            problem.ID.String(),
 			Title:         problem.Title,
-			Difficulty:    nullStringToStr(problem.Difficulty, "medium"),
-			Source:        nullStringToPtr(problem.Source),
+			Difficulty:    pgtypeTextToStr(problem.Difficulty, "medium"),
+			Source:        pgtypeTextToPtr(problem.Source),
 			Score:         score.Score,
 			DaysSinceLast: daysSinceLast,
-			Confidence:    stats.Confidence.Int64,
+			Confidence:    stats.Confidence.Int32,
 			Reason:        score.Reason,
-			CreatedAt:     problem.CreatedAt.String,
+			CreatedAt:     problem.CreatedAt.Time.Format(time.RFC3339),
 		})
 	}
 
 	return problems, nil
 }
 
-func (s *problemService) LinkProblemToPatterns(ctx context.Context, problemID int64, patternIDs []int64) error {
+func (s *problemService) LinkProblemToPatterns(ctx context.Context, problemID uuid.UUID, patternIDs []uuid.UUID) error {
 	for _, patternID := range patternIDs {
 		if err := s.repo.LinkProblemToPattern(ctx, repo.LinkProblemToPatternParams{
 			ProblemID: problemID,
 			PatternID: patternID,
 		}); err != nil {
-			return fmt.Errorf("failed to link pattern %d: %w", patternID, err)
+			return fmt.Errorf("failed to link pattern %s: %w", patternID.String(), err)
 		}
 	}
 	return nil
 }
 
 // Helper functions
-func sqlNullString(s *string) sql.NullString {
+func pgtypeText(s *string) pgtype.Text {
 	if s == nil {
-		return sql.NullString{}
+		return pgtype.Text{}
 	}
-	return sql.NullString{String: *s, Valid: true}
+	return pgtype.Text{String: *s, Valid: true}
 }
 
-func nullStringToPtr(ns sql.NullString) *string {
-	if !ns.Valid {
+func pgtypeTextToPtr(t pgtype.Text) *string {
+	if !t.Valid {
 		return nil
 	}
-	return &ns.String
+	return &t.String
 }
 
-func nullStringToStr(ns sql.NullString, defaultVal string) string {
-	if !ns.Valid {
+func pgtypeTextToStr(t pgtype.Text, defaultVal string) string {
+	if !t.Valid {
 		return defaultVal
 	}
-	return ns.String
+	return t.String
+}
+
+func pgtypeTimestamptzToPtr(t pgtype.Timestamptz) *string {
+	if !t.Valid {
+		return nil
+	}
+	s := t.Time.Format(time.RFC3339)
+	return &s
 }
 
 func strPtr(s string) *string {
 	return &s
 }
 
+func parseUUIDs(strs []string) ([]uuid.UUID, error) {
+	uuids := make([]uuid.UUID, 0, len(strs))
+	for _, s := range strs {
+		u, err := uuid.Parse(s)
+		if err != nil {
+			return nil, fmt.Errorf("invalid UUID %q: %w", s, err)
+		}
+		uuids = append(uuids, u)
+	}
+	return uuids, nil
+}
+
 func convertPatternsFromRepo(rows []repo.Pattern) []Pattern {
 	patterns := make([]Pattern, 0, len(rows))
 	for _, row := range rows {
 		patterns = append(patterns, Pattern{
-			ID:          row.ID,
+			ID:          row.ID.String(),
 			Title:       row.Title,
-			Description: nullStringToPtr(row.Description),
+			Description: pgtypeTextToPtr(row.Description),
 		})
 	}
 	return patterns

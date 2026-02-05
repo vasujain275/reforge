@@ -11,14 +11,11 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Slider } from "@/components/ui/slider";
 import { api } from "@/lib/api";
-import { useAuthStore } from "@/store/authStore";
 import type { ScoringWeights } from "@/types";
-import { Cpu, Loader2, Save, Sliders, Terminal } from "lucide-react";
+import { Loader2, Save, Sliders, Settings, RotateCcw } from "lucide-react";
 import { useEffect, useState } from "react";
-import { getAppVersion } from "@/lib/version";
 
 export default function SettingsPage() {
-  const { user } = useAuthStore();
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
@@ -111,9 +108,9 @@ export default function SettingsPage() {
     return (
       <div className="flex items-center justify-center h-full">
         <div className="flex flex-col items-center gap-4">
-          <Terminal className="h-8 w-8 text-primary animate-pulse" />
-          <p className="text-sm font-mono text-muted-foreground uppercase tracking-wider">
-            Loading Configuration...
+          <Settings className="h-8 w-8 text-primary animate-pulse" />
+          <p className="text-sm text-muted-foreground">
+            Loading settings...
           </p>
         </div>
       </div>
@@ -128,8 +125,8 @@ export default function SettingsPage() {
     <div className="flex-1 p-6 max-w-4xl">
       {/* Header */}
       <div className="mb-6">
-        <h2 className="text-3xl font-bold tracking-tight font-mono uppercase">
-          SYSTEM CONFIGURATION
+        <h2 className="text-3xl font-bold tracking-tight">
+          Settings
         </h2>
         <p className="text-muted-foreground mt-1 text-sm">
           Manage scoring algorithm weights and preferences
@@ -146,7 +143,7 @@ export default function SettingsPage() {
           <CardHeader>
             <div className="flex items-center gap-2">
               <Sliders className="h-5 w-5 text-primary" />
-              <CardTitle className="font-mono uppercase tracking-wider">
+              <CardTitle>
                 Scoring Weights
               </CardTitle>
             </div>
@@ -158,8 +155,8 @@ export default function SettingsPage() {
             {/* Confidence Weight */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <Label className="font-mono uppercase tracking-wider text-xs">
-                  W_CONF (Confidence)
+                <Label className="text-xs">
+                  Confidence Weight
                 </Label>
                 <span className="font-mono text-sm text-primary">
                   {weights.w_conf.toFixed(2)}
@@ -178,8 +175,8 @@ export default function SettingsPage() {
             {/* Days Since Last */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <Label className="font-mono uppercase tracking-wider text-xs">
-                  W_DAYS (Days Since Last)
+                <Label className="text-xs">
+                  Days Since Last Attempt
                 </Label>
                 <span className="font-mono text-sm text-primary">
                   {weights.w_days.toFixed(2)}
@@ -198,8 +195,8 @@ export default function SettingsPage() {
             {/* Attempts */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <Label className="font-mono uppercase tracking-wider text-xs">
-                  W_ATTEMPTS (Total Attempts)
+                <Label className="text-xs">
+                  Total Attempts Weight
                 </Label>
                 <span className="font-mono text-sm text-primary">
                   {weights.w_attempts.toFixed(2)}
@@ -218,8 +215,8 @@ export default function SettingsPage() {
             {/* Time */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <Label className="font-mono uppercase tracking-wider text-xs">
-                  W_TIME (Average Time)
+                <Label className="text-xs">
+                  Average Time Weight
                 </Label>
                 <span className="font-mono text-sm text-primary">
                   {weights.w_time.toFixed(2)}
@@ -238,8 +235,8 @@ export default function SettingsPage() {
             {/* Difficulty */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <Label className="font-mono uppercase tracking-wider text-xs">
-                  W_DIFFICULTY (Problem Difficulty)
+                <Label className="text-xs">
+                  Problem Difficulty Weight
                 </Label>
                 <span className="font-mono text-sm text-primary">
                   {weights.w_difficulty.toFixed(2)}
@@ -258,8 +255,8 @@ export default function SettingsPage() {
             {/* Failed Streak */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <Label className="font-mono uppercase tracking-wider text-xs">
-                  W_FAILED (Failed Streak)
+                <Label className="text-xs">
+                  Failed Streak Weight
                 </Label>
                 <span className="font-mono text-sm text-primary">
                   {weights.w_failed.toFixed(2)}
@@ -278,8 +275,8 @@ export default function SettingsPage() {
             {/* Pattern Weakness */}
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <Label className="font-mono uppercase tracking-wider text-xs">
-                  W_PATTERN (Pattern Weakness)
+                <Label className="text-xs">
+                  Pattern Weakness Weight
                 </Label>
                 <span className="font-mono text-sm text-primary">
                   {weights.w_pattern.toFixed(2)}
@@ -298,7 +295,7 @@ export default function SettingsPage() {
             {/* Total Weight Indicator */}
             <div className="pt-4 border-t">
               <div className="flex items-center justify-between">
-                <span className="font-mono uppercase tracking-wider text-xs text-muted-foreground">
+                <span className="text-xs text-muted-foreground">
                   Total Weight Sum
                 </span>
                 <span
@@ -322,26 +319,6 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
 
-        {/* System Info */}
-        <Card className="border-dashed bg-muted/30 rounded-md">
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <Cpu className="h-5 w-5 text-muted-foreground" />
-              <CardTitle className="text-muted-foreground font-mono uppercase tracking-wider">
-                System Info
-              </CardTitle>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="font-mono text-xs text-muted-foreground space-y-1">
-              <p>$ reforge --version</p>
-              <p className="text-foreground">reforge {getAppVersion()}</p>
-              <p className="mt-2">$ echo $USER</p>
-              <p className="text-foreground">{user?.email || "anonymous"}</p>
-            </div>
-          </CardContent>
-        </Card>
-
         <Separator />
 
         {/* Action Buttons */}
@@ -359,7 +336,7 @@ export default function SettingsPage() {
               </>
             ) : (
               <>
-                <Terminal className="h-4 w-4 mr-2" />
+                <RotateCcw className="h-4 w-4 mr-2" />
                 Reset to Defaults
               </>
             )}

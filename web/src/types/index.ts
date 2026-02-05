@@ -1,7 +1,7 @@
 /**
  * Core domain types matching backend schema.
  * 
- * IMPORTANT: All IDs are integers (int64 in backend, number in TypeScript).
+ * IMPORTANT: All IDs are UUIDs (uuid in backend, string in TypeScript).
  */
 
 // ============================================================================
@@ -9,7 +9,7 @@
 // ============================================================================
 
 export interface Problem {
-  id: number;
+  id: string;
   title: string;
   source?: string;
   url?: string;
@@ -20,7 +20,7 @@ export interface Problem {
 }
 
 export interface Pattern {
-  id: number;
+  id: string;
   title: string;
   description?: string;
 }
@@ -36,9 +36,9 @@ export type ProblemPriority = "overdue" | "due_soon" | "on_track" | "new";
 // ============================================================================
 
 export interface UserProblemStats {
-  id: number;
-  user_id: number;
-  problem_id: number;
+  id: string;
+  user_id: string;
+  problem_id: string;
   status: ProblemStatus;
   confidence: number; // 0-100
   avg_confidence: number; // 0-100
@@ -55,9 +55,9 @@ export interface UserProblemStats {
 }
 
 export interface UserPatternStats {
-  id: number;
-  user_id: number;
-  pattern_id: number;
+  id: string;
+  user_id: string;
+  pattern_id: string;
   times_revised: number;
   avg_confidence: number;
   last_revised_at?: string;
@@ -68,8 +68,8 @@ export interface UserPatternStats {
 // ============================================================================
 
 export interface RevisionSession {
-  id: number;
-  user_id: number;
+  id: string;
+  user_id: string;
   template_key?: string;
   session_name?: string;
   is_custom: boolean;
@@ -86,7 +86,7 @@ export interface RevisionSession {
 }
 
 export interface SessionProblem {
-  id: number;
+  id: string;
   title: string;
   difficulty: Difficulty;
   source?: string;
@@ -108,29 +108,15 @@ export interface SessionProblem {
 // ============================================================================
 
 export interface Attempt {
-  id: number;
-  user_id: number;
-  problem_id: number;
-  session_id?: number;
+  id: string;
+  user_id: string;
+  problem_id: string;
+  session_id?: string;
   confidence_score: number;
   duration_seconds?: number;
   outcome: AttemptOutcome;
   notes?: string;
   performed_at: string;
-}
-
-export interface InProgressAttempt {
-  id: number;
-  user_id: number;
-  problem_id: number;
-  session_id?: number;
-  status: "in_progress" | "completed" | "abandoned";
-  elapsed_time_seconds: number;
-  timer_state: TimerState;
-  timer_last_updated_at?: string;
-  started_at: string;
-  problem_title?: string;
-  problem_difficulty?: string;
 }
 
 export interface InProgressAttempt {
@@ -152,8 +138,8 @@ export interface InProgressAttempt {
 // ============================================================================
 
 export interface StartAttemptBody {
-  problem_id: number;
-  session_id?: number;
+  problem_id: string;
+  session_id?: string;
 }
 
 export interface UpdateAttemptTimerBody {
@@ -187,8 +173,8 @@ export interface TemplateInfo {
 }
 
 export interface UserSessionTemplate {
-  id: number;
-  user_id: number;
+  id: string;
+  user_id: string;
   template_name: string;
   template_key?: string;
   config: CustomSessionConfig;
@@ -207,7 +193,7 @@ export interface CustomSessionConfig {
   difficulty_distribution: DifficultyDistribution;
   require_quick_win: boolean;
   pattern_mode: PatternMode;
-  pattern_ids?: number[];
+  pattern_ids?: string[];
   max_same_pattern: number;
   scoring_emphasis: ScoringEmphasis;
   confidence_range?: ConfidenceRange;
@@ -244,7 +230,7 @@ export interface TemplateListResponse {
 // ============================================================================
 
 export interface UrgentProblem {
-  id: number;
+  id: string;
   title: string;
   source?: string;
   url?: string;
@@ -301,7 +287,7 @@ export interface ScoringWeights {
 // ============================================================================
 
 export interface PatternWithStats {
-  id: number;
+  id: string;
   title: string;
   description?: string;
   problemCount: number;
@@ -309,9 +295,9 @@ export interface PatternWithStats {
 }
 
 export interface PatternUserStats {
-  id: number;
-  user_id: number;
-  pattern_id: number;
+  id: string;
+  user_id: string;
+  pattern_id: string;
   times_revised: number;
   avg_confidence: number;
   last_revised_at?: string;
@@ -342,7 +328,7 @@ export type PaginatedPatterns = PaginatedPatternsResponse;
 // ============================================================================
 
 export interface User {
-  id: number;
+  id: string;
   email: string;
   name: string;
   role: "user" | "admin";

@@ -11,14 +11,11 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Slider } from "@/components/ui/slider";
 import { api } from "@/lib/api";
-import { useAuthStore } from "@/store/authStore";
 import type { ScoringWeights } from "@/types";
 import { Loader2, Save, Sliders, Settings, RotateCcw } from "lucide-react";
 import { useEffect, useState } from "react";
-import { getAppVersion } from "@/lib/version";
 
 export default function SettingsPage() {
-  const { user } = useAuthStore();
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isResetting, setIsResetting] = useState(false);

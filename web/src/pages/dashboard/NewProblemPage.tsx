@@ -52,7 +52,7 @@ export default function NewProblemPage() {
   const [error, setError] = useState<string | null>(null);
   const [patterns, setPatterns] = useState<Pattern[]>([]);
   const [patternsLoading, setPatternsLoading] = useState(true);
-  const [selectedPatterns, setSelectedPatterns] = useState<number[]>([]);
+  const [selectedPatterns, setSelectedPatterns] = useState<string[]>([]);
   const [open, setOpen] = useState(false);
 
   const [formData, setFormData] = useState({
@@ -110,7 +110,7 @@ export default function NewProblemPage() {
     }
   };
 
-  const togglePattern = (patternId: number) => {
+  const togglePattern = (patternId: string) => {
     setSelectedPatterns((prev) =>
       prev.includes(patternId)
         ? prev.filter((id) => id !== patternId)
@@ -118,7 +118,7 @@ export default function NewProblemPage() {
     );
   };
 
-  const removePattern = (patternId: number) => {
+  const removePattern = (patternId: string) => {
     setSelectedPatterns((prev) => prev.filter((id) => id !== patternId));
   };
 

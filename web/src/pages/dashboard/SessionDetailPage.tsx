@@ -165,7 +165,7 @@ export default function SessionDetailPage() {
   };
 
   // Handle skip - move problem to end of list
-  const handleSkip = async (problemId: number) => {
+  const handleSkip = async (problemId: string) => {
     if (!id) return;
 
     const currentIndex = problems.findIndex((p) => p.id === problemId);

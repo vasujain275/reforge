@@ -3,7 +3,7 @@ import type { LoginCredentials, RegisterData } from "@/lib/schemas";
 import { create } from "zustand";
 
 interface User {
-    id: number; // ID is int64 in Go, comes as number in JSON
+    id: string; // UUID from PostgreSQL
     name: string;
     email: string;
     role: 'user' | 'admin';

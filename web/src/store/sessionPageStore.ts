@@ -5,7 +5,7 @@ type ViewMode = "list" | "focus";
 interface SessionPageState {
   // UI State
   viewMode: ViewMode;
-  activeTimerProblemId: number | null;
+  activeTimerProblemId: string | null;
   showCompleteDialog: boolean;
   showDeleteDialog: boolean;
   isCompletingSession: boolean;
@@ -14,7 +14,7 @@ interface SessionPageState {
 
   // Actions
   setViewMode: (mode: ViewMode) => void;
-  setActiveTimerProblemId: (id: number | null) => void;
+  setActiveTimerProblemId: (id: string | null) => void;
   setShowCompleteDialog: (show: boolean) => void;
   setShowDeleteDialog: (show: boolean) => void;
   setIsCompletingSession: (isCompleting: boolean) => void;
@@ -22,7 +22,7 @@ interface SessionPageState {
   setIsReordering: (isReordering: boolean) => void;
 
   // Convenience actions
-  startTimer: (problemId: number) => void;
+  startTimer: (problemId: string) => void;
   cancelTimer: () => void;
   openCompleteDialog: () => void;
   closeCompleteDialog: () => void;

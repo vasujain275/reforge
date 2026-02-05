@@ -53,7 +53,7 @@ export default function EditProblemPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [patterns, setPatterns] = useState<Pattern[]>([]);
-  const [selectedPatterns, setSelectedPatterns] = useState<number[]>([]);
+  const [selectedPatterns, setSelectedPatterns] = useState<string[]>([]);
   const [open, setOpen] = useState(false);
 
   const [formData, setFormData] = useState({
@@ -126,7 +126,7 @@ export default function EditProblemPage() {
     }
   };
 
-  const togglePattern = (patternId: number) => {
+  const togglePattern = (patternId: string) => {
     setSelectedPatterns((prev) =>
       prev.includes(patternId)
         ? prev.filter((id) => id !== patternId)
@@ -134,7 +134,7 @@ export default function EditProblemPage() {
     );
   };
 
-  const removePattern = (patternId: number) => {
+  const removePattern = (patternId: string) => {
     setSelectedPatterns((prev) => prev.filter((id) => id !== patternId));
   };
 

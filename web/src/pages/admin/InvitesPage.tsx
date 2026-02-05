@@ -48,7 +48,7 @@ export default function InvitesPage() {
   const [expiresInHours, setExpiresInHours] = useState("24");
   const [maxUses, setMaxUses] = useState("1");
   const [isCreating, setIsCreating] = useState(false);
-  const [deleteLoading, setDeleteLoading] = useState<number | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState<string | null>(null);
 
   const loadInvites = async () => {
     setIsLoading(true);
@@ -100,7 +100,7 @@ export default function InvitesPage() {
     }
   };
 
-  const handleDelete = async (inviteId: number, code: string) => {
+  const handleDelete = async (inviteId: string, code: string) => {
     if (!confirm(`Are you sure you want to delete invite code "${code}"?`)) {
       return;
     }

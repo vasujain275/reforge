@@ -22,7 +22,7 @@ import type {
   GenerateSessionResponse,
   Pattern,
 } from "@/types";
-import { ArrowLeft, Loader2, Play, Sparkles, Activity, Clock } from "lucide-react";
+import { ArrowLeft, Loader2, Play, Sparkles, Clock } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { TemplateGallery } from "@/components/sessions/TemplateGallery";
@@ -35,7 +35,7 @@ export default function NewSessionPage() {
   const [patterns, setPatterns] = useState<Pattern[]>([]);
   const [isLoadingTemplates, setIsLoadingTemplates] = useState(true);
   const [selectedTemplateKey, setSelectedTemplateKey] = useState<string>("");
-  const [selectedPatternId, setSelectedPatternId] = useState<number | null>(
+  const [selectedPatternId, setSelectedPatternId] = useState<string | null>(
     null
   );
   const [customDuration, setCustomDuration] = useState<number | null>(null);
@@ -111,7 +111,7 @@ export default function NewSessionPage() {
     setIsGenerating(true);
     setError(null);
     try {
-      const params: { template_key: string; pattern_id?: number; duration_min?: number } = { 
+      const params: { template_key: string; pattern_id?: string; duration_min?: number } = { 
         template_key: selectedTemplateKey 
       };
       if (selectedPatternId) {
@@ -246,7 +246,7 @@ export default function NewSessionPage() {
                         <Select
                           value={selectedPatternId?.toString() || ""}
                           onValueChange={(val) =>
-                            setSelectedPatternId(parseInt(val))
+                            setSelectedPatternId(val)
                           }
                         >
                           <SelectTrigger className="mt-2 text-sm">

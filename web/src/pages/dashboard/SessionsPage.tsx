@@ -31,7 +31,7 @@ import { Link, useNavigate } from "react-router-dom";
 
 export default function SessionsPage() {
   const navigate = useNavigate();
-  const [repeatingSessionId, setRepeatingSessionId] = useState<number | null>(
+  const [repeatingSessionId, setRepeatingSessionId] = useState<string | null>(
     null
   );
 
@@ -56,14 +56,14 @@ export default function SessionsPage() {
     status: statusFilter,
   });
 
-  const handleRepeatSession = async (sessionId: number) => {
+  const handleRepeatSession = async (sessionId: string) => {
     setRepeatingSessionId(sessionId);
     try {
       const sessionResponse = await api.get(`/sessions/${sessionId}`);
       const sessionData = sessionResponse.data.data;
 
       const problemIds =
-        sessionData.problems?.map((p: { id: number }) => p.id) || [];
+        sessionData.problems?.map((p: { id: string }) => p.id) || [];
 
       if (problemIds.length === 0) {
         alert(

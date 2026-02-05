@@ -16,7 +16,7 @@ import {
   Shield,
   Settings,
 } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useEffect } from "react";
 import { useOnboardingStore } from "@/store/onboardingStore";
 
 export default function OnboardingPage() {

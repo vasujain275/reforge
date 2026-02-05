@@ -7,7 +7,7 @@ export type TimerPhase = "loading" | "prompt" | "running" | "paused" | "completi
 
 interface AttemptTimerState {
   // Core state
-  attemptId: number | null;
+  attemptId: string | null;
   attempt: InProgressAttempt | null;
   elapsedSeconds: number;
   timerState: TimerState;
@@ -32,11 +32,11 @@ interface AttemptTimerState {
   };
 
   // Actions
-  initialize: (problemId: number, sessionId?: number) => Promise<void>;
+  initialize: (problemId: string, sessionId?: string) => Promise<void>;
   initializeFromAttempt: (attempt: InProgressAttempt) => void;
-  startNewAttempt: (problemId: number, sessionId?: number) => Promise<void>;
+  startNewAttempt: (problemId: string, sessionId?: string) => Promise<void>;
   resumeAttempt: () => void;
-  startFresh: (problemId: number, sessionId?: number) => Promise<void>;
+  startFresh: (problemId: string, sessionId?: string) => Promise<void>;
   toggleTimer: () => Promise<void>;
   tick: () => void;
   save: () => Promise<void>;
@@ -90,7 +90,7 @@ const stopIntervals = () => {
 
 // Helper to save timer state to backend
 const saveTimerState = async (
-  attemptId: number,
+  attemptId: string,
   elapsed: number,
   state: TimerState,
   set: (partial: Partial<AttemptTimerState>) => void
@@ -137,7 +137,7 @@ export const useAttemptTimerStore = create<AttemptTimerState>((set, get) => ({
   isSubmitting: false,
   formData: { ...initialFormData },
 
-  initialize: async (problemId: number, sessionId?: number) => {
+  initialize: async (problemId: string, sessionId?: string) => {
     set({ phase: "loading", error: null });
 
     try {
@@ -180,7 +180,7 @@ export const useAttemptTimerStore = create<AttemptTimerState>((set, get) => ({
     }
   },
 
-  startNewAttempt: async (problemId: number, sessionId?: number) => {
+  startNewAttempt: async (problemId: string, sessionId?: string) => {
     try {
       const response = await api.post("/attempts/start", {
         problem_id: problemId,
@@ -224,7 +224,7 @@ export const useAttemptTimerStore = create<AttemptTimerState>((set, get) => ({
     }
   },
 
-  startFresh: async (problemId: number, sessionId?: number) => {
+  startFresh: async (problemId: string, sessionId?: string) => {
     const { existingAttempt } = get();
     if (existingAttempt) {
       try {

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"database/sql"
 	"log/slog"
 	"net/http"
 	"time"
@@ -9,7 +8,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-playground/validator/v10"
-	repo "github.com/vasujain275/reforge/internal/adapters/sqlite/sqlc"
+	"github.com/jackc/pgx/v5/pgxpool"
+	repo "github.com/vasujain275/reforge/internal/adapters/postgres/sqlc"
 	"github.com/vasujain275/reforge/internal/admin"
 	"github.com/vasujain275/reforge/internal/attempts"
 	"github.com/vasujain275/reforge/internal/auth"
@@ -36,7 +36,7 @@ func (app *application) mount() http.Handler {
 
 	r.Use(middleware.Timeout(60 * time.Second))
 
-	repoInstance := repo.New(app.db)
+	repoInstance := repo.New(app.pool)
 
 	// Determine production status from config
 	isProd := app.config.env == "prod"
@@ -64,7 +64,7 @@ func (app *application) mount() http.Handler {
 	settingsService := settings.NewService(repoInstance, defaultWeights)
 	adminService := admin.NewService(repoInstance)
 	onboardingService := onboarding.NewService(repoInstance)
-	importService := dataimport.NewService(repoInstance, app.db, app.config.datasetPath)
+	importService := dataimport.NewService(repoInstance, app.pool, app.config.datasetPath)
 
 	// Handlers
 	userHandler := users.NewHandler(userService, adminService)
@@ -248,7 +248,7 @@ func (app *application) run(h http.Handler) error {
 
 type application struct {
 	config   config
-	db       *sql.DB
+	pool     *pgxpool.Pool
 	validate *validator.Validate
 }
 

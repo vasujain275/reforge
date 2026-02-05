@@ -2,10 +2,11 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"log/slog"
 
-	repo "github.com/vasujain275/reforge/internal/adapters/sqlite/sqlc"
+	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jackc/pgx/v5/pgxpool"
+	repo "github.com/vasujain275/reforge/internal/adapters/postgres/sqlc"
 	"github.com/vasujain275/reforge/internal/env"
 	"github.com/vasujain275/reforge/internal/security"
 )
@@ -13,8 +14,8 @@ import (
 // seedAdminIfNeeded checks if any admin exists in the database.
 // If no admin exists, it creates one using credentials from environment variables.
 // This ensures there's always at least one admin user to manage the system.
-func seedAdminIfNeeded(ctx context.Context, db *sql.DB) error {
-	queries := repo.New(db)
+func seedAdminIfNeeded(ctx context.Context, pool *pgxpool.Pool) error {
+	queries := repo.New(pool)
 
 	// Check if any admin exists
 	adminCount, err := queries.CountAdmins(ctx)
@@ -50,7 +51,7 @@ func seedAdminIfNeeded(ctx context.Context, db *sql.DB) error {
 		Email:        email,
 		PasswordHash: passwordHash,
 		Name:         name,
-		Role:         sql.NullString{String: "admin", Valid: true},
+		Role:         pgtype.Text{String: "admin", Valid: true},
 	})
 
 	if err != nil {

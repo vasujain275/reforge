@@ -6,7 +6,8 @@ import (
 	"net/http"
 
 	"github.com/golang-jwt/jwt/v5"
-	repo "github.com/vasujain275/reforge/internal/adapters/sqlite/sqlc"
+	"github.com/google/uuid"
+	repo "github.com/vasujain275/reforge/internal/adapters/postgres/sqlc"
 	"github.com/vasujain275/reforge/internal/auth"
 	"github.com/vasujain275/reforge/internal/utils"
 )
@@ -44,13 +45,17 @@ func (app *application) AuthTokenMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		// JSON numbers are float64 by default in JWT parser
-		userIDFloat, ok := claims["sub"].(float64)
+		// Extract sub as string (UUID)
+		userIDStr, ok := claims["sub"].(string)
 		if !ok {
 			utils.Unauthorized(w, "Invalid user ID in token")
 			return
 		}
-		userID := int64(userIDFloat)
+		userID, err := uuid.Parse(userIDStr)
+		if err != nil {
+			utils.Unauthorized(w, "Invalid user ID format in token")
+			return
+		}
 
 		// Extract role (default to "user" if not present)
 		role, _ := claims["role"].(string)
@@ -84,7 +89,7 @@ func (app *application) RequireAdminMiddleware(next http.Handler) http.Handler {
 func (app *application) PreventLastAdminDeletionMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Create queries instance
-		queries := repo.New(app.db)
+		queries := repo.New(app.pool)
 
 		// Check admin count
 		adminCount, err := queries.CountAdmins(r.Context())

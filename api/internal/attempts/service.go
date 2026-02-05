@@ -2,27 +2,30 @@ package attempts
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
-	repo "github.com/vasujain275/reforge/internal/adapters/sqlite/sqlc"
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
+	repo "github.com/vasujain275/reforge/internal/adapters/postgres/sqlc"
 	"github.com/vasujain275/reforge/internal/scoring"
 )
 
 type Service interface {
-	CreateAttempt(ctx context.Context, userID int64, body CreateAttemptBody) (*AttemptResponse, error)
-	ListAttemptsForUser(ctx context.Context, userID int64, limit, offset int64) ([]AttemptResponse, error)
-	ListAttemptsForProblem(ctx context.Context, userID int64, problemID int64) ([]AttemptResponse, error)
+	CreateAttempt(ctx context.Context, userID uuid.UUID, body CreateAttemptBody) (*AttemptResponse, error)
+	ListAttemptsForUser(ctx context.Context, userID uuid.UUID, limit, offset int32) ([]AttemptResponse, error)
+	ListAttemptsForProblem(ctx context.Context, userID uuid.UUID, problemID uuid.UUID) ([]AttemptResponse, error)
 
 	// Timer-based attempt methods
-	StartAttempt(ctx context.Context, userID int64, body StartAttemptBody) (*InProgressAttemptResponse, error)
-	GetInProgressAttempt(ctx context.Context, userID int64, problemID int64) (*InProgressAttemptResponse, error)
-	GetAttemptByID(ctx context.Context, userID int64, attemptID int64) (*InProgressAttemptResponse, error)
-	UpdateAttemptTimer(ctx context.Context, userID int64, attemptID int64, body UpdateAttemptTimerBody) error
-	CompleteAttempt(ctx context.Context, userID int64, attemptID int64, body CompleteAttemptBody) (*AttemptResponse, error)
-	AbandonAttempt(ctx context.Context, userID int64, attemptID int64) error
+	StartAttempt(ctx context.Context, userID uuid.UUID, body StartAttemptBody) (*InProgressAttemptResponse, error)
+	GetInProgressAttempt(ctx context.Context, userID uuid.UUID, problemID uuid.UUID) (*InProgressAttemptResponse, error)
+	GetAttemptByID(ctx context.Context, userID uuid.UUID, attemptID uuid.UUID) (*InProgressAttemptResponse, error)
+	UpdateAttemptTimer(ctx context.Context, userID uuid.UUID, attemptID uuid.UUID, body UpdateAttemptTimerBody) error
+	CompleteAttempt(ctx context.Context, userID uuid.UUID, attemptID uuid.UUID, body CompleteAttemptBody) (*AttemptResponse, error)
+	AbandonAttempt(ctx context.Context, userID uuid.UUID, attemptID uuid.UUID) error
 }
 
 type attemptService struct {
@@ -37,7 +40,23 @@ func NewService(repo repo.Querier, scoringService scoring.Service) Service {
 	}
 }
 
-func (s *attemptService) CreateAttempt(ctx context.Context, userID int64, body CreateAttemptBody) (*AttemptResponse, error) {
+func (s *attemptService) CreateAttempt(ctx context.Context, userID uuid.UUID, body CreateAttemptBody) (*AttemptResponse, error) {
+	// Parse problem ID from string
+	problemID, err := uuid.Parse(body.ProblemID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid problem_id: %w", err)
+	}
+
+	// Parse optional session ID
+	var sessionID pgtype.UUID
+	if body.SessionID != nil {
+		sid, err := uuid.Parse(*body.SessionID)
+		if err != nil {
+			return nil, fmt.Errorf("invalid session_id: %w", err)
+		}
+		sessionID = pgtype.UUID{Bytes: sid, Valid: true}
+	}
+
 	// Create the attempt - Column8 is the performed_at timestamp
 	var performedAtVal interface{}
 	if body.PerformedAt != nil {
@@ -46,12 +65,12 @@ func (s *attemptService) CreateAttempt(ctx context.Context, userID int64, body C
 
 	attempt, err := s.repo.CreateAttempt(ctx, repo.CreateAttemptParams{
 		UserID:          userID,
-		ProblemID:       body.ProblemID,
-		SessionID:       sqlNullInt64(body.SessionID),
-		ConfidenceScore: sqlNullInt64(&body.ConfidenceScore),
-		DurationSeconds: sqlNullInt64(body.DurationSeconds),
-		Outcome:         sqlNullString(&body.Outcome),
-		Notes:           sqlNullString(body.Notes),
+		ProblemID:       problemID,
+		SessionID:       sessionID,
+		ConfidenceScore: toPgInt4(&body.ConfidenceScore),
+		DurationSeconds: toPgInt4FromPtr(body.DurationSeconds),
+		Outcome:         toPgText(&body.Outcome),
+		Notes:           toPgTextFromPtr(body.Notes),
 		Column8:         performedAtVal,
 	})
 	if err != nil {
@@ -59,31 +78,31 @@ func (s *attemptService) CreateAttempt(ctx context.Context, userID int64, body C
 	}
 
 	// Update user problem stats
-	if err := s.updateUserProblemStats(ctx, userID, body.ProblemID); err != nil {
+	if err := s.updateUserProblemStats(ctx, userID, problemID); err != nil {
 		// Log error but don't fail the request
 		fmt.Printf("Warning: failed to update user problem stats: %v\n", err)
 	}
 
 	// Update user pattern stats
-	if err := s.updateUserPatternStats(ctx, userID, body.ProblemID); err != nil {
+	if err := s.updateUserPatternStats(ctx, userID, problemID); err != nil {
 		// Log error but don't fail the request
 		fmt.Printf("Warning: failed to update user pattern stats: %v\n", err)
 	}
 
 	return &AttemptResponse{
-		ID:              attempt.ID,
-		UserID:          attempt.UserID,
-		ProblemID:       attempt.ProblemID,
-		SessionID:       nullInt64ToPtr(attempt.SessionID),
-		ConfidenceScore: nullInt64ToInt64(attempt.ConfidenceScore, 0),
-		DurationSeconds: nullInt64ToPtr(attempt.DurationSeconds),
-		Outcome:         nullStringToStr(attempt.Outcome, ""),
-		Notes:           nullStringToPtr(attempt.Notes),
-		PerformedAt:     attempt.PerformedAt.String,
+		ID:              attempt.ID.String(),
+		UserID:          attempt.UserID.String(),
+		ProblemID:       attempt.ProblemID.String(),
+		SessionID:       pgUUIDToPtr(attempt.SessionID),
+		ConfidenceScore: pgInt4ToInt64(attempt.ConfidenceScore, 0),
+		DurationSeconds: pgInt4ToPtr(attempt.DurationSeconds),
+		Outcome:         pgTextToStr(attempt.Outcome, ""),
+		Notes:           pgTextToPtr(attempt.Notes),
+		PerformedAt:     pgTimestamptzToStr(attempt.PerformedAt, ""),
 	}, nil
 }
 
-func (s *attemptService) ListAttemptsForUser(ctx context.Context, userID int64, limit, offset int64) ([]AttemptResponse, error) {
+func (s *attemptService) ListAttemptsForUser(ctx context.Context, userID uuid.UUID, limit, offset int32) ([]AttemptResponse, error) {
 	rows, err := s.repo.ListAttemptsForUser(ctx, repo.ListAttemptsForUserParams{
 		UserID: userID,
 		Limit:  limit,
@@ -96,24 +115,24 @@ func (s *attemptService) ListAttemptsForUser(ctx context.Context, userID int64, 
 	attempts := make([]AttemptResponse, 0, len(rows))
 	for _, row := range rows {
 		attempts = append(attempts, AttemptResponse{
-			ID:                row.ID,
-			UserID:            row.UserID,
-			ProblemID:         row.ProblemID,
-			SessionID:         nullInt64ToPtr(row.SessionID),
-			ConfidenceScore:   nullInt64ToInt64(row.ConfidenceScore, 0),
-			DurationSeconds:   nullInt64ToPtr(row.DurationSeconds),
-			Outcome:           nullStringToStr(row.Outcome, ""),
-			Notes:             nullStringToPtr(row.Notes),
-			PerformedAt:       row.PerformedAt.String,
+			ID:                row.ID.String(),
+			UserID:            row.UserID.String(),
+			ProblemID:         row.ProblemID.String(),
+			SessionID:         pgUUIDToPtr(row.SessionID),
+			ConfidenceScore:   pgInt4ToInt64(row.ConfidenceScore, 0),
+			DurationSeconds:   pgInt4ToPtr(row.DurationSeconds),
+			Outcome:           pgTextToStr(row.Outcome, ""),
+			Notes:             pgTextToPtr(row.Notes),
+			PerformedAt:       pgTimestamptzToStr(row.PerformedAt, ""),
 			ProblemTitle:      &row.ProblemTitle,
-			ProblemDifficulty: nullStringToPtr(row.ProblemDifficulty),
+			ProblemDifficulty: pgTextToPtr(row.ProblemDifficulty),
 		})
 	}
 
 	return attempts, nil
 }
 
-func (s *attemptService) ListAttemptsForProblem(ctx context.Context, userID int64, problemID int64) ([]AttemptResponse, error) {
+func (s *attemptService) ListAttemptsForProblem(ctx context.Context, userID uuid.UUID, problemID uuid.UUID) ([]AttemptResponse, error) {
 	rows, err := s.repo.ListAttemptsForProblem(ctx, repo.ListAttemptsForProblemParams{
 		UserID:    userID,
 		ProblemID: problemID,
@@ -125,15 +144,15 @@ func (s *attemptService) ListAttemptsForProblem(ctx context.Context, userID int6
 	attempts := make([]AttemptResponse, 0, len(rows))
 	for _, row := range rows {
 		attempts = append(attempts, AttemptResponse{
-			ID:              row.ID,
-			UserID:          row.UserID,
-			ProblemID:       row.ProblemID,
-			SessionID:       nullInt64ToPtr(row.SessionID),
-			ConfidenceScore: nullInt64ToInt64(row.ConfidenceScore, 0),
-			DurationSeconds: nullInt64ToPtr(row.DurationSeconds),
-			Outcome:         nullStringToStr(row.Outcome, ""),
-			Notes:           nullStringToPtr(row.Notes),
-			PerformedAt:     row.PerformedAt.String,
+			ID:              row.ID.String(),
+			UserID:          row.UserID.String(),
+			ProblemID:       row.ProblemID.String(),
+			SessionID:       pgUUIDToPtr(row.SessionID),
+			ConfidenceScore: pgInt4ToInt64(row.ConfidenceScore, 0),
+			DurationSeconds: pgInt4ToPtr(row.DurationSeconds),
+			Outcome:         pgTextToStr(row.Outcome, ""),
+			Notes:           pgTextToPtr(row.Notes),
+			PerformedAt:     pgTimestamptzToStr(row.PerformedAt, ""),
 		})
 	}
 
@@ -141,7 +160,7 @@ func (s *attemptService) ListAttemptsForProblem(ctx context.Context, userID int6
 }
 
 // updateUserProblemStats aggregates data from all attempts and updates stats
-func (s *attemptService) updateUserProblemStats(ctx context.Context, userID int64, problemID int64) error {
+func (s *attemptService) updateUserProblemStats(ctx context.Context, userID uuid.UUID, problemID uuid.UUID) error {
 	// Get all attempts for this problem
 	attempts, err := s.repo.ListAttemptsForProblem(ctx, repo.ListAttemptsForProblemParams{
 		UserID:    userID,
@@ -158,14 +177,13 @@ func (s *attemptService) updateUserProblemStats(ctx context.Context, userID int6
 	// Calculate aggregates
 	var totalConfidence, totalDuration, passedCount int64
 	var lastOutcome string
-	lastAttemptAt := attempts[0].PerformedAt.String
 
 	for _, attempt := range attempts {
 		if attempt.ConfidenceScore.Valid {
-			totalConfidence += attempt.ConfidenceScore.Int64
+			totalConfidence += int64(attempt.ConfidenceScore.Int32)
 		}
 		if attempt.DurationSeconds.Valid {
-			totalDuration += attempt.DurationSeconds.Int64
+			totalDuration += int64(attempt.DurationSeconds.Int32)
 		}
 		if attempt.Outcome.Valid && attempt.Outcome.String == "passed" {
 			passedCount++
@@ -173,7 +191,7 @@ func (s *attemptService) updateUserProblemStats(ctx context.Context, userID int6
 	}
 
 	avgConfidence := totalConfidence / int64(len(attempts))
-	latestConfidence := attempts[0].ConfidenceScore.Int64
+	latestConfidence := int64(attempts[0].ConfidenceScore.Int32)
 	if attempts[0].Outcome.Valid {
 		lastOutcome = attempts[0].Outcome.String
 	}
@@ -194,9 +212,9 @@ func (s *attemptService) updateUserProblemStats(ctx context.Context, userID int6
 	recentHistory := make([]map[string]interface{}, 0)
 	for i := 0; i < min(5, len(attempts)); i++ {
 		recentHistory = append(recentHistory, map[string]interface{}{
-			"performed_at": attempts[i].PerformedAt.String,
-			"outcome":      nullStringToStr(attempts[i].Outcome, ""),
-			"confidence":   nullInt64ToInt64(attempts[i].ConfidenceScore, 0),
+			"performed_at": pgTimestamptzToStr(attempts[i].PerformedAt, ""),
+			"outcome":      pgTextToStr(attempts[i].Outcome, ""),
+			"confidence":   pgInt4ToInt64(attempts[i].ConfidenceScore, 0),
 		})
 	}
 	recentHistoryJSON, _ := json.Marshal(recentHistory)
@@ -214,9 +232,9 @@ func (s *attemptService) updateUserProblemStats(ctx context.Context, userID int6
 
 	if err == nil {
 		// Use existing values
-		currentInterval = int(existingStats.IntervalDays.Int64)
-		easeFactor = existingStats.EaseFactor.Float64
-		reviewCount = int(existingStats.ReviewCount.Int64)
+		currentInterval = int(existingStats.IntervalDays.Int32)
+		easeFactor = float64(existingStats.EaseFactor.Float32)
+		reviewCount = int(existingStats.ReviewCount.Int32)
 	} else {
 		// New problem defaults
 		currentInterval = 0
@@ -233,31 +251,35 @@ func (s *attemptService) updateUserProblemStats(ctx context.Context, userID int6
 		reviewCount,
 	)
 
-	nextReviewStr := nextReviewDate.Format(time.RFC3339)
+	nextReviewTimestamp := pgtype.Timestamptz{Time: nextReviewDate, Valid: true}
+	lastAttemptTimestamp := pgtype.Timestamptz{Time: time.Now(), Valid: true}
+	if len(attempts) > 0 && attempts[0].PerformedAt.Valid {
+		lastAttemptTimestamp = attempts[0].PerformedAt
+	}
 
 	// Upsert stats with spaced repetition data
 	_, err = s.repo.UpsertUserProblemStats(ctx, repo.UpsertUserProblemStatsParams{
 		UserID:            userID,
 		ProblemID:         problemID,
-		Status:            sqlNullString(&status),
-		Confidence:        sqlNullInt64(&latestConfidence),
-		AvgConfidence:     sqlNullInt64(&avgConfidence),
-		LastAttemptAt:     sqlNullString(&lastAttemptAt),
-		TotalAttempts:     sqlNullInt64(int64Ptr(int64(len(attempts)))),
-		AvgTimeSeconds:    sqlNullInt64(avgTimeSeconds),
-		LastOutcome:       sqlNullString(&lastOutcome),
-		RecentHistoryJson: sqlNullString(strPtr(string(recentHistoryJSON))),
-		NextReviewAt:      sqlNullString(&nextReviewStr),
-		IntervalDays:      sqlNullInt64(int64Ptr(int64(newInterval))),
-		EaseFactor:        sql.NullFloat64{Float64: newEaseFactor, Valid: true},
-		ReviewCount:       sqlNullInt64(int64Ptr(int64(reviewCount + 1))),
+		Status:            toPgText(&status),
+		Confidence:        toPgInt4(&latestConfidence),
+		AvgConfidence:     toPgInt4(&avgConfidence),
+		LastAttemptAt:     lastAttemptTimestamp,
+		TotalAttempts:     pgtype.Int4{Int32: int32(len(attempts)), Valid: true},
+		AvgTimeSeconds:    toPgInt4FromPtr(avgTimeSeconds),
+		LastOutcome:       toPgText(&lastOutcome),
+		RecentHistoryJson: toPgText(strPtr(string(recentHistoryJSON))),
+		NextReviewAt:      nextReviewTimestamp,
+		IntervalDays:      pgtype.Int4{Int32: int32(newInterval), Valid: true},
+		EaseFactor:        pgtype.Float4{Float32: float32(newEaseFactor), Valid: true},
+		ReviewCount:       pgtype.Int4{Int32: int32(reviewCount + 1), Valid: true},
 	})
 
 	return err
 }
 
 // updateUserPatternStats updates pattern-level statistics for all patterns linked to the problem
-func (s *attemptService) updateUserPatternStats(ctx context.Context, userID int64, problemID int64) error {
+func (s *attemptService) updateUserPatternStats(ctx context.Context, userID uuid.UUID, problemID uuid.UUID) error {
 	// Get all patterns linked to this problem
 	patterns, err := s.repo.GetPatternsForProblem(ctx, problemID)
 	if err != nil {
@@ -288,12 +310,12 @@ func (s *attemptService) updateUserPatternStats(ctx context.Context, userID int6
 			}
 
 			if stats.AvgConfidence.Valid {
-				totalConfidence += stats.AvgConfidence.Int64
+				totalConfidence += int64(stats.AvgConfidence.Int32)
 				problemCount++
 			}
 
 			if stats.TotalAttempts.Valid {
-				totalRevisions += stats.TotalAttempts.Int64
+				totalRevisions += int64(stats.TotalAttempts.Int32)
 			}
 		}
 
@@ -307,58 +329,96 @@ func (s *attemptService) updateUserPatternStats(ctx context.Context, userID int6
 		_, err = s.repo.UpsertUserPatternStats(ctx, repo.UpsertUserPatternStatsParams{
 			UserID:        userID,
 			PatternID:     pattern.ID,
-			AvgConfidence: sqlNullInt64(&avgConfidence),
-			TimesRevised:  sqlNullInt64(&totalRevisions),
+			AvgConfidence: toPgInt4(&avgConfidence),
+			TimesRevised:  toPgInt4(&totalRevisions),
 		})
 		if err != nil {
-			fmt.Printf("Warning: failed to update pattern stats for pattern %d: %v\n", pattern.ID, err)
+			fmt.Printf("Warning: failed to update pattern stats for pattern %s: %v\n", pattern.ID.String(), err)
 		}
 	}
 
 	return nil
 }
 
-// Helper functions
-func sqlNullString(s *string) sql.NullString {
+// Helper functions for pgtype conversions
+func toPgText(s *string) pgtype.Text {
 	if s == nil {
-		return sql.NullString{}
+		return pgtype.Text{}
 	}
-	return sql.NullString{String: *s, Valid: true}
+	return pgtype.Text{String: *s, Valid: true}
 }
 
-func sqlNullInt64(i *int64) sql.NullInt64 {
+func toPgTextFromPtr(s *string) pgtype.Text {
+	if s == nil {
+		return pgtype.Text{}
+	}
+	return pgtype.Text{String: *s, Valid: true}
+}
+
+func toPgInt4(i *int64) pgtype.Int4 {
 	if i == nil {
-		return sql.NullInt64{}
+		return pgtype.Int4{}
 	}
-	return sql.NullInt64{Int64: *i, Valid: true}
+	return pgtype.Int4{Int32: int32(*i), Valid: true}
 }
 
-func nullStringToStr(ns sql.NullString, defaultVal string) string {
-	if !ns.Valid {
+func toPgInt4FromPtr(i *int64) pgtype.Int4 {
+	if i == nil {
+		return pgtype.Int4{}
+	}
+	return pgtype.Int4{Int32: int32(*i), Valid: true}
+}
+
+func pgTextToStr(t pgtype.Text, defaultVal string) string {
+	if !t.Valid {
 		return defaultVal
 	}
-	return ns.String
+	return t.String
 }
 
-func nullStringToPtr(ns sql.NullString) *string {
-	if !ns.Valid {
+func pgTextToPtr(t pgtype.Text) *string {
+	if !t.Valid {
 		return nil
 	}
-	return &ns.String
+	return &t.String
 }
 
-func nullInt64ToPtr(ni sql.NullInt64) *int64 {
-	if !ni.Valid {
+func pgInt4ToPtr(i pgtype.Int4) *int64 {
+	if !i.Valid {
 		return nil
 	}
-	return &ni.Int64
+	v := int64(i.Int32)
+	return &v
 }
 
-func nullInt64ToInt64(ni sql.NullInt64, defaultVal int64) int64 {
-	if !ni.Valid {
+func pgInt4ToInt64(i pgtype.Int4, defaultVal int64) int64 {
+	if !i.Valid {
 		return defaultVal
 	}
-	return ni.Int64
+	return int64(i.Int32)
+}
+
+func pgUUIDToPtr(u pgtype.UUID) *string {
+	if !u.Valid {
+		return nil
+	}
+	s := uuid.UUID(u.Bytes).String()
+	return &s
+}
+
+func pgTimestamptzToStr(ts pgtype.Timestamptz, defaultVal string) string {
+	if !ts.Valid {
+		return defaultVal
+	}
+	return ts.Time.Format(time.RFC3339)
+}
+
+func pgTimestamptzToPtr(ts pgtype.Timestamptz) *string {
+	if !ts.Valid {
+		return nil
+	}
+	s := ts.Time.Format(time.RFC3339)
+	return &s
 }
 
 func strPtr(s string) *string {
@@ -381,111 +441,127 @@ func min(a, b int) int {
 // ============================================================================
 
 // StartAttempt creates a new in-progress attempt with timer
-func (s *attemptService) StartAttempt(ctx context.Context, userID int64, body StartAttemptBody) (*InProgressAttemptResponse, error) {
+func (s *attemptService) StartAttempt(ctx context.Context, userID uuid.UUID, body StartAttemptBody) (*InProgressAttemptResponse, error) {
+	// Parse problem ID from string
+	problemID, err := uuid.Parse(body.ProblemID)
+	if err != nil {
+		return nil, fmt.Errorf("invalid problem_id: %w", err)
+	}
+
+	// Parse optional session ID
+	var sessionID pgtype.UUID
+	if body.SessionID != nil {
+		sid, err := uuid.Parse(*body.SessionID)
+		if err != nil {
+			return nil, fmt.Errorf("invalid session_id: %w", err)
+		}
+		sessionID = pgtype.UUID{Bytes: sid, Valid: true}
+	}
+
 	attempt, err := s.repo.CreateInProgressAttempt(ctx, repo.CreateInProgressAttemptParams{
 		UserID:    userID,
-		ProblemID: body.ProblemID,
-		SessionID: sqlNullInt64(body.SessionID),
+		ProblemID: problemID,
+		SessionID: sessionID,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create in-progress attempt: %w", err)
 	}
 
 	// Get problem details for the response
-	problem, err := s.repo.GetProblem(ctx, body.ProblemID)
+	problem, err := s.repo.GetProblem(ctx, problemID)
 	if err != nil {
 		// Return attempt without problem details if problem fetch fails
 		return &InProgressAttemptResponse{
-			ID:                 attempt.ID,
-			UserID:             attempt.UserID,
-			ProblemID:          attempt.ProblemID,
-			SessionID:          nullInt64ToPtr(attempt.SessionID),
-			Status:             nullStringToStr(attempt.Status, "in_progress"),
-			ElapsedTimeSeconds: nullInt64ToInt64(attempt.ElapsedTimeSeconds, 0),
-			TimerState:         nullStringToStr(attempt.TimerState, "idle"),
-			TimerLastUpdatedAt: nullStringToPtr(attempt.TimerLastUpdatedAt),
-			StartedAt:          nullStringToStr(attempt.StartedAt, ""),
+			ID:                 attempt.ID.String(),
+			UserID:             attempt.UserID.String(),
+			ProblemID:          attempt.ProblemID.String(),
+			SessionID:          pgUUIDToPtr(attempt.SessionID),
+			Status:             pgTextToStr(attempt.Status, "in_progress"),
+			ElapsedTimeSeconds: pgInt4ToInt64(attempt.ElapsedTimeSeconds, 0),
+			TimerState:         pgTextToStr(attempt.TimerState, "idle"),
+			TimerLastUpdatedAt: pgTimestamptzToPtr(attempt.TimerLastUpdatedAt),
+			StartedAt:          pgTimestamptzToStr(attempt.StartedAt, ""),
 		}, nil
 	}
 
 	return &InProgressAttemptResponse{
-		ID:                 attempt.ID,
-		UserID:             attempt.UserID,
-		ProblemID:          attempt.ProblemID,
-		SessionID:          nullInt64ToPtr(attempt.SessionID),
-		Status:             nullStringToStr(attempt.Status, "in_progress"),
-		ElapsedTimeSeconds: nullInt64ToInt64(attempt.ElapsedTimeSeconds, 0),
-		TimerState:         nullStringToStr(attempt.TimerState, "idle"),
-		TimerLastUpdatedAt: nullStringToPtr(attempt.TimerLastUpdatedAt),
-		StartedAt:          nullStringToStr(attempt.StartedAt, ""),
+		ID:                 attempt.ID.String(),
+		UserID:             attempt.UserID.String(),
+		ProblemID:          attempt.ProblemID.String(),
+		SessionID:          pgUUIDToPtr(attempt.SessionID),
+		Status:             pgTextToStr(attempt.Status, "in_progress"),
+		ElapsedTimeSeconds: pgInt4ToInt64(attempt.ElapsedTimeSeconds, 0),
+		TimerState:         pgTextToStr(attempt.TimerState, "idle"),
+		TimerLastUpdatedAt: pgTimestamptzToPtr(attempt.TimerLastUpdatedAt),
+		StartedAt:          pgTimestamptzToStr(attempt.StartedAt, ""),
 		ProblemTitle:       &problem.Title,
-		ProblemDifficulty:  nullStringToPtr(problem.Difficulty),
+		ProblemDifficulty:  pgTextToPtr(problem.Difficulty),
 	}, nil
 }
 
 // GetInProgressAttempt retrieves an existing in-progress attempt for a problem
-func (s *attemptService) GetInProgressAttempt(ctx context.Context, userID int64, problemID int64) (*InProgressAttemptResponse, error) {
+func (s *attemptService) GetInProgressAttempt(ctx context.Context, userID uuid.UUID, problemID uuid.UUID) (*InProgressAttemptResponse, error) {
 	row, err := s.repo.GetInProgressAttemptForProblem(ctx, repo.GetInProgressAttemptForProblemParams{
 		UserID:    userID,
 		ProblemID: problemID,
 	})
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil // No in-progress attempt found
 		}
 		return nil, fmt.Errorf("failed to get in-progress attempt: %w", err)
 	}
 
 	return &InProgressAttemptResponse{
-		ID:                 row.ID,
-		UserID:             row.UserID,
-		ProblemID:          row.ProblemID,
-		SessionID:          nullInt64ToPtr(row.SessionID),
-		Status:             nullStringToStr(row.Status, "in_progress"),
-		ElapsedTimeSeconds: nullInt64ToInt64(row.ElapsedTimeSeconds, 0),
-		TimerState:         nullStringToStr(row.TimerState, "idle"),
-		TimerLastUpdatedAt: nullStringToPtr(row.TimerLastUpdatedAt),
-		StartedAt:          nullStringToStr(row.StartedAt, ""),
+		ID:                 row.ID.String(),
+		UserID:             row.UserID.String(),
+		ProblemID:          row.ProblemID.String(),
+		SessionID:          pgUUIDToPtr(row.SessionID),
+		Status:             pgTextToStr(row.Status, "in_progress"),
+		ElapsedTimeSeconds: pgInt4ToInt64(row.ElapsedTimeSeconds, 0),
+		TimerState:         pgTextToStr(row.TimerState, "idle"),
+		TimerLastUpdatedAt: pgTimestamptzToPtr(row.TimerLastUpdatedAt),
+		StartedAt:          pgTimestamptzToStr(row.StartedAt, ""),
 		ProblemTitle:       &row.ProblemTitle,
-		ProblemDifficulty:  nullStringToPtr(row.ProblemDifficulty),
+		ProblemDifficulty:  pgTextToPtr(row.ProblemDifficulty),
 	}, nil
 }
 
 // GetAttemptByID retrieves an attempt by its ID
-func (s *attemptService) GetAttemptByID(ctx context.Context, userID int64, attemptID int64) (*InProgressAttemptResponse, error) {
+func (s *attemptService) GetAttemptByID(ctx context.Context, userID uuid.UUID, attemptID uuid.UUID) (*InProgressAttemptResponse, error) {
 	row, err := s.repo.GetAttemptById(ctx, repo.GetAttemptByIdParams{
 		ID:     attemptID,
 		UserID: userID,
 	})
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, fmt.Errorf("attempt not found")
 		}
 		return nil, fmt.Errorf("failed to get attempt: %w", err)
 	}
 
 	return &InProgressAttemptResponse{
-		ID:                 row.ID,
-		UserID:             row.UserID,
-		ProblemID:          row.ProblemID,
-		SessionID:          nullInt64ToPtr(row.SessionID),
-		Status:             nullStringToStr(row.Status, "in_progress"),
-		ElapsedTimeSeconds: nullInt64ToInt64(row.ElapsedTimeSeconds, 0),
-		TimerState:         nullStringToStr(row.TimerState, "idle"),
-		TimerLastUpdatedAt: nullStringToPtr(row.TimerLastUpdatedAt),
-		StartedAt:          nullStringToStr(row.StartedAt, ""),
+		ID:                 row.ID.String(),
+		UserID:             row.UserID.String(),
+		ProblemID:          row.ProblemID.String(),
+		SessionID:          pgUUIDToPtr(row.SessionID),
+		Status:             pgTextToStr(row.Status, "in_progress"),
+		ElapsedTimeSeconds: pgInt4ToInt64(row.ElapsedTimeSeconds, 0),
+		TimerState:         pgTextToStr(row.TimerState, "idle"),
+		TimerLastUpdatedAt: pgTimestamptzToPtr(row.TimerLastUpdatedAt),
+		StartedAt:          pgTimestamptzToStr(row.StartedAt, ""),
 		ProblemTitle:       &row.ProblemTitle,
-		ProblemDifficulty:  nullStringToPtr(row.ProblemDifficulty),
+		ProblemDifficulty:  pgTextToPtr(row.ProblemDifficulty),
 	}, nil
 }
 
 // UpdateAttemptTimer updates the timer state for an in-progress attempt
-func (s *attemptService) UpdateAttemptTimer(ctx context.Context, userID int64, attemptID int64, body UpdateAttemptTimerBody) error {
-	now := sql.NullString{String: currentTimestamp(), Valid: true}
+func (s *attemptService) UpdateAttemptTimer(ctx context.Context, userID uuid.UUID, attemptID uuid.UUID, body UpdateAttemptTimerBody) error {
+	now := pgtype.Timestamptz{Time: time.Now().UTC(), Valid: true}
 
 	err := s.repo.UpdateAttemptTimer(ctx, repo.UpdateAttemptTimerParams{
-		ElapsedTimeSeconds: sql.NullInt64{Int64: body.ElapsedTimeSeconds, Valid: true},
-		TimerState:         sql.NullString{String: body.TimerState, Valid: true},
+		ElapsedTimeSeconds: pgtype.Int4{Int32: int32(body.ElapsedTimeSeconds), Valid: true},
+		TimerState:         pgtype.Text{String: body.TimerState, Valid: true},
 		TimerLastUpdatedAt: now,
 		ID:                 attemptID,
 		UserID:             userID,
@@ -498,7 +574,7 @@ func (s *attemptService) UpdateAttemptTimer(ctx context.Context, userID int64, a
 }
 
 // CompleteAttempt completes an in-progress attempt with final data
-func (s *attemptService) CompleteAttempt(ctx context.Context, userID int64, attemptID int64, body CompleteAttemptBody) (*AttemptResponse, error) {
+func (s *attemptService) CompleteAttempt(ctx context.Context, userID uuid.UUID, attemptID uuid.UUID, body CompleteAttemptBody) (*AttemptResponse, error) {
 	// First get the attempt to get the elapsed time for duration
 	existingAttempt, err := s.repo.GetAttempt(ctx, repo.GetAttemptParams{
 		ID:     attemptID,
@@ -513,14 +589,14 @@ func (s *attemptService) CompleteAttempt(ctx context.Context, userID int64, atte
 	if body.DurationSeconds != nil {
 		durationSeconds = *body.DurationSeconds
 	} else {
-		durationSeconds = nullInt64ToInt64(existingAttempt.ElapsedTimeSeconds, 0)
+		durationSeconds = pgInt4ToInt64(existingAttempt.ElapsedTimeSeconds, 0)
 	}
 
 	attempt, err := s.repo.CompleteAttempt(ctx, repo.CompleteAttemptParams{
-		ConfidenceScore: sql.NullInt64{Int64: body.ConfidenceScore, Valid: true},
-		DurationSeconds: sql.NullInt64{Int64: durationSeconds, Valid: true},
-		Outcome:         sql.NullString{String: body.Outcome, Valid: true},
-		Notes:           sqlNullString(body.Notes),
+		ConfidenceScore: pgtype.Int4{Int32: int32(body.ConfidenceScore), Valid: true},
+		DurationSeconds: pgtype.Int4{Int32: int32(durationSeconds), Valid: true},
+		Outcome:         pgtype.Text{String: body.Outcome, Valid: true},
+		Notes:           toPgTextFromPtr(body.Notes),
 		ID:              attemptID,
 		UserID:          userID,
 	})
@@ -539,20 +615,20 @@ func (s *attemptService) CompleteAttempt(ctx context.Context, userID int64, atte
 	}
 
 	return &AttemptResponse{
-		ID:              attempt.ID,
-		UserID:          attempt.UserID,
-		ProblemID:       attempt.ProblemID,
-		SessionID:       nullInt64ToPtr(attempt.SessionID),
-		ConfidenceScore: nullInt64ToInt64(attempt.ConfidenceScore, 0),
-		DurationSeconds: nullInt64ToPtr(attempt.DurationSeconds),
-		Outcome:         nullStringToStr(attempt.Outcome, ""),
-		Notes:           nullStringToPtr(attempt.Notes),
-		PerformedAt:     nullStringToStr(attempt.PerformedAt, ""),
+		ID:              attempt.ID.String(),
+		UserID:          attempt.UserID.String(),
+		ProblemID:       attempt.ProblemID.String(),
+		SessionID:       pgUUIDToPtr(attempt.SessionID),
+		ConfidenceScore: pgInt4ToInt64(attempt.ConfidenceScore, 0),
+		DurationSeconds: pgInt4ToPtr(attempt.DurationSeconds),
+		Outcome:         pgTextToStr(attempt.Outcome, ""),
+		Notes:           pgTextToPtr(attempt.Notes),
+		PerformedAt:     pgTimestamptzToStr(attempt.PerformedAt, ""),
 	}, nil
 }
 
 // AbandonAttempt marks an in-progress attempt as abandoned
-func (s *attemptService) AbandonAttempt(ctx context.Context, userID int64, attemptID int64) error {
+func (s *attemptService) AbandonAttempt(ctx context.Context, userID uuid.UUID, attemptID uuid.UUID) error {
 	err := s.repo.AbandonAttempt(ctx, repo.AbandonAttemptParams{
 		ID:     attemptID,
 		UserID: userID,
@@ -562,9 +638,4 @@ func (s *attemptService) AbandonAttempt(ctx context.Context, userID int64, attem
 	}
 
 	return nil
-}
-
-// currentTimestamp returns the current time in RFC3339 format
-func currentTimestamp() string {
-	return time.Now().UTC().Format(time.RFC3339)
 }

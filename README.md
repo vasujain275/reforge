@@ -7,7 +7,7 @@
 [![Go Version](https://img.shields.io/badge/Go-1.23+-00ADD8?style=flat&logo=go)](https://go.dev/)
 [![React](https://img.shields.io/badge/React-19-61DAFB?style=flat&logo=react)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7+-3178C6?style=flat&logo=typescript)](https://www.typescriptlang.org/)
-[![SQLite](https://img.shields.io/badge/SQLite-3-003B57?style=flat&logo=sqlite)](https://www.sqlite.org/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-18-336791?style=flat&logo=postgresql)](https://www.postgresql.org/)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat)](LICENSE)
 
 [Features](#-features) • [Why Reforge?](#-why-reforge) • [Quick Start](#-quick-start) • [Documentation](#-documentation) • [Philosophy](#-philosophy)
@@ -61,8 +61,8 @@ Pre-configured session types tailored for different goals:
 ### 🔐 **Privacy & Security**
 - 🔒 **JWT-based authentication** with stateful refresh tokens
 - 🛡️ **Password hashing** using bcrypt
-- 🏠 **Local-first** — no telemetry, no tracking, no cloud
-- 💾 **SQLite database** — single file, easy to backup
+- 🏠 **Self-hostable** — deploy on your own infrastructure
+- 💾 **PostgreSQL database** — production-ready, scalable storage
 
 ### ⚙️ **Customizable & Transparent**
 - 🎚️ **Adjustable scoring weights** — tune the algorithm to your preferences
@@ -119,11 +119,11 @@ Score: 0.82 (High Priority)
 
 | Layer | Technology |
 |:-----:|:-----------|
-| **Backend** | Go 1.23+, Chi Router, SQLite, SQLC, Goose Migrations |
+| **Backend** | Go 1.23+, Chi Router, PostgreSQL 18, pgx/v5, SQLC, Goose Migrations |
 | **Frontend** | React 19, TypeScript 5.7+, Vite, Zustand |
 | **UI** | Shadcn UI, Tailwind CSS, Lucide Icons, OKLCH Colors |
 | **Auth** | JWT (stateful refresh tokens), bcrypt |
-| **Database** | SQLite 3 (local-first) |
+| **Database** | PostgreSQL 18 (production-ready, UUID PKs) |
 
 </div>
 
@@ -150,6 +150,7 @@ Comprehensive guides to get you started:
 
 - **[📦 Installation Guide](docs/INSTALLATION.md)** — Setup instructions for all platforms
 - **[💻 Development Guide](docs/DEVELOPMENT.md)** — Contributing and local development
+- **[🔄 PostgreSQL Migration Guide](docs/POSTGRES_MIGRATION.md)** — Migrating from SQLite to PostgreSQL
 - **[🤖 Agent Guide](AGENTS.md)** — Guide for AI coding agents working on this project
 - **[🎨 Style Guide](STYLE-GUIDE.md)** — Frontend design system and patterns
 
@@ -160,8 +161,8 @@ Comprehensive guides to get you started:
 ### **Why No AI?**
 AI-based scheduling introduces non-determinism, maintenance burden, and opacity without meaningful benefit for this problem. Interview prep needs are **rule-based and explainable** — deterministic heuristics build trust and are fully testable.
 
-### **Why Local-First?**
-Your practice data is personal. You shouldn't need to trust a cloud service, pay for subscriptions, or lose access when the internet is down. Reforge runs entirely on your machine and respects your privacy.
+### **Why Self-Hostable?**
+Your practice data is personal. Reforge gives you full control — deploy on your own infrastructure, keep data private, and never worry about subscriptions or service shutdowns. PostgreSQL ensures production-grade reliability and scalability.
 
 ### **Why Explainable?**
 When a tool tells you to practice a problem, you should know *why*. Reforge shows feature-by-feature breakdowns for every recommendation, so you understand (and can tune) the logic.

@@ -2,18 +2,19 @@ package users
 
 import (
 	"context"
-	"database/sql"
 	"time"
 
-	repo "github.com/vasujain275/reforge/internal/adapters/sqlite/sqlc"
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
+	repo "github.com/vasujain275/reforge/internal/adapters/postgres/sqlc"
 	"github.com/vasujain275/reforge/internal/security"
 )
 
 type Service interface {
 	CreateUser(ctx context.Context, body CreateUserBody) (UserResponse, error)
-	GetUserByID(ctx context.Context, userID int64) (UserResponse, error)
-	ChangePassword(ctx context.Context, userID int64, oldPassword, newPassword string) error
-	DeleteOwnAccount(ctx context.Context, userID int64, password string) error
+	GetUserByID(ctx context.Context, userID uuid.UUID) (UserResponse, error)
+	ChangePassword(ctx context.Context, userID uuid.UUID, oldPassword, newPassword string) error
+	DeleteOwnAccount(ctx context.Context, userID uuid.UUID, password string) error
 	ResetPasswordWithToken(ctx context.Context, token, newPassword string) error
 }
 
@@ -39,7 +40,7 @@ func (s *userService) CreateUser(ctx context.Context, body CreateUserBody) (User
 		Email:        body.Email,
 		Name:         body.Name,
 		PasswordHash: passwordHash,
-		Role:         sql.NullString{String: "user", Valid: true}, // Default role
+		Role:         pgtype.Text{String: "user", Valid: true}, // Default role
 	}
 
 	user, err := s.repo.CreateUser(ctx, params)
@@ -50,7 +51,7 @@ func (s *userService) CreateUser(ctx context.Context, body CreateUserBody) (User
 	return ToUserResponse(user.ID, user.Email, user.Name, user.Role, user.IsActive, user.CreatedAt), nil
 }
 
-func (s *userService) GetUserByID(ctx context.Context, userID int64) (UserResponse, error) {
+func (s *userService) GetUserByID(ctx context.Context, userID uuid.UUID) (UserResponse, error) {
 
 	user, err := s.repo.GetUserByID(ctx, userID)
 	if err != nil {
@@ -61,7 +62,7 @@ func (s *userService) GetUserByID(ctx context.Context, userID int64) (UserRespon
 }
 
 // ToUserResponse converts DB row to UserResponse (exported for use by auth package)
-func ToUserResponse(id int64, email, name string, role sql.NullString, isActive sql.NullBool, createdAt sql.NullString) UserResponse {
+func ToUserResponse(id uuid.UUID, email, name string, role pgtype.Text, isActive pgtype.Bool, createdAt pgtype.Timestamptz) UserResponse {
 	// Default values for nullable fields
 	roleStr := "user"
 	if role.Valid && role.String != "" {
@@ -75,11 +76,11 @@ func ToUserResponse(id int64, email, name string, role sql.NullString, isActive 
 
 	createdAtStr := ""
 	if createdAt.Valid {
-		createdAtStr = createdAt.String
+		createdAtStr = createdAt.Time.Format(time.RFC3339)
 	}
 
 	return UserResponse{
-		ID:        id,
+		ID:        id.String(),
 		Email:     email,
 		Name:      name,
 		Role:      roleStr,
@@ -88,7 +89,7 @@ func ToUserResponse(id int64, email, name string, role sql.NullString, isActive 
 	}
 }
 
-func (s *userService) ChangePassword(ctx context.Context, userID int64, oldPassword, newPassword string) error {
+func (s *userService) ChangePassword(ctx context.Context, userID uuid.UUID, oldPassword, newPassword string) error {
 	// Fetch user with password hash to verify old password
 	user, err := s.repo.GetUserByIDWithPassword(ctx, userID)
 	if err != nil {
@@ -111,7 +112,7 @@ func (s *userService) ChangePassword(ctx context.Context, userID int64, oldPassw
 	})
 }
 
-func (s *userService) DeleteOwnAccount(ctx context.Context, userID int64, password string) error {
+func (s *userService) DeleteOwnAccount(ctx context.Context, userID uuid.UUID, password string) error {
 	// Verify password before deletion
 	user, err := s.repo.GetUserByIDWithPassword(ctx, userID)
 	if err != nil {
@@ -142,12 +143,8 @@ func (s *userService) ResetPasswordWithToken(ctx context.Context, token, newPass
 		return ErrResetTokenUsed
 	}
 
-	// Check expiration
-	expiresAt, err := time.Parse(time.RFC3339, resetToken.ExpiresAt)
-	if err != nil {
-		return ErrInvalidResetToken
-	}
-	if time.Now().After(expiresAt) {
+	// Check expiration (ExpiresAt is now time.Time directly)
+	if time.Now().After(resetToken.ExpiresAt) {
 		return ErrInvalidResetToken
 	}
 

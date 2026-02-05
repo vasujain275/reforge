@@ -2,13 +2,14 @@ package sessions
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
 
-	repo "github.com/vasujain275/reforge/internal/adapters/sqlite/sqlc"
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
+	repo "github.com/vasujain275/reforge/internal/adapters/postgres/sqlc"
 	"github.com/vasujain275/reforge/internal/scoring"
 )
 
@@ -41,15 +42,15 @@ func getTemplateConfig(templateKey string) (TemplateConfig, error) {
 }
 
 type Service interface {
-	CreateSession(ctx context.Context, userID int64, body CreateSessionBody) (*SessionResponse, error)
-	GetSession(ctx context.Context, userID int64, sessionID int64) (*SessionResponse, error)
-	ListSessionsForUser(ctx context.Context, userID int64, limit, offset int64) ([]SessionResponse, error)
-	SearchSessionsForUser(ctx context.Context, userID int64, params SearchSessionsParams) (*PaginatedSessions, error)
-	GenerateSession(ctx context.Context, userID int64, body GenerateSessionBody) (*GenerateSessionResponse, error)
-	CompleteSession(ctx context.Context, userID int64, sessionID int64) error
-	DeleteSession(ctx context.Context, userID int64, sessionID int64) error
-	UpdateSessionTimer(ctx context.Context, userID int64, sessionID int64, body UpdateSessionTimerBody) error
-	ReorderSession(ctx context.Context, userID int64, sessionID int64, body ReorderSessionBody) error
+	CreateSession(ctx context.Context, userID uuid.UUID, body CreateSessionBody) (*SessionResponse, error)
+	GetSession(ctx context.Context, userID uuid.UUID, sessionID uuid.UUID) (*SessionResponse, error)
+	ListSessionsForUser(ctx context.Context, userID uuid.UUID, limit, offset int32) ([]SessionResponse, error)
+	SearchSessionsForUser(ctx context.Context, userID uuid.UUID, params SearchSessionsParams) (*PaginatedSessions, error)
+	GenerateSession(ctx context.Context, userID uuid.UUID, body GenerateSessionBody) (*GenerateSessionResponse, error)
+	CompleteSession(ctx context.Context, userID uuid.UUID, sessionID uuid.UUID) error
+	DeleteSession(ctx context.Context, userID uuid.UUID, sessionID uuid.UUID) error
+	UpdateSessionTimer(ctx context.Context, userID uuid.UUID, sessionID uuid.UUID, body UpdateSessionTimerBody) error
+	ReorderSession(ctx context.Context, userID uuid.UUID, sessionID uuid.UUID, body ReorderSessionBody) error
 }
 
 type sessionService struct {
@@ -64,8 +65,18 @@ func NewService(repo repo.Querier, scoringService scoring.Service) Service {
 	}
 }
 
-func (s *sessionService) CreateSession(ctx context.Context, userID int64, body CreateSessionBody) (*SessionResponse, error) {
-	// Marshal problem IDs to JSON
+func (s *sessionService) CreateSession(ctx context.Context, userID uuid.UUID, body CreateSessionBody) (*SessionResponse, error) {
+	// Convert string problem IDs to UUIDs for validation, then marshal as strings
+	problemUUIDs := make([]uuid.UUID, len(body.ProblemIDs))
+	for i, idStr := range body.ProblemIDs {
+		id, err := uuid.Parse(idStr)
+		if err != nil {
+			return nil, fmt.Errorf("invalid problem ID %s: %w", idStr, err)
+		}
+		problemUUIDs[i] = id
+	}
+
+	// Marshal problem IDs to JSON (as strings)
 	itemsJSON, err := json.Marshal(body.ProblemIDs)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal problem IDs: %w", err)
@@ -73,30 +84,30 @@ func (s *sessionService) CreateSession(ctx context.Context, userID int64, body C
 
 	session, err := s.repo.CreateSession(ctx, repo.CreateSessionParams{
 		UserID:             userID,
-		TemplateKey:        sqlNullString(&body.TemplateKey),
-		PlannedDurationMin: sqlNullInt64(&body.PlannedDurationMin),
-		ItemsOrdered:       sqlNullString(strPtr(string(itemsJSON))),
+		TemplateKey:        pgText(&body.TemplateKey),
+		PlannedDurationMin: pgInt4Ptr(&body.PlannedDurationMin),
+		ItemsOrdered:       pgText(strPtr(string(itemsJSON))),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create session: %w", err)
 	}
 
 	return &SessionResponse{
-		ID:                 session.ID,
-		UserID:             session.UserID,
-		TemplateKey:        nullStringToPtr(session.TemplateKey),
+		ID:                 session.ID.String(),
+		UserID:             session.UserID.String(),
+		TemplateKey:        pgTextToPtr(session.TemplateKey),
 		SessionName:        nil, // TODO: Add session_name after regenerating sqlc
 		IsCustom:           false,
-		CreatedAt:          session.CreatedAt.String,
-		PlannedDurationMin: nullInt64ToInt64(session.PlannedDurationMin, 0),
+		CreatedAt:          session.CreatedAt.Time.Format(time.RFC3339),
+		PlannedDurationMin: pgInt4ToInt64(session.PlannedDurationMin, 0),
 		Completed:          session.CompletedAt.Valid,
-		ElapsedTimeSeconds: nullInt64ToInt64(session.ElapsedTimeSeconds, 0),
-		TimerState:         nullStringToStr(session.TimerState, "idle"),
-		TimerLastUpdatedAt: nullStringToPtr(session.TimerLastUpdatedAt),
+		ElapsedTimeSeconds: pgInt4ToInt64(session.ElapsedTimeSeconds, 0),
+		TimerState:         pgTextToStr(session.TimerState, "idle"),
+		TimerLastUpdatedAt: pgTimestamptzToPtr(session.TimerLastUpdatedAt),
 	}, nil
 }
 
-func (s *sessionService) GetSession(ctx context.Context, userID int64, sessionID int64) (*SessionResponse, error) {
+func (s *sessionService) GetSession(ctx context.Context, userID uuid.UUID, sessionID uuid.UUID) (*SessionResponse, error) {
 	session, err := s.repo.GetSession(ctx, repo.GetSessionParams{
 		ID:     sessionID,
 		UserID: userID,
@@ -105,17 +116,22 @@ func (s *sessionService) GetSession(ctx context.Context, userID int64, sessionID
 		return nil, fmt.Errorf("failed to get session: %w", err)
 	}
 
-	// Parse problem IDs from JSON
-	var problemIDs []int64
+	// Parse problem IDs from JSON (stored as string UUIDs)
+	var problemIDStrs []string
 	if session.ItemsOrdered.Valid && session.ItemsOrdered.String != "" {
-		if err := json.Unmarshal([]byte(session.ItemsOrdered.String), &problemIDs); err != nil {
+		if err := json.Unmarshal([]byte(session.ItemsOrdered.String), &problemIDStrs); err != nil {
 			return nil, fmt.Errorf("failed to parse problem IDs: %w", err)
 		}
 	}
 
 	// Fetch problems for the session with attempt data
 	problems := make([]SessionProblem, 0)
-	for _, problemID := range problemIDs {
+	for _, problemIDStr := range problemIDStrs {
+		problemID, err := uuid.Parse(problemIDStr)
+		if err != nil {
+			continue // Skip invalid IDs
+		}
+
 		problem, err := s.repo.GetProblem(ctx, problemID)
 		if err != nil {
 			continue // Skip if problem not found
@@ -131,6 +147,7 @@ func (s *sessionService) GetSession(ctx context.Context, userID int64, sessionID
 		}
 
 		// Calculate score for this problem
+		// Note: scoring service will be migrated to use uuid.UUID
 		score, err := s.scoringService.ComputeScore(ctx, userID, problemID)
 		if err != nil {
 			// If scoring fails, use default values
@@ -144,15 +161,12 @@ func (s *sessionService) GetSession(ctx context.Context, userID int64, sessionID
 		// Calculate days since last attempt
 		var daysSinceLast *int
 		if stats.LastAttemptAt.Valid {
-			lastAttempt, err := time.Parse(time.RFC3339, stats.LastAttemptAt.String)
-			if err == nil {
-				days := int(time.Since(lastAttempt).Hours() / 24)
-				daysSinceLast = &days
-			}
+			days := int(time.Since(stats.LastAttemptAt.Time).Hours() / 24)
+			daysSinceLast = &days
 		}
 
 		// Get estimated time based on difficulty
-		difficulty := nullStringToStr(problem.Difficulty, "medium")
+		difficulty := pgTextToStr(problem.Difficulty, "medium")
 		estimatedMin := getEstimatedTime(difficulty)
 
 		// Check if there's an attempt for this problem in this session
@@ -161,7 +175,7 @@ func (s *sessionService) GetSession(ctx context.Context, userID int64, sessionID
 		attempt, err := s.repo.GetLatestAttemptForProblemInSession(ctx, repo.GetLatestAttemptForProblemInSessionParams{
 			UserID:    userID,
 			ProblemID: problemID,
-			SessionID: sql.NullInt64{Int64: sessionID, Valid: true},
+			SessionID: pgtype.UUID{Bytes: sessionID, Valid: true},
 		})
 		if err == nil {
 			// Found an attempt
@@ -171,39 +185,39 @@ func (s *sessionService) GetSession(ctx context.Context, userID int64, sessionID
 		}
 
 		problems = append(problems, SessionProblem{
-			ID:            problem.ID,
+			ID:            problem.ID.String(),
 			Title:         problem.Title,
 			Difficulty:    difficulty,
-			Source:        nullStringToPtr(problem.Source),
-			URL:           nullStringToPtr(problem.Url),
+			Source:        pgTextToPtr(problem.Source),
+			URL:           pgTextToPtr(problem.Url),
 			PlannedMin:    estimatedMin,
 			Score:         score.Score,
 			DaysSinceLast: daysSinceLast,
-			Confidence:    stats.Confidence.Int64,
+			Confidence:    int64(stats.Confidence.Int32),
 			Reason:        score.Reason,
-			CreatedAt:     problem.CreatedAt.String,
+			CreatedAt:     problem.CreatedAt.Time.Format(time.RFC3339),
 			Completed:     completed,
 			Outcome:       outcome,
 		})
 	}
 
 	return &SessionResponse{
-		ID:                 session.ID,
-		UserID:             session.UserID,
-		TemplateKey:        nullStringToPtr(session.TemplateKey),
+		ID:                 session.ID.String(),
+		UserID:             session.UserID.String(),
+		TemplateKey:        pgTextToPtr(session.TemplateKey),
 		SessionName:        nil,
 		IsCustom:           false,
-		CreatedAt:          session.CreatedAt.String,
-		PlannedDurationMin: nullInt64ToInt64(session.PlannedDurationMin, 0),
+		CreatedAt:          session.CreatedAt.Time.Format(time.RFC3339),
+		PlannedDurationMin: pgInt4ToInt64(session.PlannedDurationMin, 0),
 		Completed:          session.CompletedAt.Valid,
-		ElapsedTimeSeconds: nullInt64ToInt64(session.ElapsedTimeSeconds, 0),
-		TimerState:         nullStringToStr(session.TimerState, "idle"),
-		TimerLastUpdatedAt: nullStringToPtr(session.TimerLastUpdatedAt),
+		ElapsedTimeSeconds: pgInt4ToInt64(session.ElapsedTimeSeconds, 0),
+		TimerState:         pgTextToStr(session.TimerState, "idle"),
+		TimerLastUpdatedAt: pgTimestamptzToPtr(session.TimerLastUpdatedAt),
 		Problems:           problems,
 	}, nil
 }
 
-func (s *sessionService) ListSessionsForUser(ctx context.Context, userID int64, limit, offset int64) ([]SessionResponse, error) {
+func (s *sessionService) ListSessionsForUser(ctx context.Context, userID uuid.UUID, limit, offset int32) ([]SessionResponse, error) {
 	sessions, err := s.repo.ListSessionsForUser(ctx, repo.ListSessionsForUserParams{
 		UserID: userID,
 		Limit:  limit,
@@ -216,30 +230,30 @@ func (s *sessionService) ListSessionsForUser(ctx context.Context, userID int64, 
 	results := make([]SessionResponse, 0, len(sessions))
 	for _, session := range sessions {
 		// Parse problem IDs to get count
-		var problemIDs []int64
+		var problemIDs []string
 		if session.ItemsOrdered.Valid && session.ItemsOrdered.String != "" {
 			_ = json.Unmarshal([]byte(session.ItemsOrdered.String), &problemIDs)
 		}
 
 		results = append(results, SessionResponse{
-			ID:                 session.ID,
-			UserID:             session.UserID,
-			TemplateKey:        nullStringToPtr(session.TemplateKey),
+			ID:                 session.ID.String(),
+			UserID:             session.UserID.String(),
+			TemplateKey:        pgTextToPtr(session.TemplateKey),
 			SessionName:        nil,
 			IsCustom:           false,
-			CreatedAt:          session.CreatedAt.String,
-			PlannedDurationMin: nullInt64ToInt64(session.PlannedDurationMin, 0),
+			CreatedAt:          session.CreatedAt.Time.Format(time.RFC3339),
+			PlannedDurationMin: pgInt4ToInt64(session.PlannedDurationMin, 0),
 			Completed:          session.CompletedAt.Valid,
-			ElapsedTimeSeconds: nullInt64ToInt64(session.ElapsedTimeSeconds, 0),
-			TimerState:         nullStringToStr(session.TimerState, "idle"),
-			TimerLastUpdatedAt: nullStringToPtr(session.TimerLastUpdatedAt),
+			ElapsedTimeSeconds: pgInt4ToInt64(session.ElapsedTimeSeconds, 0),
+			TimerState:         pgTextToStr(session.TimerState, "idle"),
+			TimerLastUpdatedAt: pgTimestamptzToPtr(session.TimerLastUpdatedAt),
 		})
 	}
 
 	return results, nil
 }
 
-func (s *sessionService) SearchSessionsForUser(ctx context.Context, userID int64, params SearchSessionsParams) (*PaginatedSessions, error) {
+func (s *sessionService) SearchSessionsForUser(ctx context.Context, userID uuid.UUID, params SearchSessionsParams) (*PaginatedSessions, error) {
 	// Get total count
 	countRow, err := s.repo.CountSearchSessionsForUser(ctx, repo.CountSearchSessionsForUserParams{
 		UserID:       userID,
@@ -265,17 +279,17 @@ func (s *sessionService) SearchSessionsForUser(ctx context.Context, userID int64
 	results := make([]SessionResponse, 0, len(sessions))
 	for _, session := range sessions {
 		results = append(results, SessionResponse{
-			ID:                 session.ID,
-			UserID:             session.UserID,
-			TemplateKey:        nullStringToPtr(session.TemplateKey),
-			SessionName:        nullStringToPtr(session.SessionName),
+			ID:                 session.ID.String(),
+			UserID:             session.UserID.String(),
+			TemplateKey:        pgTextToPtr(session.TemplateKey),
+			SessionName:        pgTextToPtr(session.SessionName),
 			IsCustom:           false,
-			CreatedAt:          session.CreatedAt.String,
-			PlannedDurationMin: nullInt64ToInt64(session.PlannedDurationMin, 0),
+			CreatedAt:          session.CreatedAt.Time.Format(time.RFC3339),
+			PlannedDurationMin: pgInt4ToInt64(session.PlannedDurationMin, 0),
 			Completed:          session.CompletedAt.Valid,
-			ElapsedTimeSeconds: nullInt64ToInt64(session.ElapsedTimeSeconds, 0),
-			TimerState:         nullStringToStr(session.TimerState, "idle"),
-			TimerLastUpdatedAt: nullStringToPtr(session.TimerLastUpdatedAt),
+			ElapsedTimeSeconds: pgInt4ToInt64(session.ElapsedTimeSeconds, 0),
+			TimerState:         pgTextToStr(session.TimerState, "idle"),
+			TimerLastUpdatedAt: pgTimestamptzToPtr(session.TimerLastUpdatedAt),
 		})
 	}
 
@@ -284,7 +298,7 @@ func (s *sessionService) SearchSessionsForUser(ctx context.Context, userID int64
 	if params.Offset == 0 {
 		page = 1
 	}
-	totalPages := (countRow + params.Limit - 1) / params.Limit
+	totalPages := (int32(countRow) + params.Limit - 1) / params.Limit
 
 	return &PaginatedSessions{
 		Data:       results,
@@ -295,7 +309,7 @@ func (s *sessionService) SearchSessionsForUser(ctx context.Context, userID int64
 	}, nil
 }
 
-func (s *sessionService) GenerateSession(ctx context.Context, userID int64, body GenerateSessionBody) (*GenerateSessionResponse, error) {
+func (s *sessionService) GenerateSession(ctx context.Context, userID uuid.UUID, body GenerateSessionBody) (*GenerateSessionResponse, error) {
 	// Get template configuration
 	template, err := getTemplateConfig(body.TemplateKey)
 	if err != nil {
@@ -340,7 +354,7 @@ func (s *sessionService) GenerateSession(ctx context.Context, userID int64, body
 
 func (s *sessionService) buildSessionWithConstraints(
 	ctx context.Context,
-	userID int64,
+	userID uuid.UUID,
 	scores []scoring.ProblemScore,
 	template TemplateConfig,
 	durationMin int64,
@@ -414,7 +428,7 @@ func (s *sessionService) buildSessionWithConstraints(
 }
 
 // buildAllCandidates creates candidate structs for all scored problems without filtering
-func (s *sessionService) buildAllCandidates(ctx context.Context, userID int64, scores []scoring.ProblemScore) []candidateProblem {
+func (s *sessionService) buildAllCandidates(ctx context.Context, userID uuid.UUID, scores []scoring.ProblemScore) []candidateProblem {
 	candidates := make([]candidateProblem, 0, len(scores))
 
 	for _, score := range scores {
@@ -423,7 +437,7 @@ func (s *sessionService) buildAllCandidates(ctx context.Context, userID int64, s
 			continue
 		}
 
-		difficulty := nullStringToStr(problem.Difficulty, "medium")
+		difficulty := pgTextToStr(problem.Difficulty, "medium")
 		estimatedMin := getEstimatedTime(difficulty)
 
 		stats, err := s.repo.GetUserProblemStats(ctx, repo.GetUserProblemStatsParams{
@@ -436,11 +450,8 @@ func (s *sessionService) buildAllCandidates(ctx context.Context, userID int64, s
 
 		var daysSinceLast *int
 		if stats.LastAttemptAt.Valid {
-			lastAttempt, err := time.Parse(time.RFC3339, stats.LastAttemptAt.String)
-			if err == nil {
-				days := int(time.Since(lastAttempt).Hours() / 24)
-				daysSinceLast = &days
-			}
+			days := int(time.Since(stats.LastAttemptAt.Time).Hours() / 24)
+			daysSinceLast = &days
 		}
 
 		patterns, err := s.repo.GetPatternsForProblem(ctx, score.ProblemID)
@@ -466,7 +477,7 @@ func (s *sessionService) buildAllCandidates(ctx context.Context, userID int64, s
 // relaxLevel: 0=strict, 1=relax confidence, 2=relax days, 3=relax pattern requirements, 4=minimal filters
 func (s *sessionService) filterCandidates(
 	ctx context.Context,
-	userID int64,
+	userID uuid.UUID,
 	candidates []candidateProblem,
 	template TemplateConfig,
 	relaxLevel int,
@@ -479,7 +490,7 @@ func (s *sessionService) filterCandidates(
 			continue
 		}
 
-		confidence := int(candidate.stats.Confidence.Int64)
+		confidence := int(candidate.stats.Confidence.Int32)
 
 		// Confidence filters (relaxed at level 1+)
 		if relaxLevel < 1 {
@@ -509,7 +520,7 @@ func (s *sessionService) filterCandidates(
 // applyPatternModeFilterWithFallback applies pattern filtering with fallback at higher relax levels
 func (s *sessionService) applyPatternModeFilterWithFallback(
 	ctx context.Context,
-	userID int64,
+	userID uuid.UUID,
 	candidates []candidateProblem,
 	template TemplateConfig,
 	relaxLevel int,
@@ -606,8 +617,8 @@ func (s *sessionService) greedySelectProblems(
 ) ([]SessionProblem, int) {
 	problems := make([]SessionProblem, 0)
 	totalMinutes := int64(0)
-	patternCounts := make(map[int64]int)
-	uniquePatterns := make(map[int64]bool)
+	patternCounts := make(map[uuid.UUID]int)
+	uniquePatterns := make(map[uuid.UUID]bool)
 	quickWinCount := 0
 	usedCandidateIdx := make(map[int]bool)
 
@@ -745,17 +756,17 @@ func (s *sessionService) candidateToSessionProblem(candidate candidateProblem) S
 	priority, daysUntilDue := s.calculatePriority(candidate.stats)
 
 	return SessionProblem{
-		ID:            candidate.problem.ID,
+		ID:            candidate.problem.ID.String(),
 		Title:         candidate.problem.Title,
 		Difficulty:    candidate.difficulty,
-		Source:        nullStringToPtr(candidate.problem.Source),
-		URL:           nullStringToPtr(candidate.problem.Url),
+		Source:        pgTextToPtr(candidate.problem.Source),
+		URL:           pgTextToPtr(candidate.problem.Url),
 		PlannedMin:    candidate.estimatedMin,
 		Score:         candidate.score.Score,
 		DaysSinceLast: candidate.daysSinceLast,
-		Confidence:    candidate.stats.Confidence.Int64,
+		Confidence:    int64(candidate.stats.Confidence.Int32),
 		Reason:        candidate.score.Reason,
-		CreatedAt:     candidate.problem.CreatedAt.String,
+		CreatedAt:     candidate.problem.CreatedAt.Time.Format(time.RFC3339),
 		Completed:     false,
 		Outcome:       nil,
 		Priority:      priority,
@@ -767,22 +778,12 @@ func (s *sessionService) candidateToSessionProblem(candidate candidateProblem) S
 // Returns priority status and days until due (negative = overdue)
 func (s *sessionService) calculatePriority(stats repo.UserProblemStat) (string, *int) {
 	// If never reviewed, it's a new problem
-	if !stats.NextReviewAt.Valid || stats.NextReviewAt.String == "" {
+	if !stats.NextReviewAt.Valid {
 		return "new", nil
 	}
 
-	// Parse next review date
-	nextReview, err := time.Parse(time.RFC3339, stats.NextReviewAt.String)
-	if err != nil {
-		// Try parsing as date only
-		nextReview, err = time.Parse("2006-01-02", stats.NextReviewAt.String)
-		if err != nil {
-			return "new", nil
-		}
-	}
-
 	now := time.Now()
-	daysUntil := int(nextReview.Sub(now).Hours() / 24)
+	daysUntil := int(stats.NextReviewAt.Time.Sub(now).Hours() / 24)
 
 	// Priority thresholds:
 	// overdue: daysUntil < 0
@@ -846,7 +847,7 @@ type candidateProblem struct {
 // applyPatternModeFilter filters candidates based on template pattern mode
 func (s *sessionService) applyPatternModeFilter(
 	ctx context.Context,
-	userID int64,
+	userID uuid.UUID,
 	candidates []candidateProblem,
 	template TemplateConfig,
 ) ([]candidateProblem, error) {
@@ -860,10 +861,14 @@ func (s *sessionService) applyPatternModeFilter(
 		if template.PatternID == nil {
 			return nil, fmt.Errorf("pattern_id required for 'specific' pattern mode")
 		}
+		patternUUID, err := uuid.Parse(*template.PatternID)
+		if err != nil {
+			return nil, fmt.Errorf("invalid pattern_id: %w", err)
+		}
 		filtered := make([]candidateProblem, 0)
 		for _, candidate := range candidates {
 			for _, pattern := range candidate.patterns {
-				if pattern.ID == *template.PatternID {
+				if pattern.ID == patternUUID {
 					filtered = append(filtered, candidate)
 					break
 				}
@@ -908,7 +913,7 @@ func (s *sessionService) applyPatternModeFilter(
 }
 
 // getWeakestPatterns returns the N weakest patterns for a user
-func (s *sessionService) getWeakestPatterns(ctx context.Context, userID int64, count int) ([]int64, error) {
+func (s *sessionService) getWeakestPatterns(ctx context.Context, userID uuid.UUID, count int) ([]uuid.UUID, error) {
 	// Get all pattern stats for user
 	stats, err := s.repo.ListUserPatternStats(ctx, userID)
 	if err != nil {
@@ -918,14 +923,14 @@ func (s *sessionService) getWeakestPatterns(ctx context.Context, userID int64, c
 	// Sort by avg confidence ascending
 	for i := 0; i < len(stats)-1; i++ {
 		for j := 0; j < len(stats)-i-1; j++ {
-			if stats[j].AvgConfidence.Int64 > stats[j+1].AvgConfidence.Int64 {
+			if stats[j].AvgConfidence.Int32 > stats[j+1].AvgConfidence.Int32 {
 				stats[j], stats[j+1] = stats[j+1], stats[j]
 			}
 		}
 	}
 
 	// Take first N
-	result := make([]int64, 0, count)
+	result := make([]uuid.UUID, 0, count)
 	for i := 0; i < len(stats) && i < count; i++ {
 		result = append(result, stats[i].PatternID)
 	}
@@ -959,7 +964,7 @@ func (s *sessionService) applyProgressionMode(candidates []candidateProblem) []c
 	return result
 }
 
-func (s *sessionService) CompleteSession(ctx context.Context, userID int64, sessionID int64) error {
+func (s *sessionService) CompleteSession(ctx context.Context, userID uuid.UUID, sessionID uuid.UUID) error {
 	// Verify session belongs to user
 	_, err := s.repo.GetSession(ctx, repo.GetSessionParams{
 		ID:     sessionID,
@@ -970,9 +975,9 @@ func (s *sessionService) CompleteSession(ctx context.Context, userID int64, sess
 	}
 
 	// Mark session as completed with current timestamp
-	completedAt := time.Now().Format(time.RFC3339)
+	completedAt := pgtype.Timestamptz{Time: time.Now(), Valid: true}
 	err = s.repo.UpdateSessionCompleted(ctx, repo.UpdateSessionCompletedParams{
-		CompletedAt: sql.NullString{String: completedAt, Valid: true},
+		CompletedAt: completedAt,
 		ID:          sessionID,
 		UserID:      userID,
 	})
@@ -983,7 +988,7 @@ func (s *sessionService) CompleteSession(ctx context.Context, userID int64, sess
 	return nil
 }
 
-func (s *sessionService) DeleteSession(ctx context.Context, userID int64, sessionID int64) error {
+func (s *sessionService) DeleteSession(ctx context.Context, userID uuid.UUID, sessionID uuid.UUID) error {
 	err := s.repo.DeleteSession(ctx, repo.DeleteSessionParams{
 		ID:     sessionID,
 		UserID: userID,
@@ -995,7 +1000,7 @@ func (s *sessionService) DeleteSession(ctx context.Context, userID int64, sessio
 	return nil
 }
 
-func (s *sessionService) UpdateSessionTimer(ctx context.Context, userID int64, sessionID int64, body UpdateSessionTimerBody) error {
+func (s *sessionService) UpdateSessionTimer(ctx context.Context, userID uuid.UUID, sessionID uuid.UUID, body UpdateSessionTimerBody) error {
 	// Verify session belongs to user
 	_, err := s.repo.GetSession(ctx, repo.GetSessionParams{
 		ID:     sessionID,
@@ -1006,11 +1011,11 @@ func (s *sessionService) UpdateSessionTimer(ctx context.Context, userID int64, s
 	}
 
 	// Update timer state
-	now := time.Now().Format(time.RFC3339)
+	now := pgtype.Timestamptz{Time: time.Now(), Valid: true}
 	err = s.repo.UpdateSessionTimer(ctx, repo.UpdateSessionTimerParams{
-		ElapsedTimeSeconds: sql.NullInt64{Int64: body.ElapsedTimeSeconds, Valid: true},
-		TimerState:         sql.NullString{String: body.TimerState, Valid: true},
-		TimerLastUpdatedAt: sql.NullString{String: now, Valid: true},
+		ElapsedTimeSeconds: pgtype.Int4{Int32: int32(body.ElapsedTimeSeconds), Valid: true},
+		TimerState:         pgtype.Text{String: body.TimerState, Valid: true},
+		TimerLastUpdatedAt: now,
 		ID:                 sessionID,
 		UserID:             userID,
 	})
@@ -1021,40 +1026,48 @@ func (s *sessionService) UpdateSessionTimer(ctx context.Context, userID int64, s
 	return nil
 }
 
-// Helper functions
-func sqlNullString(s *string) sql.NullString {
+// Helper functions for pgtype conversions
+func pgText(s *string) pgtype.Text {
 	if s == nil {
-		return sql.NullString{}
+		return pgtype.Text{}
 	}
-	return sql.NullString{String: *s, Valid: true}
+	return pgtype.Text{String: *s, Valid: true}
 }
 
-func sqlNullInt64(i *int64) sql.NullInt64 {
+func pgInt4Ptr(i *int64) pgtype.Int4 {
 	if i == nil {
-		return sql.NullInt64{}
+		return pgtype.Int4{}
 	}
-	return sql.NullInt64{Int64: *i, Valid: true}
+	return pgtype.Int4{Int32: int32(*i), Valid: true}
 }
 
-func nullStringToStr(ns sql.NullString, defaultVal string) string {
-	if !ns.Valid {
+func pgTextToStr(t pgtype.Text, defaultVal string) string {
+	if !t.Valid {
 		return defaultVal
 	}
-	return ns.String
+	return t.String
 }
 
-func nullStringToPtr(ns sql.NullString) *string {
-	if !ns.Valid {
+func pgTextToPtr(t pgtype.Text) *string {
+	if !t.Valid {
 		return nil
 	}
-	return &ns.String
+	return &t.String
 }
 
-func nullInt64ToInt64(ni sql.NullInt64, defaultVal int64) int64 {
-	if !ni.Valid {
+func pgInt4ToInt64(i pgtype.Int4, defaultVal int64) int64 {
+	if !i.Valid {
 		return defaultVal
 	}
-	return ni.Int64
+	return int64(i.Int32)
+}
+
+func pgTimestamptzToPtr(ts pgtype.Timestamptz) *string {
+	if !ts.Valid {
+		return nil
+	}
+	s := ts.Time.Format(time.RFC3339)
+	return &s
 }
 
 func strPtr(s string) *string {
@@ -1074,7 +1087,7 @@ func getEstimatedTime(difficulty string) int {
 	}
 }
 
-func (s *sessionService) ReorderSession(ctx context.Context, userID int64, sessionID int64, body ReorderSessionBody) error {
+func (s *sessionService) ReorderSession(ctx context.Context, userID uuid.UUID, sessionID uuid.UUID, body ReorderSessionBody) error {
 	// Verify session belongs to user and get current session
 	session, err := s.repo.GetSession(ctx, repo.GetSessionParams{
 		ID:     sessionID,
@@ -1084,8 +1097,8 @@ func (s *sessionService) ReorderSession(ctx context.Context, userID int64, sessi
 		return fmt.Errorf("failed to get session: %w", err)
 	}
 
-	// Get current problem IDs from session
-	var currentProblemIDs []int64
+	// Get current problem IDs from session (stored as string UUIDs)
+	var currentProblemIDs []string
 	if session.ItemsOrdered.Valid && session.ItemsOrdered.String != "" {
 		if err := json.Unmarshal([]byte(session.ItemsOrdered.String), &currentProblemIDs); err != nil {
 			return fmt.Errorf("failed to parse current problem IDs: %w", err)
@@ -1098,14 +1111,14 @@ func (s *sessionService) ReorderSession(ctx context.Context, userID int64, sessi
 	}
 
 	// Create a map to verify all IDs exist in current session
-	currentIDMap := make(map[int64]bool)
+	currentIDMap := make(map[string]bool)
 	for _, id := range currentProblemIDs {
 		currentIDMap[id] = true
 	}
 
 	for _, id := range body.ProblemIDs {
 		if !currentIDMap[id] {
-			return fmt.Errorf("problem ID %d not found in session", id)
+			return fmt.Errorf("problem ID %s not found in session", id)
 		}
 	}
 
@@ -1117,7 +1130,7 @@ func (s *sessionService) ReorderSession(ctx context.Context, userID int64, sessi
 
 	// Update session order
 	err = s.repo.UpdateSessionOrder(ctx, repo.UpdateSessionOrderParams{
-		ItemsOrdered: sql.NullString{String: string(newOrderJSON), Valid: true},
+		ItemsOrdered: pgtype.Text{String: string(newOrderJSON), Valid: true},
 		ID:           sessionID,
 		UserID:       userID,
 	})

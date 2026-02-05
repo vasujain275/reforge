@@ -4,6 +4,7 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/google/uuid"
 	"github.com/vasujain275/reforge/internal/admin"
 	"github.com/vasujain275/reforge/internal/auth"
 	"github.com/vasujain275/reforge/internal/utils"
@@ -87,7 +88,7 @@ func (h *handler) CreateUser(w http.ResponseWriter, r *http.Request) {
 func (h *handler) GetCurrentUser(w http.ResponseWriter, r *http.Request) {
 
 	// Get ID from context
-	userID, ok := r.Context().Value(auth.UserKey).(int64)
+	userID, ok := r.Context().Value(auth.UserKey).(uuid.UUID)
 	if !ok {
 		utils.InternalServerError(w, "User ID is missing from context")
 		return
@@ -107,7 +108,7 @@ func (h *handler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
 	// Get user ID from context
-	userID, ok := r.Context().Value(auth.UserKey).(int64)
+	userID, ok := r.Context().Value(auth.UserKey).(uuid.UUID)
 	if !ok {
 		utils.InternalServerError(w, "User ID is missing from context")
 		return
@@ -140,7 +141,7 @@ func (h *handler) DeleteOwnAccount(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
 	// Get user ID from context
-	userID, ok := r.Context().Value(auth.UserKey).(int64)
+	userID, ok := r.Context().Value(auth.UserKey).(uuid.UUID)
 	if !ok {
 		utils.InternalServerError(w, "User ID is missing from context")
 		return

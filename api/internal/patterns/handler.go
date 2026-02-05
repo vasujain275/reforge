@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"github.com/vasujain275/reforge/internal/auth"
 	"github.com/vasujain275/reforge/internal/utils"
 )
@@ -42,9 +43,9 @@ func (h *handler) CreatePattern(w http.ResponseWriter, r *http.Request) {
 
 func (h *handler) GetPattern(w http.ResponseWriter, r *http.Request) {
 	patternIDStr := chi.URLParam(r, "id")
-	patternID, err := strconv.ParseInt(patternIDStr, 10, 64)
+	patternID, err := uuid.Parse(patternIDStr)
 	if err != nil {
-		utils.BadRequest(w, "Invalid pattern ID", nil)
+		utils.BadRequest(w, "Invalid pattern ID format", nil)
 		return
 	}
 
@@ -62,9 +63,9 @@ func (h *handler) UpdatePattern(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
 	patternIDStr := chi.URLParam(r, "id")
-	patternID, err := strconv.ParseInt(patternIDStr, 10, 64)
+	patternID, err := uuid.Parse(patternIDStr)
 	if err != nil {
-		utils.BadRequest(w, "Invalid pattern ID", nil)
+		utils.BadRequest(w, "Invalid pattern ID format", nil)
 		return
 	}
 
@@ -87,9 +88,9 @@ func (h *handler) UpdatePattern(w http.ResponseWriter, r *http.Request) {
 
 func (h *handler) DeletePattern(w http.ResponseWriter, r *http.Request) {
 	patternIDStr := chi.URLParam(r, "id")
-	patternID, err := strconv.ParseInt(patternIDStr, 10, 64)
+	patternID, err := uuid.Parse(patternIDStr)
 	if err != nil {
-		utils.BadRequest(w, "Invalid pattern ID", nil)
+		utils.BadRequest(w, "Invalid pattern ID format", nil)
 		return
 	}
 
@@ -104,7 +105,7 @@ func (h *handler) DeletePattern(w http.ResponseWriter, r *http.Request) {
 
 func (h *handler) ListPatternsWithStats(w http.ResponseWriter, r *http.Request) {
 	// Get user ID from context
-	userID, ok := r.Context().Value(auth.UserKey).(int64)
+	userID, ok := r.Context().Value(auth.UserKey).(uuid.UUID)
 	if !ok {
 		utils.InternalServerError(w, "User ID is missing from context")
 		return
@@ -132,7 +133,7 @@ func (h *handler) ListPatternsWithStats(w http.ResponseWriter, r *http.Request) 
 	utils.WriteSuccess(w, http.StatusOK, patterns)
 }
 
-func (h *handler) searchPatternsWithStats(w http.ResponseWriter, r *http.Request, userID int64, query, pageStr, pageSizeStr, sortBy string) {
+func (h *handler) searchPatternsWithStats(w http.ResponseWriter, r *http.Request, userID uuid.UUID, query, pageStr, pageSizeStr, sortBy string) {
 	// Parse pagination params
 	page := int64(1)
 	pageSize := int64(20)

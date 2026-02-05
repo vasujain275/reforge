@@ -3,11 +3,12 @@ package dashboard
 import (
 	"context"
 
-	repo "github.com/vasujain275/reforge/internal/adapters/sqlite/sqlc"
+	"github.com/google/uuid"
+	repo "github.com/vasujain275/reforge/internal/adapters/postgres/sqlc"
 )
 
 type Service interface {
-	GetDashboardStats(ctx context.Context, userID int64) (*DashboardStats, error)
+	GetDashboardStats(ctx context.Context, userID uuid.UUID) (*DashboardStats, error)
 }
 
 type dashboardService struct {
@@ -20,7 +21,7 @@ func NewService(repo repo.Querier) Service {
 	}
 }
 
-func (s *dashboardService) GetDashboardStats(ctx context.Context, userID int64) (*DashboardStats, error) {
+func (s *dashboardService) GetDashboardStats(ctx context.Context, userID uuid.UUID) (*DashboardStats, error) {
 	stats := &DashboardStats{}
 
 	// Get total problems
@@ -56,7 +57,7 @@ func (s *dashboardService) GetDashboardStats(ctx context.Context, userID int64) 
 	if err == nil {
 		stats.WeakestPattern = &WeakestPattern{
 			Name:       weakestPattern.PatternTitle,
-			Confidence: weakestPattern.AvgConfidence.Int64,
+			Confidence: int64(weakestPattern.AvgConfidence.Int32),
 		}
 	}
 

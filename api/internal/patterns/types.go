@@ -11,7 +11,7 @@ type UpdatePatternBody struct {
 }
 
 type PatternWithStats struct {
-	ID           int64             `json:"id"`
+	ID           string            `json:"id"`
 	Title        string            `json:"title"`
 	Description  *string           `json:"description"`
 	ProblemCount int64             `json:"problemCount"`
@@ -19,9 +19,9 @@ type PatternWithStats struct {
 }
 
 type PatternUserStats struct {
-	ID            int64   `json:"id"`
-	UserID        int64   `json:"user_id"`
-	PatternID     int64   `json:"pattern_id"`
+	ID            string  `json:"id"`
+	UserID        string  `json:"user_id"`
+	PatternID     string  `json:"pattern_id"`
 	TimesRevised  int64   `json:"times_revised"`
 	AvgConfidence int64   `json:"avg_confidence"`
 	LastRevisedAt *string `json:"last_revised_at"`

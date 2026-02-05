@@ -35,7 +35,7 @@ type ResetPasswordBody struct {
 
 // Response types
 type UserResponse struct {
-	ID        int64  `json:"id"`
+	ID        string `json:"id"`
 	Email     string `json:"email"`
 	Name      string `json:"name"`
 	Role      string `json:"role"` // Always "user" or "admin", never null in response

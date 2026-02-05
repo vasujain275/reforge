@@ -2,10 +2,10 @@ package onboarding
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 
-	repo "github.com/vasujain275/reforge/internal/adapters/sqlite/sqlc"
+	"github.com/jackc/pgx/v5/pgtype"
+	repo "github.com/vasujain275/reforge/internal/adapters/postgres/sqlc"
 	"github.com/vasujain275/reforge/internal/security"
 )
 
@@ -60,7 +60,7 @@ func (s *onboardingService) CreateFirstAdmin(ctx context.Context, email, passwor
 		Email:        email,
 		PasswordHash: passwordHash,
 		Name:         name,
-		Role:         sql.NullString{String: "admin", Valid: true},
+		Role:         pgtype.Text{String: "admin", Valid: true},
 	})
 
 	return err

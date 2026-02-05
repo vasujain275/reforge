@@ -2,10 +2,10 @@ package settings
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 
-	repo "github.com/vasujain275/reforge/internal/adapters/sqlite/sqlc"
+	"github.com/jackc/pgx/v5/pgtype"
+	repo "github.com/vasujain275/reforge/internal/adapters/postgres/sqlc"
 )
 
 type Service interface {
@@ -99,7 +99,7 @@ func (s *settingsService) UpdateScoringWeights(ctx context.Context, body UpdateS
 		_, err := s.repo.UpsertSystemSetting(ctx, repo.UpsertSystemSettingParams{
 			Key:   key,
 			Value: valueStr,
-			Description: sql.NullString{
+			Description: pgtype.Text{
 				String: descriptions[key],
 				Valid:  true,
 			},

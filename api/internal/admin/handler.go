@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"github.com/vasujain275/reforge/internal/auth"
 	"github.com/vasujain275/reforge/internal/utils"
 )
@@ -45,13 +46,13 @@ func (h *Handler) ListUsers(w http.ResponseWriter, r *http.Request) {
 // UpdateUserRole - POST /api/v1/admin/users/:id/role
 func (h *Handler) UpdateUserRole(w http.ResponseWriter, r *http.Request) {
 	userIDStr := chi.URLParam(r, "id")
-	targetUserID, err := strconv.ParseInt(userIDStr, 10, 64)
+	targetUserID, err := uuid.Parse(userIDStr)
 	if err != nil {
-		utils.BadRequest(w, "Invalid user ID", nil)
+		utils.BadRequest(w, "Invalid user ID format", nil)
 		return
 	}
 
-	adminID, _ := r.Context().Value(auth.UserKey).(int64)
+	adminID := r.Context().Value(auth.UserKey).(uuid.UUID)
 
 	var req UpdateRoleRequest
 	if err := utils.Read(r, &req); err != nil {
@@ -79,13 +80,13 @@ func (h *Handler) UpdateUserRole(w http.ResponseWriter, r *http.Request) {
 // DeactivateUser - POST /api/v1/admin/users/:id/deactivate
 func (h *Handler) DeactivateUser(w http.ResponseWriter, r *http.Request) {
 	userIDStr := chi.URLParam(r, "id")
-	targetUserID, err := strconv.ParseInt(userIDStr, 10, 64)
+	targetUserID, err := uuid.Parse(userIDStr)
 	if err != nil {
-		utils.BadRequest(w, "Invalid user ID", nil)
+		utils.BadRequest(w, "Invalid user ID format", nil)
 		return
 	}
 
-	adminID, _ := r.Context().Value(auth.UserKey).(int64)
+	adminID := r.Context().Value(auth.UserKey).(uuid.UUID)
 
 	if err := h.service.DeactivateUser(r.Context(), adminID, targetUserID); err != nil {
 		if err == ErrSelfDeactivation {
@@ -103,13 +104,13 @@ func (h *Handler) DeactivateUser(w http.ResponseWriter, r *http.Request) {
 // ReactivateUser - POST /api/v1/admin/users/:id/reactivate
 func (h *Handler) ReactivateUser(w http.ResponseWriter, r *http.Request) {
 	userIDStr := chi.URLParam(r, "id")
-	targetUserID, err := strconv.ParseInt(userIDStr, 10, 64)
+	targetUserID, err := uuid.Parse(userIDStr)
 	if err != nil {
-		utils.BadRequest(w, "Invalid user ID", nil)
+		utils.BadRequest(w, "Invalid user ID format", nil)
 		return
 	}
 
-	adminID, _ := r.Context().Value(auth.UserKey).(int64)
+	adminID := r.Context().Value(auth.UserKey).(uuid.UUID)
 
 	if err := h.service.ReactivateUser(r.Context(), adminID, targetUserID); err != nil {
 		slog.Error("Failed to reactivate user", "error", err)
@@ -123,13 +124,13 @@ func (h *Handler) ReactivateUser(w http.ResponseWriter, r *http.Request) {
 // DeleteUser - DELETE /api/v1/admin/users/:id
 func (h *Handler) DeleteUser(w http.ResponseWriter, r *http.Request) {
 	userIDStr := chi.URLParam(r, "id")
-	targetUserID, err := strconv.ParseInt(userIDStr, 10, 64)
+	targetUserID, err := uuid.Parse(userIDStr)
 	if err != nil {
-		utils.BadRequest(w, "Invalid user ID", nil)
+		utils.BadRequest(w, "Invalid user ID format", nil)
 		return
 	}
 
-	adminID, _ := r.Context().Value(auth.UserKey).(int64)
+	adminID := r.Context().Value(auth.UserKey).(uuid.UUID)
 
 	if err := h.service.DeleteUser(r.Context(), adminID, targetUserID); err != nil {
 		if err == ErrSelfDeactivation {
@@ -151,13 +152,13 @@ func (h *Handler) DeleteUser(w http.ResponseWriter, r *http.Request) {
 // InitiatePasswordReset - POST /api/v1/admin/users/:id/reset-password
 func (h *Handler) InitiatePasswordReset(w http.ResponseWriter, r *http.Request) {
 	userIDStr := chi.URLParam(r, "id")
-	targetUserID, err := strconv.ParseInt(userIDStr, 10, 64)
+	targetUserID, err := uuid.Parse(userIDStr)
 	if err != nil {
-		utils.BadRequest(w, "Invalid user ID", nil)
+		utils.BadRequest(w, "Invalid user ID format", nil)
 		return
 	}
 
-	adminID, _ := r.Context().Value(auth.UserKey).(int64)
+	adminID := r.Context().Value(auth.UserKey).(uuid.UUID)
 
 	response, err := h.service.InitiatePasswordReset(r.Context(), adminID, targetUserID)
 	if err != nil {
@@ -171,7 +172,7 @@ func (h *Handler) InitiatePasswordReset(w http.ResponseWriter, r *http.Request) 
 
 // CreateInviteCode - POST /api/v1/admin/invites
 func (h *Handler) CreateInviteCode(w http.ResponseWriter, r *http.Request) {
-	adminID, _ := r.Context().Value(auth.UserKey).(int64)
+	adminID := r.Context().Value(auth.UserKey).(uuid.UUID)
 
 	var req CreateInviteCodeRequest
 	if err := utils.Read(r, &req); err != nil {
@@ -204,9 +205,9 @@ func (h *Handler) ListInviteCodes(w http.ResponseWriter, r *http.Request) {
 // DeleteInviteCode - DELETE /api/v1/admin/invites/:id
 func (h *Handler) DeleteInviteCode(w http.ResponseWriter, r *http.Request) {
 	idStr := chi.URLParam(r, "id")
-	codeID, err := strconv.ParseInt(idStr, 10, 64)
+	codeID, err := uuid.Parse(idStr)
 	if err != nil {
-		utils.BadRequest(w, "Invalid invite code ID", nil)
+		utils.BadRequest(w, "Invalid invite code ID format", nil)
 		return
 	}
 
@@ -233,7 +234,7 @@ func (h *Handler) GetSignupSettings(w http.ResponseWriter, r *http.Request) {
 
 // UpdateSignupEnabled - PUT /api/v1/admin/settings/signup/enabled
 func (h *Handler) UpdateSignupEnabled(w http.ResponseWriter, r *http.Request) {
-	adminID, _ := r.Context().Value(auth.UserKey).(int64)
+	adminID := r.Context().Value(auth.UserKey).(uuid.UUID)
 
 	var req UpdateSignupEnabledRequest
 	if err := utils.Read(r, &req); err != nil {
@@ -252,7 +253,7 @@ func (h *Handler) UpdateSignupEnabled(w http.ResponseWriter, r *http.Request) {
 
 // UpdateInviteCodesEnabled - PUT /api/v1/admin/settings/signup/invites
 func (h *Handler) UpdateInviteCodesEnabled(w http.ResponseWriter, r *http.Request) {
-	adminID, _ := r.Context().Value(auth.UserKey).(int64)
+	adminID := r.Context().Value(auth.UserKey).(uuid.UUID)
 
 	var req UpdateSignupEnabledRequest
 	if err := utils.Read(r, &req); err != nil {

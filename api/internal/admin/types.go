@@ -23,7 +23,7 @@ type UserListResponse struct {
 }
 
 type UserInfo struct {
-	ID        int64  `json:"id"`
+	ID        string `json:"id"`
 	Email     string `json:"email"`
 	Name      string `json:"name"`
 	Role      string `json:"role"`
@@ -43,9 +43,9 @@ type CreateInviteCodeRequest struct {
 }
 
 type InviteCodeResponse struct {
-	ID               int64   `json:"id"`
+	ID               string  `json:"id"`
 	Code             string  `json:"code"`
-	CreatedByAdminID int64   `json:"created_by_admin_id"`
+	CreatedByAdminID string  `json:"created_by_admin_id"`
 	MaxUses          int     `json:"max_uses"`
 	CurrentUses      int     `json:"current_uses"`
 	ExpiresAt        *string `json:"expires_at"`

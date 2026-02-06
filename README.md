@@ -124,6 +124,7 @@ Score: 0.82 (High Priority)
 | **UI** | Shadcn UI, Tailwind CSS, Lucide Icons, OKLCH Colors |
 | **Auth** | JWT (stateful refresh tokens), bcrypt |
 | **Database** | PostgreSQL 18 (production-ready, UUID PKs) |
+| **Deployment** | Docker (multi-service), Caddy reverse proxy |
 
 </div>
 
@@ -131,13 +132,26 @@ Score: 0.82 (High Priority)
 
 ## 🏁 Quick Start
 
+### Docker (Recommended)
+
 ```bash
 # Clone the repository
 git clone https://github.com/vasujain275/reforge.git
 cd reforge
 
-# See detailed setup instructions
-📖 Documentation → Installation Guide (coming soon)
+# Copy environment template
+cp infra/.env.sample infra/.env
+
+# Edit .env and set JWT_SECRET and DB_PASSWORD
+# Generate with: openssl rand -base64 32
+nano infra/.env
+
+# Start the stack
+docker compose -f infra/docker-compose.yaml up -d
+
+# Access the app
+# Frontend: http://localhost:5173
+# Backend API: http://localhost:9173
 ```
 
 For full installation and development instructions, see the [**📚 Documentation**](#-documentation) section below.
@@ -151,6 +165,7 @@ Comprehensive guides to get you started:
 - **[📦 Installation Guide](docs/INSTALLATION.md)** — Setup instructions for all platforms
 - **[💻 Development Guide](docs/DEVELOPMENT.md)** — Contributing and local development
 - **[🔄 PostgreSQL Migration Guide](docs/POSTGRES_MIGRATION.md)** — Migrating from SQLite to PostgreSQL
+- **[🔒 Caddy Setup Guide](docs/CADDY_SETUP.md)** — Production reverse proxy with automatic HTTPS
 - **[🤖 Agent Guide](AGENTS.md)** — Guide for AI coding agents working on this project
 - **[🎨 Style Guide](STYLE-GUIDE.md)** — Frontend design system and patterns
 
@@ -180,9 +195,8 @@ When a tool tells you to practice a problem, you should know *why*. Reforge show
 - [x] Session generation and tracking
 - [x] CSV bulk problem import
 - [x] Session history and analytics
-
-### 🔧 **In Progress**
-- [ ] Single binary / Docker distribution
+- [x] Docker multi-service deployment
+- [x] PostgreSQL 18 production database
 
 ### 🚀 **Planned**
 - [ ] Progress charts and session replay

@@ -1,8 +1,12 @@
 # ============================================================================
-# Reforge Docker Compose - Production Deployment
+# Reforge Docker Compose - Multi-Service Architecture
+# Services: PostgreSQL + Backend API (Go) + Frontend (React)
 # ============================================================================
 
 services:
+  # ============================================================================
+  # PostgreSQL Database
+  # ============================================================================
   postgres:
     image: postgres:18-alpine
     container_name: reforge-postgres
@@ -21,10 +25,15 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
+    networks:
+      - reforge-network
 
-  reforge:
-    image: vasujain275/reforge:latest
-    container_name: reforge
+  # ============================================================================
+  # Backend API (Go)
+  # ============================================================================
+  reforge-api:
+    image: vasujain275/reforge-api:${VERSION:-latest}
+    container_name: reforge-api
     restart: unless-stopped
     depends_on:
       postgres:
@@ -32,13 +41,17 @@ services:
     ports:
       - "9173:9173"
     environment:
+      # Server Configuration
       - ADDR=:9173
       - ENV=prod
+      
+      # Authentication
       - JWT_SECRET=${JWT_SECRET}
-      - DATABASE_URL=${DATABASE_URL:-postgres://reforge:${DB_PASSWORD:-changeme}@postgres:5432/reforge?sslmode=disable}
-      - GOOSE_DRIVER=postgres
-      - GOOSE_MIGRATION_DIR=/app/migrations
-      # Scoring weights (optional - defaults are used if not set)
+      
+      # Database
+      - DATABASE_URL=postgresql://reforge:${DB_PASSWORD:-changeme}@postgres:5432/reforge?sslmode=disable
+      
+      # Scoring weights (optional - defaults used if not set)
       - DEFAULT_W_CONF=${DEFAULT_W_CONF:-0.30}
       - DEFAULT_W_DAYS=${DEFAULT_W_DAYS:-0.20}
       - DEFAULT_W_ATTEMPTS=${DEFAULT_W_ATTEMPTS:-0.10}
@@ -46,14 +59,58 @@ services:
       - DEFAULT_W_DIFFICULTY=${DEFAULT_W_DIFFICULTY:-0.15}
       - DEFAULT_W_FAILED=${DEFAULT_W_FAILED:-0.10}
       - DEFAULT_W_PATTERN=${DEFAULT_W_PATTERN:-0.10}
+      
+      # Dataset path
+      - DATASET_PATH=/app/sample-datasets
+      
+      # Signup settings (optional)
+      - DEFAULT_SIGNUP_ENABLED=${DEFAULT_SIGNUP_ENABLED:-true}
+      - DEFAULT_INVITE_CODES_ENABLED=${DEFAULT_INVITE_CODES_ENABLED:-true}
     env_file:
       - .env
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9173/api/v1/health"]
+      test: ["CMD", "wget", "-qO-", "http://localhost:9173/api/v1/health"]
       interval: 30s
       timeout: 5s
       retries: 3
       start_period: 10s
+    networks:
+      - reforge-network
 
+  # ============================================================================
+  # Frontend Web (React + Vite)
+  # ============================================================================
+  reforge-web:
+    image: vasujain275/reforge-web:${VERSION:-latest}
+    container_name: reforge-web
+    restart: unless-stopped
+    depends_on:
+      reforge-api:
+        condition: service_healthy
+    ports:
+      - "5173:5173"
+    environment:
+      # Frontend will proxy /api requests to backend
+      - VITE_API_URL=http://localhost:9173/api/v1
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:5173/"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    networks:
+      - reforge-network
+
+# ============================================================================
+# Volumes
+# ============================================================================
 volumes:
   postgres_data:
+    driver: local
+
+# ============================================================================
+# Networks
+# ============================================================================
+networks:
+  reforge-network:
+    driver: bridge

@@ -1,0 +1,104 @@
+# ============================================================================
+# Cloudflare Pages Deployment
+# Deploys reforge-web SPA to Cloudflare Pages
+# Triggers on push to main when version in web/package.json changes
+# ============================================================================
+
+name: Deploy to Cloudflare Pages
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'web/package.json'
+      - 'web/**'
+      - '.github/workflows/cloudflare-pages.yaml'
+
+jobs:
+  check-version:
+    name: Check Version Change
+    runs-on: ubuntu-latest
+    outputs:
+      version_changed: ${{ steps.check.outputs.changed }}
+      version: ${{ steps.check.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get current version
+        id: current
+        run: |
+          VERSION=$(jq -r '.version' web/package.json)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Check if version changed from previous commit
+        id: check
+        run: |
+          VERSION="${{ steps.current.outputs.version }}"
+          
+          # Get version from previous commit
+          git checkout HEAD~1 -- web/package.json 2>/dev/null || true
+          PREV_VERSION=$(jq -r '.version' web/package.json 2>/dev/null || echo "0.0.0")
+          git checkout HEAD -- web/package.json
+          
+          if [ "$VERSION" != "$PREV_VERSION" ]; then
+            echo "Version changed: $PREV_VERSION -> $VERSION"
+            echo "changed=true" >> $GITHUB_OUTPUT
+          else
+            echo "Version unchanged: $VERSION"
+            echo "changed=false" >> $GITHUB_OUTPUT
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+  deploy:
+    name: Deploy to Cloudflare Pages
+    needs: check-version
+    if: needs.check-version.outputs.version_changed == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      deployments: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+          cache-dependency-path: 'web/pnpm-lock.yaml'
+
+      - name: Install dependencies
+        run: pnpm install
+        working-directory: ./web
+
+      - name: Build
+        run: pnpm build
+        working-directory: ./web
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy dist --project-name=reforge
+          workingDirectory: ./web
+
+      - name: Deployment Summary
+        run: |
+          echo "### Cloudflare Pages Deployment" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Version**: v${{ needs.check-version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Project**: reforge" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status**: Deployed ✅" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Visit your Cloudflare Dashboard to get the deployment URL." >> $GITHUB_STEP_SUMMARY

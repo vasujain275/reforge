@@ -7,26 +7,23 @@ This guide covers installing and running Reforge on your system.
 ### Option 1: Docker (Recommended)
 
 ```bash
-# Create directory
-mkdir reforge && cd reforge
+# Clone the repository
+git clone https://github.com/vasujain275/reforge.git
+cd reforge
 
-# Download docker-compose
-curl -O https://raw.githubusercontent.com/vasujain275/reforge/main/docker-compose.yaml
-curl -O https://raw.githubusercontent.com/vasujain275/reforge/main/.env.example
+# Copy environment template
+cp infra/.env.sample infra/.env
 
-# Configure
-cp .env.example .env
-# Edit .env and set JWT_SECRET (required)
-
-# Create data directory
-mkdir data
+# Edit .env and set JWT_SECRET and DB_PASSWORD (required)
+# Generate secrets with: openssl rand -base64 32
+nano infra/.env
 
 # Run
-docker compose up -d
+docker compose -f infra/docker-compose.yaml up -d
 
 # Access
-# Backend API: http://localhost:8080
-# Frontend: http://localhost:5173 (in development) or serve /web/dist for production
+# Frontend: http://localhost:5173
+# Backend API: http://localhost:9173
 ```
 
 ### Option 2: From Source
@@ -55,7 +52,7 @@ task install:tools
 
 # Run backend
 task dev
-# Backend runs on http://localhost:8080
+# Backend runs on http://localhost:9173
 ```
 
 #### Frontend Setup
@@ -67,7 +64,7 @@ pnpm install
 
 # Development mode
 pnpm dev
-# Frontend runs on http://localhost:5173 with API proxy to :8080
+# Frontend runs on http://localhost:5173 with API proxy to :9173
 
 # Production build
 pnpm build
@@ -83,8 +80,9 @@ pnpm build
 | Variable | Description | Example |
 |----------|-------------|---------|
 | `JWT_SECRET` | Secret key for JWT tokens | `openssl rand -base64 32` |
-| `ADDR` | Server address | `0.0.0.0:8080` |
+| `ADDR` | Server address | `0.0.0.0:9173` |
 | `ENV` | Environment | `dev` or `prod` |
+| `DATABASE_URL` | PostgreSQL connection | `postgresql://user:pass@host:5432/reforge` |
 
 ### Optional Environment Variables
 
@@ -93,7 +91,7 @@ pnpm build
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `CORS_ALLOWED_ORIGINS` | (empty) | Comma-separated origins for CORS |
-| `GOOSE_DBSTRING` | `file:./data/reforge.db?...` | Database connection |
+| `DB_PASSWORD` | (none) | PostgreSQL password (Docker only) |
 
 **Frontend (`web/.env`)** - Optional
 
@@ -120,7 +118,7 @@ openssl rand -base64 32
 
 ## First-Time Setup
 
-1. **Start Backend** - API runs on `:8080`
+1. **Start Backend** - API runs on `:9173`
 2. **Start Frontend** - Dev server on `:5173` (or serve built files)
 3. **Database migrations run automatically** on backend startup
 4. **Open** `http://localhost:5173` in your browser
@@ -129,12 +127,13 @@ openssl rand -base64 32
 
 ## Architecture
 
-Reforge now runs as **separate backend and frontend services**:
+Reforge runs as **separate backend and frontend services**:
 
-- **Backend (Go):** REST API on port 8080
+- **Backend (Go):** REST API on port 9173
 - **Frontend (React):** Vite dev server on port 5173 (development) or static files (production)
+- **Database:** PostgreSQL 18 on port 5432
 
-In development, Vite proxies `/api/*` requests to the backend at `:8080`.
+In development, Vite proxies `/api/*` requests to the backend at `:9173`.
 
 ## Database Migrations
 
@@ -147,19 +146,19 @@ INFO Database migrations completed successfully
 
 ## Data Storage
 
-Your data is stored in PostgreSQL (or SQLite in development):
+Your data is stored in PostgreSQL:
 
-- **Docker:** `./data/reforge.db` (bind mount)
-- **Local:** `./api/data/reforge.db`
+- **Docker:** `postgres_data` volume (managed by Docker)
+- **Local Development:** PostgreSQL server (configurable in `.env`)
 
 ### Backup
 
 ```bash
-# SQLite backup
-sqlite3 api/data/reforge.db ".backup backups/reforge-$(date +%Y%m%d).db"
+# PostgreSQL backup (Docker)
+docker exec reforge-postgres pg_dump -U reforge reforge > backup_$(date +%Y%m%d).sql
 
-# PostgreSQL backup
-pg_dump -h localhost -U reforge reforge > backup.sql
+# PostgreSQL backup (local)
+pg_dump -h localhost -U reforge reforge > backup_$(date +%Y%m%d).sql
 ```
 
 ## Updating
@@ -184,11 +183,11 @@ pnpm dev  # or pnpm build for production
 
 ## Production Deployment
 
-See [Docker Deployment](../docker-compose.yaml) for production setup with:
+See [infra/README.md](../infra/README.md) for production Docker setup and [docs/CADDY_SETUP.md](./CADDY_SETUP.md) for Caddy reverse proxy configuration with:
 
-- Nginx reverse proxy
+- Automatic HTTPS with Let's Encrypt
 - PostgreSQL database
-- Docker Compose orchestration
+- Multi-service Docker Compose orchestration
 
 ## Troubleshooting
 
@@ -196,7 +195,7 @@ See [Docker Deployment](../docker-compose.yaml) for production setup with:
 
 Change the backend port in `api/.env`:
 ```bash
-ADDR='0.0.0.0:3000'
+ADDR='0.0.0.0:8080'
 ```
 
 Change the frontend port:
@@ -224,9 +223,9 @@ JWT_SECRET="your-secret-key"
 ## System Requirements
 
 - **OS**: Linux, macOS, or Windows
-- **Memory**: 256MB+ RAM (backend), 512MB+ (development with hot reload)
-- **Disk**: 200MB+ for app + database
-- **Ports**: 8080 (backend), 5173 (frontend dev)
+- **Memory**: 512MB+ RAM (backend + frontend), 1GB+ (development with hot reload)
+- **Disk**: 2GB+ for app + database
+- **Ports**: 9173 (backend), 5173 (frontend), 5432 (PostgreSQL)
 
 ## Related Documentation
 

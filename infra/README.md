@@ -2,6 +2,32 @@
 
 This directory contains everything you need to deploy Reforge using Docker.
 
+## Architecture
+
+Reforge runs as a **multi-service architecture** with separate containers:
+
+```
+┌──────────────────────────────────────────────────┐
+│         reforge-web (Frontend - React)           │
+│       vasujain275/reforge-web:latest             │
+│              Port: 5173                          │
+└────────────────────┬─────────────────────────────┘
+                     │ API Requests to backend
+                     ▼
+┌────────────────────────────────────────────────── ┐
+│         reforge-api (Backend - Go)               │
+│       vasujain275/reforge-api:latest             │
+│              Port: 9173                          │
+└────────────────────┬─────────────────────────────┘
+                     │ PostgreSQL Connection
+                     ▼
+┌──────────────────────────────────────────────────┐
+│           postgres (Database)                    │
+│        postgres:18-alpine                        │
+│              Port: 5432                          │
+└──────────────────────────────────────────────────┘
+```
+
 ## Quick Start
 
 ### Using Docker Compose (Recommended)
@@ -11,71 +37,38 @@ This directory contains everything you need to deploy Reforge using Docker.
    cp .env.sample .env
    ```
 
-2. **Edit `.env` and set a secure JWT secret:**
+2. **Edit `.env` and set required secrets:**
    ```bash
-   # Generate a random secret
+   # Generate a random JWT secret
    openssl rand -base64 32
    
-   # Add it to .env
-   JWT_SECRET=your-generated-secret
+   # Generate a database password
+   openssl rand -base64 32
+   
+   # Edit the .env file
+   nano .env
    ```
 
-3. **Create the data directory:**
-   ```bash
-   mkdir -p data
-   ```
-
-4. **Start the container:**
+3. **Start the stack:**
    ```bash
    docker compose up -d
    ```
 
-5. **Access Reforge:**
-   Open http://localhost:9173 in your browser.
+4. **Access Reforge:**
+   - Frontend: http://localhost:5173
+   - Backend API: http://localhost:9173/api/v1
 
-6. **Complete setup:**
+5. **Complete setup:**
    Follow the onboarding wizard to create your admin account.
 
-### Using Docker Run
+### Pulling Individual Images
 
 ```bash
-docker run -d \
-  --name reforge \
-  -p 9173:9173 \
-  -v $(pwd)/data:/app/data \
-  -e JWT_SECRET="your-secret-key" \
-  -e ENV=prod \
-  vasujain275/reforge:latest
-```
+# Backend API
+docker pull vasujain275/reforge-api:latest
 
-## Using the Binary
-
-Download the appropriate binary for your platform from the [Releases page](https://github.com/vasujain275/reforge/releases).
-
-### Linux / macOS
-
-```bash
-# Make executable
-chmod +x reforge-linux-amd64
-
-# Create data directory
-mkdir -p data
-
-# Set environment and run
-export JWT_SECRET="your-secret-key"
-export GOOSE_DBSTRING="file:./data/reforge.db?_pragma=journal_mode(WAL)&_pragma=foreign_keys(ON)"
-./reforge-linux-amd64
-```
-
-### Windows
-
-```powershell
-# Set environment variables
-$env:JWT_SECRET="your-secret-key"
-$env:GOOSE_DBSTRING="file:./data/reforge.db?_pragma=journal_mode(WAL)&_pragma=foreign_keys(ON)"
-
-# Run
-.\reforge-windows-amd64.exe
+# Frontend Web
+docker pull vasujain275/reforge-web:latest
 ```
 
 ## Configuration
@@ -85,14 +78,15 @@ $env:GOOSE_DBSTRING="file:./data/reforge.db?_pragma=journal_mode(WAL)&_pragma=fo
 | Variable | Description | Example |
 |----------|-------------|---------|
 | `JWT_SECRET` | Secret key for JWT tokens | `openssl rand -base64 32` |
+| `DB_PASSWORD` | PostgreSQL database password | `openssl rand -base64 32` |
 
 ### Optional Environment Variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `ADDR` | `:9173` | Server address |
-| `ENV` | `dev` | Environment (`dev` or `prod`) |
-| `GOOSE_DBSTRING` | `file:./data/reforge.db?...` | SQLite connection string |
+| `VERSION` | `latest` | Docker image version tag |
+| `POSTGRES_PORT` | `5432` | PostgreSQL port on host |
+| `ENV` | `prod` | Environment (`dev` or `prod`) |
 
 ### Scoring Weights
 
@@ -110,109 +104,307 @@ The scoring algorithm uses 7 weighted features. Defaults are optimized for most 
 
 **Note:** Weights should sum to 1.0 for optimal scoring.
 
+## Services
+
+### Backend API (`reforge-api`)
+
+- **Image:** `vasujain275/reforge-api:latest`
+- **Port:** 9173
+- **Health Check:** `GET /api/v1/health`
+- **Purpose:** REST API backend, handles all business logic
+
+### Frontend Web (`reforge-web`)
+
+- **Image:** `vasujain275/reforge-web:latest`
+- **Port:** 5173
+- **Purpose:** React SPA, serves the user interface
+
+### PostgreSQL Database (`postgres`)
+
+- **Image:** `postgres:18-alpine`
+- **Port:** 5432 (configurable)
+- **Data Volume:** `postgres_data`
+- **Purpose:** Persistent data storage
+
 ## Data Persistence
 
-The SQLite database is stored in `/app/data/reforge.db` inside the container.
+PostgreSQL data is stored in a Docker volume named `postgres_data`.
 
 ### Backup
 
 ```bash
-# Create backup
-cp data/reforge.db backups/reforge-$(date +%Y%m%d).db
+# Dump database to SQL file
+docker exec reforge-postgres pg_dump -U reforge reforge > backup_$(date +%Y%m%d).sql
 
-# Or use SQLite backup command
-sqlite3 data/reforge.db ".backup backups/reforge-$(date +%Y%m%d).db"
+# Or backup the entire volume
+docker run --rm \
+  -v reforge_postgres_data:/data \
+  -v $(pwd):/backup \
+  alpine tar czf /backup/postgres_backup_$(date +%Y%m%d).tar.gz -C /data .
 ```
 
 ### Restore
 
 ```bash
-# Stop the container
+# Stop the containers
 docker compose down
 
-# Replace the database
-cp backups/reforge-20240101.db data/reforge.db
+# Restore from SQL dump
+cat backup_20240101.sql | docker exec -i reforge-postgres psql -U reforge -d reforge
 
-# Start the container
+# Or restore from volume backup
+docker run --rm \
+  -v reforge_postgres_data:/data \
+  -v $(pwd):/backup \
+  alpine sh -c "cd /data && tar xzf /backup/postgres_backup_20240101.tar.gz"
+
+# Start the containers
 docker compose up -d
 ```
 
 ## Updating
 
 ```bash
-# Pull latest image
+# Pull latest images
 docker compose pull
 
-# Restart with new image
+# Restart with new images
 docker compose up -d
+
+# View logs
+docker compose logs -f
 ```
 
-## Health Check
+## Production Deployment
 
-The container includes a health check endpoint:
+### Using Caddy Reverse Proxy (Recommended)
+
+For production with HTTPS and a custom domain:
+
+1. **See the Caddy setup guide:**
+   - [docs/CADDY_SETUP.md](../docs/CADDY_SETUP.md)
+
+2. **Benefits:**
+   - Automatic HTTPS with Let's Encrypt
+   - Single domain for frontend and API
+   - Enhanced security headers
+   - Gzip compression
+
+### Example Caddy Configuration
+
+```caddyfile
+reforge.example.com {
+    # API proxy
+    handle /api/* {
+        reverse_proxy reforge-api:9173
+    }
+
+    # Frontend
+    handle /* {
+        reverse_proxy reforge-web:5173
+    }
+
+    encode gzip
+}
+```
+
+## Health Checks
+
+The containers include health checks:
 
 ```bash
+# Check all services
+docker compose ps
+
+# Check API health
 curl http://localhost:9173/api/v1/health
 # Returns: {"status":"ok"}
+
+# Check frontend
+curl http://localhost:5173/
+# Returns: HTML page
 ```
 
 ## Troubleshooting
 
-### Container won't start
+### Containers won't start
 
 Check logs:
 ```bash
-docker compose logs reforge
+docker compose logs reforge-api
+docker compose logs reforge-web
+docker compose logs postgres
 ```
 
-### Database locked errors
+### Database connection errors
 
-Ensure only one instance is running:
-```bash
-docker ps | grep reforge
-```
+1. Ensure PostgreSQL is healthy:
+   ```bash
+   docker compose ps postgres
+   ```
 
-### Permission denied on data directory
+2. Check database credentials in `.env`
+
+3. Verify network connectivity:
+   ```bash
+   docker network inspect reforge_reforge-network
+   ```
+
+### Frontend can't reach backend
+
+1. Verify backend is running:
+   ```bash
+   curl http://localhost:9173/api/v1/health
+   ```
+
+2. Check if both services are on the same network:
+   ```bash
+   docker network inspect reforge_reforge-network
+   ```
+
+3. Check CORS settings (should be relaxed in `ENV=prod`)
+
+### Permission denied on volumes
 
 Fix ownership:
 ```bash
-sudo chown -R 1000:1000 data/
+sudo chown -R 1000:1000 ./postgres_data/
+```
+
+### Port already in use
+
+Change ports in `docker-compose.yaml`:
+```yaml
+reforge-api:
+  ports:
+    - "9174:9173"  # Changed from 9173 to 9174
+
+reforge-web:
+  ports:
+    - "5174:5173"  # Changed from 5173 to 5174
 ```
 
 ## Security Recommendations
 
-1. **Generate a strong JWT secret** - Never use the default
-2. **Use HTTPS in production** - Put behind a reverse proxy (nginx, Caddy, Traefik)
-3. **Restrict network access** - Bind to localhost if not exposing publicly
-4. **Regular backups** - Automate SQLite database backups
+1. **Generate strong secrets** - Never use defaults in production
+   ```bash
+   openssl rand -base64 32
+   ```
+
+2. **Use HTTPS in production** - Deploy behind Caddy or Nginx reverse proxy
+
+3. **Restrict network access** - Use firewall rules to limit exposed ports
+
+4. **Regular backups** - Automate PostgreSQL database backups
+
 5. **Keep updated** - Pull new images regularly
+   ```bash
+   docker compose pull && docker compose up -d
+   ```
 
-## Reverse Proxy (Optional)
+6. **Review logs** - Monitor for suspicious activity
+   ```bash
+   docker compose logs -f --tail=100
+   ```
 
-### Caddy
+## Resource Requirements
 
+### Minimum
+
+- **CPU:** 1 core
+- **RAM:** 512MB
+- **Disk:** 2GB (app + database)
+- **Network:** 100 Mbps
+
+### Recommended
+
+- **CPU:** 2+ cores
+- **RAM:** 2GB+
+- **Disk:** 10GB+ (with room for growth)
+- **Network:** 1 Gbps
+
+## Environment-Specific Configs
+
+### Development
+
+```yaml
+services:
+  reforge-api:
+    environment:
+      - ENV=dev
+      - ADDR=:9173
 ```
-reforge.example.com {
-    reverse_proxy localhost:9173
-}
+
+### Staging
+
+```yaml
+services:
+  reforge-api:
+    environment:
+      - ENV=prod
+      - ADDR=:9173
+      - LOG_LEVEL=debug
 ```
 
-### Nginx
+### Production
 
-```nginx
-server {
-    listen 443 ssl;
-    server_name reforge.example.com;
+```yaml
+services:
+  reforge-api:
+    environment:
+      - ENV=prod
+      - ADDR=:9173
+      - LOG_LEVEL=info
+    restart: always
+```
 
-    location / {
-        proxy_pass http://localhost:9173;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-    }
-}
+## Advanced Configuration
+
+### Custom Database Host
+
+To use an external PostgreSQL instance:
+
+1. Comment out the `postgres` service in `docker-compose.yaml`
+
+2. Update `DATABASE_URL` in `.env`:
+   ```env
+   DATABASE_URL=postgresql://user:pass@external-host:5432/reforge?sslmode=require
+   ```
+
+### Custom Ports
+
+Edit `docker-compose.yaml`:
+
+```yaml
+services:
+  reforge-api:
+    ports:
+      - "8080:9173"  # Expose on port 8080 instead
+
+  reforge-web:
+    ports:
+      - "3000:5173"  # Expose on port 3000 instead
+```
+
+### Resource Limits
+
+Add resource constraints:
+
+```yaml
+services:
+  reforge-api:
+    deploy:
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
 ```
 
 ## Support
 
 - [GitHub Issues](https://github.com/vasujain275/reforge/issues)
 - [Documentation](https://github.com/vasujain275/reforge)
+- [Caddy Setup Guide](../docs/CADDY_SETUP.md)

@@ -1,0 +1,45 @@
+# Development files
+.env
+.env.*
+*.log
+.air.toml
+
+# Build artifacts
+bin/
+.task/
+reforge-api
+
+# Database files
+data/
+*.db
+*.db-shm
+*.db-wal
+
+# Version control
+.git/
+.github/
+.gitignore
+
+# Documentation
+*.md
+README.md
+docs/
+
+# Testing
+*_test.go
+testdata/
+coverage/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Bruno API collection
+bruno-collection/
+
+# Temporary files
+tmp/
+temp/

@@ -142,8 +142,10 @@ cd reforge
 # Copy environment template
 cp infra/.env.sample infra/.env
 
-# Edit .env and set JWT_SECRET and DB_PASSWORD
-# Generate with: openssl rand -base64 32
+# Edit .env and set JWT_SECRET, DB_PASSWORD, and VITE_BACKEND_URL
+# Generate secrets with: openssl rand -base64 32
+# For Docker: VITE_BACKEND_URL=http://reforge-api:9173
+# For local dev: VITE_BACKEND_URL=http://localhost:9173
 nano infra/.env
 
 # Start the stack

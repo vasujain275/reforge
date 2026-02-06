@@ -36,23 +36,25 @@ cp .env.example .env  # First time only
 task dev
 ```
 
-Backend runs on `http://localhost:8080` with hot reload via Air.
+Backend runs on `http://localhost:9173` with hot reload via Air.
 
 ### Terminal 2: Frontend (React + Vite)
 
 ```bash
 cd web
+# (Optional) Set backend URL if different from default
+export VITE_BACKEND_URL=http://localhost:9173
 pnpm dev
 ```
 
-Frontend runs on `http://localhost:5173` with hot reload. Vite proxies `/api/*` requests to `:8080`.
+Frontend runs on `http://localhost:5173` with hot reload. Vite proxies `/api/*` requests to backend URL specified by `VITE_BACKEND_URL` (defaults to `http://localhost:9173`).
 
 ### Access the App
 
 Open `http://localhost:5173` in your browser.
 
 - Frontend: Served by Vite dev server (port 5173)
-- API calls: Proxied to backend (port 8080)
+- API calls: Proxied to backend URL from `VITE_BACKEND_URL` env var (defaults to `http://localhost:9173`)
 
 ## Project Structure
 
@@ -144,7 +146,7 @@ pnpm shadcn add <component-name>
 
 ```env
 # Server Configuration
-ADDR='0.0.0.0:8080'
+ADDR='0.0.0.0:9173'
 ENV='dev'  # 'dev' or 'prod'
 
 # CORS - Development: relaxed, Production: specify origins
@@ -180,8 +182,9 @@ DEFAULT_INVITE_CODES_ENABLED='true'
 ### Frontend (`web/.env`) - Optional
 
 ```env
-# API URL (uses Vite proxy in dev, set for production)
-VITE_API_URL='/api'
+# Backend URL for Vite dev server proxy
+# Defaults to http://localhost:9173 if not set
+VITE_BACKEND_URL=http://localhost:9173
 ```
 
 ## CORS Configuration
@@ -254,9 +257,9 @@ cd web && pnpm lint
 
 ## API Development
 
-The backend exposes a REST API on port 8080:
+The backend exposes a REST API on port 9173:
 
-- Base URL: `http://localhost:8080/api/v1`
+- Base URL: `http://localhost:9173/api/v1`
 - Health check: `GET /api/v1/health`
 - Auth: JWT tokens in HTTP-only cookies
 - All requests/responses use JSON
@@ -265,21 +268,21 @@ The backend exposes a REST API on port 8080:
 
 ```bash
 # Health check
-curl http://localhost:8080/api/v1/health
+curl http://localhost:9173/api/v1/health
 
 # Register user
-curl -X POST http://localhost:8080/api/v1/users \
+curl -X POST http://localhost:9173/api/v1/users \
   -H "Content-Type: application/json" \
   -d '{"name":"Test User","email":"test@example.com","password":"password123"}'
 
 # Login
-curl -X POST http://localhost:8080/api/v1/auth/login \
+curl -X POST http://localhost:9173/api/v1/auth/login \
   -H "Content-Type: application/json" \
   -d '{"email":"test@example.com","password":"password123"}' \
   -c cookies.txt
 
 # Get problems (authenticated)
-curl http://localhost:8080/api/v1/problems -b cookies.txt
+curl http://localhost:9173/api/v1/problems -b cookies.txt
 ```
 
 ## Database Migrations
@@ -344,8 +347,8 @@ cd api && task sqlc:generate
 ### Backend won't start
 
 ```bash
-# Check if port 8080 is in use
-lsof -i :8080
+# Check if port 9173 is in use
+lsof -i :9173
 
 # Check .env file exists
 ls -la api/.env
@@ -357,8 +360,8 @@ ls -la api/data/reforge.db
 ### Frontend API calls failing
 
 ```bash
-# Ensure backend is running on :8080
-curl http://localhost:8080/api/v1/health
+# Ensure backend is running on :9173
+curl http://localhost:9173/api/v1/health
 
 # Check Vite proxy configuration in web/vite.config.ts
 

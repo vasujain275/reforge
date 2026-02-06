@@ -87,6 +87,7 @@ docker pull vasujain275/reforge-web:latest
 | `VERSION` | `latest` | Docker image version tag |
 | `POSTGRES_PORT` | `5432` | PostgreSQL port on host |
 | `ENV` | `prod` | Environment (`dev` or `prod`) |
+| `VITE_BACKEND_URL` | `http://reforge-api:9173` | Backend URL for frontend proxy (Docker: `http://reforge-api:9173`, Local dev: `http://localhost:9173`) |
 
 ### Scoring Weights
 
@@ -264,6 +265,11 @@ docker compose logs postgres
 
 3. Check CORS settings (should be relaxed in `ENV=prod`)
 
+4. **Verify `VITE_BACKEND_URL` configuration:**
+   - For Docker deployments: Should be `http://reforge-api:9173` (uses internal hostname)
+   - For local development: Should be `http://localhost:9173`
+   - Check `.env` file or set the environment variable before starting containers
+
 ### Permission denied on volumes
 
 Fix ownership:
@@ -324,6 +330,21 @@ reforge-web:
 - **Network:** 1 Gbps
 
 ## Environment-Specific Configs
+
+### Local Development
+
+For running the frontend locally (outside Docker) with a Dockerized backend:
+
+```bash
+# In the web directory
+export VITE_BACKEND_URL=http://localhost:9173
+pnpm dev
+```
+
+Or create a `.env.local` file in the `web` directory:
+```env
+VITE_BACKEND_URL=http://localhost:9173
+```
 
 ### Development
 

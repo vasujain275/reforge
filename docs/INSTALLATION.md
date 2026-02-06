@@ -14,8 +14,10 @@ cd reforge
 # Copy environment template
 cp infra/.env.sample infra/.env
 
-# Edit .env and set JWT_SECRET and DB_PASSWORD (required)
+# Edit .env and set JWT_SECRET, DB_PASSWORD, and VITE_BACKEND_URL (required)
 # Generate secrets with: openssl rand -base64 32
+# For Docker: VITE_BACKEND_URL=http://reforge-api:9173
+# For local dev: VITE_BACKEND_URL=http://localhost:9173
 nano infra/.env
 
 # Run
@@ -62,9 +64,13 @@ task dev
 cd web
 pnpm install
 
+# For local development with backend at localhost:9173
+# (Optional) Set backend URL if different from default
+export VITE_BACKEND_URL=http://localhost:9173
+
 # Development mode
 pnpm dev
-# Frontend runs on http://localhost:5173 with API proxy to :9173
+# Frontend runs on http://localhost:5173 with API proxy
 
 # Production build
 pnpm build
@@ -97,7 +103,7 @@ pnpm build
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `VITE_API_URL` | `/api` | Backend API URL (uses proxy in dev) |
+| `VITE_BACKEND_URL` | `http://localhost:9173` | Backend URL for Vite dev server proxy (Docker: `http://reforge-api:9173`, Local: `http://localhost:9173`) |
 
 ### CORS Configuration
 
@@ -133,7 +139,7 @@ Reforge runs as **separate backend and frontend services**:
 - **Frontend (React):** Vite dev server on port 5173 (development) or static files (production)
 - **Database:** PostgreSQL 18 on port 5432
 
-In development, Vite proxies `/api/*` requests to the backend at `:9173`.
+In development, Vite proxies `/api/*` requests to the backend URL specified by `VITE_BACKEND_URL` environment variable (defaults to `http://localhost:9173`).
 
 ## Database Migrations
 

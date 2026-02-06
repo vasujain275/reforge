@@ -90,8 +90,9 @@ services:
     ports:
       - "5173:5173"
     environment:
-      # Frontend will proxy /api requests to backend
-      - VITE_API_URL=http://localhost:9173/api/v1
+      # Backend URL for Vite dev server proxy
+      # Defaults to http://localhost:9173 if not set
+      - VITE_BACKEND_URL=${VITE_BACKEND_URL:-http://reforge-api:9173}
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:5173/"]
       interval: 30s

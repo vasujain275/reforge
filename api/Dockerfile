@@ -15,8 +15,14 @@ WORKDIR /build
 COPY go.mod go.sum ./
 RUN go mod download
 
+# Install SQLC for code generation
+RUN go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest
+
 # Copy source code
 COPY . .
+
+# Generate SQLC code
+RUN sqlc generate
 
 # Build the binary
 # CGO_ENABLED=0 for fully static binary

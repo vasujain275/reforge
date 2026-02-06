@@ -15,6 +15,9 @@ data/
 *.db-shm
 *.db-wal
 
+# Generated code (will be generated during build)
+internal/adapters/postgres/sqlc/
+
 # Version control
 .git/
 .github/

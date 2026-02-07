@@ -48,8 +48,10 @@ services:
       # Authentication
       - JWT_SECRET=${JWT_SECRET}
       
-      # Database
-      - DATABASE_URL=postgresql://reforge:${DB_PASSWORD:-changeme}@postgres:5432/reforge?sslmode=disable
+      # Database - Full connection URL
+      # For local Docker: uses internal postgres service
+      # For external DB: override with full URL in .env
+      - DATABASE_URL=${DATABASE_URL:-postgresql://reforge:${DB_PASSWORD:-changeme}@postgres:5432/reforge?sslmode=disable}
       
       # Scoring weights (optional - defaults used if not set)
       - DEFAULT_W_CONF=${DEFAULT_W_CONF:-0.30}
@@ -66,8 +68,6 @@ services:
       # Signup settings (optional)
       - DEFAULT_SIGNUP_ENABLED=${DEFAULT_SIGNUP_ENABLED:-true}
       - DEFAULT_INVITE_CODES_ENABLED=${DEFAULT_INVITE_CODES_ENABLED:-true}
-    env_file:
-      - .env
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:9173/api/v1/health"]
       interval: 30s

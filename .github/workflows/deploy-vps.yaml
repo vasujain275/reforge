@@ -1,0 +1,186 @@
+# ============================================================================
+# VPS Auto-Deployment Workflow
+# Triggers after Docker images are built and pushed to Docker Hub
+# Deploys API to VPS using SSH with zero-downtime blue-green strategy
+# ============================================================================
+
+name: Deploy API to VPS
+
+on:
+  # Trigger after docker-build-push workflow completes successfully
+  workflow_run:
+    workflows: ["Build and Push Docker Images"]
+    types:
+      - completed
+    branches:
+      - main
+
+  # Allow manual triggering
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Docker image version to deploy'
+        required: false
+        default: 'latest'
+
+jobs:
+  # Only run if the previous workflow succeeded and API was built
+  check-trigger:
+    name: Check Deployment Trigger
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+    outputs:
+      should_deploy: ${{ steps.check.outputs.should_deploy }}
+      version: ${{ steps.check.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check if API changes triggered build
+        id: check
+        run: |
+          # For manual dispatch, always deploy
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "should_deploy=true" >> $GITHUB_OUTPUT
+            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          # For workflow_run, check if API was actually built
+          # Get version from package.json
+          VERSION=$(jq -r '.version' web/package.json)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          
+          # Check if API-related files changed in the triggering commit
+          # (This is a simple heuristic - adjust as needed)
+          git fetch origin main
+          CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD)
+          
+          if echo "$CHANGED_FILES" | grep -qE '^api/|^.github/workflows/docker-build-push.yaml'; then
+            echo "API changes detected - deployment needed"
+            echo "should_deploy=true" >> $GITHUB_OUTPUT
+          else
+            echo "No API changes - skipping deployment"
+            echo "should_deploy=false" >> $GITHUB_OUTPUT
+          fi
+
+  deploy:
+    name: Deploy to VPS via SSH
+    needs: check-trigger
+    if: needs.check-trigger.outputs.should_deploy == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://reforge-api.vasujain.me
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.VPS_SSH_KEY }}
+
+      - name: Add VPS to known hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Deploy to VPS
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_PORT: ${{ secrets.VPS_SSH_PORT }}
+          VERSION: ${{ needs.check-trigger.outputs.version }}
+        run: |
+          echo "🚀 Deploying version $VERSION to VPS..."
+          
+          # SSH to VPS and run deployment script
+          ssh -p ${VPS_PORT} ${VPS_USER}@${VPS_HOST} << 'ENDSSH'
+            set -e
+            
+            # Navigate to deployment directory
+            cd /opt/reforge/infra/vps
+            
+            # Pull latest version from git (to get any config updates)
+            cd /opt/reforge
+            git pull origin main
+            
+            # Navigate back to VPS directory
+            cd /opt/reforge/infra/vps
+            
+            # Run deployment script
+            ./deploy.sh deploy ${{ env.VERSION }}
+          ENDSSH
+          
+          echo "✅ Deployment completed successfully!"
+
+      - name: Verify Deployment
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_PORT: ${{ secrets.VPS_SSH_PORT }}
+        run: |
+          echo "🔍 Verifying deployment..."
+          
+          # Wait a few seconds for services to stabilize
+          sleep 5
+          
+          # Check health endpoint
+          HEALTH_STATUS=$(curl -sf https://reforge-api.vasujain.me/api/v1/health || echo "FAILED")
+          
+          if [[ "$HEALTH_STATUS" == *"ok"* ]]; then
+            echo "✅ Health check passed!"
+            echo "$HEALTH_STATUS"
+          else
+            echo "❌ Health check failed!"
+            echo "$HEALTH_STATUS"
+            exit 1
+          fi
+          
+          # Check deployment status via SSH
+          ssh -p ${VPS_PORT} ${VPS_USER}@${VPS_HOST} << 'ENDSSH'
+            cd /opt/reforge/infra/vps
+            ./deploy.sh status
+          ENDSSH
+
+      - name: Deployment Summary
+        if: always()
+        run: |
+          echo "### 🚀 VPS Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Version**: v${{ needs.check-trigger.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Domain**: https://reforge-api.vasujain.me" >> $GITHUB_STEP_SUMMARY
+          echo "- **Strategy**: Blue-Green (Zero-Downtime)" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status**: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [[ "${{ job.status }}" == "success" ]]; then
+            echo "✅ **Deployment successful!**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Health Check**: [https://reforge-api.vasujain.me/api/v1/health](https://reforge-api.vasujain.me/api/v1/health)" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ **Deployment failed!**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Check the logs above for details. The previous version is still running." >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Notify on Failure
+        if: failure()
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_PORT: ${{ secrets.VPS_SSH_PORT }}
+        run: |
+          echo "❌ Deployment failed! Checking for automatic rollback..."
+          
+          # The deploy.sh script handles rollback automatically if health checks fail
+          # Let's verify the API is still accessible
+          HEALTH_STATUS=$(curl -sf https://reforge-api.vasujain.me/api/v1/health || echo "CRITICAL")
+          
+          if [[ "$HEALTH_STATUS" == *"ok"* ]]; then
+            echo "✅ Previous version is still running - no user impact"
+          else
+            echo "🚨 CRITICAL: API is not responding! Manual intervention required!"
+            echo "SSH to VPS and run: cd /opt/reforge/infra/vps && ./deploy.sh rollback"
+          fi

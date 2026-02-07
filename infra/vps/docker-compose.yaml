@@ -1,0 +1,197 @@
+# ============================================================================
+# Reforge VPS Production Deployment - Blue-Green Strategy
+# Zero-downtime deployments with Caddy reverse proxy
+# ============================================================================
+# 
+# Architecture:
+#   - PostgreSQL 18 Alpine (persistent data storage)
+#   - Two API containers (blue and green) for zero-downtime deployments
+#   - Caddy reverse proxy with health-check based routing
+#   - Automatic HTTPS with Let's Encrypt
+#
+# Deployment Strategy:
+#   1. Blue runs the current stable version
+#   2. Green starts with new version
+#   3. After green passes health checks, traffic switches automatically
+#   4. Blue container is stopped and replaced for next deployment
+# ============================================================================
+
+services:
+  # ============================================================================
+  # PostgreSQL Database - Persistent data storage
+  # ============================================================================
+  postgres:
+    image: postgres:18-alpine
+    container_name: reforge-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-reforge}
+      POSTGRES_USER: ${POSTGRES_USER:-reforge}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backups:/backups  # Mount backup directory
+    ports:
+      - "127.0.0.1:5432:5432"  # Only accessible from localhost
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-reforge} -d ${POSTGRES_DB:-reforge}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - reforge-network
+    labels:
+      - "com.reforge.service=database"
+
+  # ============================================================================
+  # Caddy Reverse Proxy - Handles HTTPS and health-based routing
+  # ============================================================================
+  caddy:
+    image: caddy:2.8-alpine
+    container_name: reforge-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"  # HTTP/3 support
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+      - caddy_logs:/var/log/caddy
+    networks:
+      - reforge-network
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:2019/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      reforge-api-blue:
+        condition: service_started
+      reforge-api-green:
+        condition: service_started
+
+  # ============================================================================
+  # Blue API Instance - Primary deployment slot
+  # ============================================================================
+  reforge-api-blue:
+    image: vasujain275/reforge-api:${BLUE_VERSION:-latest}
+    container_name: reforge-api-blue
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "9173:9173"
+    environment:
+      # Server Configuration
+      - ADDR=:9173
+      - ENV=prod
+      
+      # Authentication
+      - JWT_SECRET=${JWT_SECRET}
+      
+      # Database - Local PostgreSQL (internal Docker network)
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-reforge}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-reforge}?sslmode=disable
+      
+      # Scoring weights (optional - defaults used if not set)
+      - DEFAULT_W_CONF=${DEFAULT_W_CONF:-0.30}
+      - DEFAULT_W_DAYS=${DEFAULT_W_DAYS:-0.20}
+      - DEFAULT_W_ATTEMPTS=${DEFAULT_W_ATTEMPTS:-0.10}
+      - DEFAULT_W_TIME=${DEFAULT_W_TIME:-0.05}
+      - DEFAULT_W_DIFFICULTY=${DEFAULT_W_DIFFICULTY:-0.15}
+      - DEFAULT_W_FAILED=${DEFAULT_W_FAILED:-0.10}
+      - DEFAULT_W_PATTERN=${DEFAULT_W_PATTERN:-0.10}
+      
+      # Dataset path
+      - DATASET_PATH=/app/sample-datasets
+      
+      # Signup settings (optional)
+      - DEFAULT_SIGNUP_ENABLED=${DEFAULT_SIGNUP_ENABLED:-true}
+      - DEFAULT_INVITE_CODES_ENABLED=${DEFAULT_INVITE_CODES_ENABLED:-true}
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:9173/api/v1/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+      start_period: 15s
+    networks:
+      - reforge-network
+    labels:
+      - "com.reforge.slot=blue"
+      - "com.reforge.service=api"
+
+  # ============================================================================
+  # Green API Instance - Secondary deployment slot
+  # ============================================================================
+  reforge-api-green:
+    image: vasujain275/reforge-api:${GREEN_VERSION:-latest}
+    container_name: reforge-api-green
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "9174:9173"  # External 9174 maps to internal 9173
+    environment:
+      # Server Configuration
+      - ADDR=:9173
+      - ENV=prod
+      
+      # Authentication
+      - JWT_SECRET=${JWT_SECRET}
+      
+      # Database - Local PostgreSQL (internal Docker network)
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-reforge}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-reforge}?sslmode=disable
+      
+      # Scoring weights (optional - defaults used if not set)
+      - DEFAULT_W_CONF=${DEFAULT_W_CONF:-0.30}
+      - DEFAULT_W_DAYS=${DEFAULT_W_DAYS:-0.20}
+      - DEFAULT_W_ATTEMPTS=${DEFAULT_W_ATTEMPTS:-0.10}
+      - DEFAULT_W_TIME=${DEFAULT_W_TIME:-0.05}
+      - DEFAULT_W_DIFFICULTY=${DEFAULT_W_DIFFICULTY:-0.15}
+      - DEFAULT_W_FAILED=${DEFAULT_W_FAILED:-0.10}
+      - DEFAULT_W_PATTERN=${DEFAULT_W_PATTERN:-0.10}
+      
+      # Dataset path
+      - DATASET_PATH=/app/sample-datasets
+      
+      # Signup settings (optional)
+      - DEFAULT_SIGNUP_ENABLED=${DEFAULT_SIGNUP_ENABLED:-true}
+      - DEFAULT_INVITE_CODES_ENABLED=${DEFAULT_INVITE_CODES_ENABLED:-true}
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:9173/api/v1/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+      start_period: 15s
+    networks:
+      - reforge-network
+    labels:
+      - "com.reforge.slot=green"
+      - "com.reforge.service=api"
+
+# ============================================================================
+# Volumes
+# ============================================================================
+volumes:
+  postgres_data:
+    driver: local
+  caddy_data:
+    driver: local
+  caddy_config:
+    driver: local
+  caddy_logs:
+    driver: local
+
+# ============================================================================
+# Networks
+# ============================================================================
+networks:
+  reforge-network:
+    driver: bridge

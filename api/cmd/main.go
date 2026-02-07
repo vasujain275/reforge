@@ -4,7 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"log/slog"
+	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	_ "github.com/jackc/pgx/v5/stdlib"
@@ -94,8 +97,15 @@ func main() {
 		validate: validator.New(),
 	}
 
-	if err := api.run(api.mount()); err != nil {
+	// Setup signal handling for graceful shutdown
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM, syscall.SIGINT)
+	defer stop()
+
+	// Run server with graceful shutdown support
+	if err := api.run(ctx, api.mount()); err != nil && err != http.ErrServerClosed {
 		slog.Error("Server has Failed to Start", "ERROR", err)
 		os.Exit(1)
 	}
+
+	slog.Info("Server shutdown completed successfully")
 }

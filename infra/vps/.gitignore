@@ -1,0 +1,17 @@
+# Ignore environment files with secrets
+.env
+
+# Ignore backup files created by deploy script
+.env.bak
+
+# Ignore any local testing files
+test-*.sh
+*.local
+
+# Ignore log files
+*.log
+logs/
+
+# Ignore database backups (except .gitkeep)
+backups/*
+!backups/.gitkeep

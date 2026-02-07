@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 	"time"
@@ -232,7 +233,7 @@ func (app *application) mount() http.Handler {
 	return r
 }
 
-func (app *application) run(h http.Handler) error {
+func (app *application) run(ctx context.Context, h http.Handler) error {
 	srv := http.Server{
 		Addr:         app.config.addr,
 		Handler:      h,
@@ -241,9 +242,29 @@ func (app *application) run(h http.Handler) error {
 		IdleTimeout:  time.Minute,
 	}
 
-	slog.Info("Server has started at addr: " + app.config.addr)
+	// Start server in goroutine
+	go func() {
+		slog.Info("Server has started", "addr", app.config.addr)
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			slog.Error("Server error", "error", err)
+		}
+	}()
 
-	return srv.ListenAndServe()
+	// Wait for shutdown signal
+	<-ctx.Done()
+	slog.Info("Shutting down server gracefully...")
+
+	// Graceful shutdown with timeout
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		slog.Error("Server forced to shutdown", "error", err)
+		return err
+	}
+
+	slog.Info("Server exited gracefully")
+	return nil
 }
 
 type application struct {

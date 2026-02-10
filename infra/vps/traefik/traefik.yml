@@ -1,0 +1,95 @@
+# ============================================================================
+# Traefik Static Configuration
+# ============================================================================
+
+# ============================================================================
+# Global Configuration
+# ============================================================================
+global:
+  checkNewVersion: true
+  sendAnonymousUsage: false
+
+# ============================================================================
+# Entry Points (HTTP and HTTPS)
+# ============================================================================
+entryPoints:
+  web:
+    address: ":80"
+    # Redirect HTTP to HTTPS
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+          permanent: true
+
+  websecure:
+    address: ":443"
+    http:
+      tls:
+        certResolver: letsencrypt
+      # Enable HTTP/3 (QUIC)
+      http3: {}
+
+# ============================================================================
+# API and Dashboard
+# ============================================================================
+api:
+  dashboard: true
+  debug: false
+  insecure: false
+
+# ============================================================================
+# Ping (Health Check)
+# ============================================================================
+ping:
+  entryPoint: "web"
+
+# ============================================================================
+# Providers
+# ============================================================================
+providers:
+  # Docker provider for automatic service discovery
+  docker:
+    endpoint: "unix:///var/run/docker.sock"
+    exposedByDefault: false
+    network: traefik-public
+    watch: true
+
+  # File provider for dynamic configuration
+  file:
+    directory: "/dynamic"
+    watch: true
+
+# ============================================================================
+# Certificate Resolvers (Let's Encrypt)
+# ============================================================================
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      email: "${ACME_EMAIL}"
+      storage: /letsencrypt/acme.json
+      # Use TLS challenge for certificate generation
+      tlsChallenge: {}
+      # Uncomment to use HTTP challenge instead:
+      # httpChallenge:
+      #   entryPoint: web
+
+# ============================================================================
+# Logging
+# ============================================================================
+log:
+  level: INFO
+  format: json
+  filePath: /var/log/traefik/traefik.log
+
+# Access logs
+accessLog:
+  format: json
+  filePath: /var/log/traefik/access.log
+  bufferingSize: 100
+  filters:
+    statusCodes:
+      - "200-299"
+      - "400-499"
+      - "500-599"

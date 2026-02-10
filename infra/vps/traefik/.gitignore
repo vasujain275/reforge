@@ -1,0 +1,5 @@
+# Ignore environment file
+.env
+
+# Ignore Let's Encrypt certificates
+acme.json

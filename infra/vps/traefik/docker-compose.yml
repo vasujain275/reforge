@@ -1,0 +1,70 @@
+# ============================================================================
+# Traefik Reverse Proxy - Global Instance
+# Handles HTTPS, routing, and load balancing for all services
+# ============================================================================
+
+services:
+  traefik:
+    image: traefik:v3.2
+    container_name: traefik
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - "80:80"       # HTTP
+      - "443:443"     # HTTPS
+      - "443:443/udp" # HTTP/3 (QUIC)
+    environment:
+      - TZ=UTC
+    volumes:
+      # Traefik configuration
+      - ./traefik.yml:/traefik.yml:ro
+      - ./dynamic:/dynamic:ro
+      
+      # Let's Encrypt certificates
+      - traefik-certs:/letsencrypt
+      
+      # Docker socket (read-only for service discovery)
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      
+      # Access logs
+      - traefik-logs:/var/log/traefik
+    networks:
+      - traefik-public
+    labels:
+      # Enable Traefik for this container
+      - "traefik.enable=true"
+      
+      # Dashboard configuration
+      - "traefik.http.routers.dashboard.rule=Host(`${TRAEFIK_DASHBOARD_DOMAIN}`)"
+      - "traefik.http.routers.dashboard.entrypoints=websecure"
+      - "traefik.http.routers.dashboard.tls=true"
+      - "traefik.http.routers.dashboard.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.dashboard.service=api@internal"
+      - "traefik.http.routers.dashboard.middlewares=dashboard-auth"
+      
+      # Dashboard authentication (basic auth)
+      - "traefik.http.middlewares.dashboard-auth.basicauth.users=${TRAEFIK_DASHBOARD_AUTH}"
+    healthcheck:
+      test: ["CMD", "traefik", "healthcheck", "--ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+# ============================================================================
+# Volumes
+# ============================================================================
+volumes:
+  traefik-certs:
+    driver: local
+  traefik-logs:
+    driver: local
+
+# ============================================================================
+# Networks
+# ============================================================================
+networks:
+  traefik-public:
+    name: traefik-public
+    driver: bridge

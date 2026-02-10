@@ -1,18 +1,18 @@
 # ============================================================================
-# Reforge VPS Production Deployment - Blue-Green Strategy
-# Zero-downtime deployments with Caddy reverse proxy
+# Reforge VPS Production Deployment - Blue-Green Strategy with Traefik
+# Zero-downtime deployments with Traefik reverse proxy
 # ============================================================================
 # 
 # Architecture:
 #   - PostgreSQL 18 Alpine (persistent data storage)
 #   - Two API containers (blue and green) for zero-downtime deployments
-#   - Caddy reverse proxy with health-check based routing
-#   - Automatic HTTPS with Let's Encrypt
+#   - Traefik reverse proxy with health-check based routing
+#   - Automatic HTTPS via global Traefik instance
 #
 # Deployment Strategy:
 #   1. Blue runs the current stable version
 #   2. Green starts with new version
-#   3. After green passes health checks, traffic switches automatically
+#   3. After green passes health checks, Traefik switches traffic automatically
 #   4. Blue container is stopped and replaced for next deployment
 # ============================================================================
 
@@ -40,41 +40,10 @@ services:
       retries: 5
       start_period: 10s
     networks:
-      - reforge-network
+      - reforge-internal
+      - traefik-public
     labels:
       - "com.reforge.service=database"
-
-  # ============================================================================
-  # Caddy Reverse Proxy - Handles HTTPS and health-based routing
-  # ============================================================================
-  caddy:
-    image: caddy:2.8-alpine
-    container_name: reforge-caddy
-    restart: unless-stopped
-    ports:
-      - "80:80"
-      - "443:443"
-      - "443:443/udp"  # HTTP/3 support
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
-      - caddy_logs:/var/log/caddy
-    networks:
-      - reforge-network
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:2019/health"]
-      interval: 10s
-      timeout: 3s
-      retries: 3
-      start_period: 5s
-    depends_on:
-      postgres:
-        condition: service_healthy
-      reforge-api-blue:
-        condition: service_started
-      reforge-api-green:
-        condition: service_started
 
   # ============================================================================
   # Blue API Instance - Primary deployment slot
@@ -121,8 +90,29 @@ services:
       retries: 3
       start_period: 15s
     networks:
-      - reforge-network
+      - reforge-internal
+      - traefik-public
     labels:
+      # Traefik routing
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik-public"
+      
+      # Router configuration
+      - "traefik.http.routers.reforge-api-blue.rule=Host(`${API_DOMAIN}`)"
+      - "traefik.http.routers.reforge-api-blue.entrypoints=websecure"
+      - "traefik.http.routers.reforge-api-blue.tls=true"
+      - "traefik.http.routers.reforge-api-blue.tls.certresolver=letsencrypt"
+      
+      # Service configuration
+      - "traefik.http.services.reforge-api-blue.loadbalancer.server.port=9173"
+      - "traefik.http.services.reforge-api-blue.loadbalancer.healthcheck.path=/api/v1/health"
+      - "traefik.http.services.reforge-api-blue.loadbalancer.healthcheck.interval=5s"
+      - "traefik.http.services.reforge-api-blue.loadbalancer.healthcheck.timeout=3s"
+      
+      # Middleware (CORS + Security Headers + Compression)
+      - "traefik.http.routers.reforge-api-blue.middlewares=cors-reforge@file,security-headers@file,compression@file"
+      
+      # Metadata
       - "com.reforge.slot=blue"
       - "com.reforge.service=api"
 
@@ -171,8 +161,29 @@ services:
       retries: 3
       start_period: 15s
     networks:
-      - reforge-network
+      - reforge-internal
+      - traefik-public
     labels:
+      # Traefik routing
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik-public"
+      
+      # Router configuration
+      - "traefik.http.routers.reforge-api-green.rule=Host(`${API_DOMAIN}`)"
+      - "traefik.http.routers.reforge-api-green.entrypoints=websecure"
+      - "traefik.http.routers.reforge-api-green.tls=true"
+      - "traefik.http.routers.reforge-api-green.tls.certresolver=letsencrypt"
+      
+      # Service configuration
+      - "traefik.http.services.reforge-api-green.loadbalancer.server.port=9173"
+      - "traefik.http.services.reforge-api-green.loadbalancer.healthcheck.path=/api/v1/health"
+      - "traefik.http.services.reforge-api-green.loadbalancer.healthcheck.interval=5s"
+      - "traefik.http.services.reforge-api-green.loadbalancer.healthcheck.timeout=3s"
+      
+      # Middleware (CORS + Security Headers + Compression)
+      - "traefik.http.routers.reforge-api-green.middlewares=cors-reforge@file,security-headers@file,compression@file"
+      
+      # Metadata
       - "com.reforge.slot=green"
       - "com.reforge.service=api"
 
@@ -182,16 +193,15 @@ services:
 volumes:
   postgres_data:
     driver: local
-  caddy_data:
-    driver: local
-  caddy_config:
-    driver: local
-  caddy_logs:
-    driver: local
 
 # ============================================================================
 # Networks
 # ============================================================================
 networks:
-  reforge-network:
+  # Internal network for API <-> PostgreSQL communication
+  reforge-internal:
     driver: bridge
+  
+  # External network for Traefik routing
+  traefik-public:
+    external: true

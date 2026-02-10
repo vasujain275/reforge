@@ -1,8 +1,8 @@
-# Ignore environment files with secrets
-.env
+# Ignore all .env files in subdirectories
+**/.env
 
 # Ignore backup files created by deploy script
-.env.bak
+**/.env.bak
 
 # Ignore any local testing files
 test-*.sh
@@ -13,5 +13,9 @@ test-*.sh
 logs/
 
 # Ignore database backups (except .gitkeep)
-backups/*
-!backups/.gitkeep
+**/backups/*.sql
+**/backups/*.sql.gz
+!**/.gitkeep
+
+# Ignore Traefik certificates
+**/acme.json

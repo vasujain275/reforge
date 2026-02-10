@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================================
-# Reforge Blue-Green Deployment Script
+# Reforge Blue-Green Deployment Script (Traefik Edition)
 # Zero-downtime deployment automation for VPS
 # ============================================================================
 
@@ -16,7 +16,7 @@ NC='\033[0m' # No Color
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENV_FILE="${SCRIPT_DIR}/.env"
-DOCKER_COMPOSE_FILE="${SCRIPT_DIR}/docker-compose.yaml"
+DOCKER_COMPOSE_FILE="${SCRIPT_DIR}/docker-compose.yml"
 HEALTH_CHECK_URL="http://localhost:9173/api/v1/health"
 HEALTH_CHECK_TIMEOUT=60
 DRAIN_TIMEOUT=30
@@ -43,13 +43,23 @@ log_error() {
 
 # Check if required commands exist
 check_dependencies() {
-    local deps=("docker" "docker-compose" "curl")
+    local deps=("docker" "curl")
     for cmd in "${deps[@]}"; do
         if ! command -v "$cmd" &> /dev/null; then
             log_error "Required command '$cmd' not found"
             exit 1
         fi
     done
+    
+    # Check if docker compose v2 is available
+    if docker compose version &> /dev/null; then
+        DOCKER_COMPOSE_CMD="docker compose"
+    elif command -v docker-compose &> /dev/null; then
+        DOCKER_COMPOSE_CMD="docker-compose"
+    else
+        log_error "Neither 'docker compose' nor 'docker-compose' found"
+        exit 1
+    fi
 }
 
 # Load environment variables
@@ -71,8 +81,13 @@ load_env() {
         exit 1
     fi
     
-    if [[ -z "${DATABASE_URL:-}" ]]; then
-        log_error "DATABASE_URL not set in .env file"
+    if [[ -z "${POSTGRES_PASSWORD:-}" ]]; then
+        log_error "POSTGRES_PASSWORD not set in .env file"
+        exit 1
+    fi
+    
+    if [[ -z "${API_DOMAIN:-}" ]]; then
+        log_error "API_DOMAIN not set in .env file"
         exit 1
     fi
 }
@@ -186,20 +201,20 @@ deploy_new_version() {
     local inactive_container="reforge-api-${inactive_color}"
     log_info "Starting $inactive_container with version $new_version..."
     
-    docker-compose -f "$DOCKER_COMPOSE_FILE" up -d "$inactive_container"
+    $DOCKER_COMPOSE_CMD -f "$DOCKER_COMPOSE_FILE" up -d "$inactive_container"
     
     # Wait for health checks
     if ! wait_for_health "$inactive_container" "$inactive_port"; then
         log_error "Deployment failed: $inactive_container did not become healthy"
         log_warn "Rolling back... Stopping $inactive_container"
-        docker-compose -f "$DOCKER_COMPOSE_FILE" stop "$inactive_container"
+        $DOCKER_COMPOSE_CMD -f "$DOCKER_COMPOSE_FILE" stop "$inactive_container"
         exit 1
     fi
     
     log_success "$inactive_container is ready to receive traffic!"
     
-    # Traffic switches automatically via Caddy health checks
-    log_info "Caddy will automatically route traffic to healthy backend"
+    # Traffic switches automatically via Traefik health checks
+    log_info "Traefik will automatically route traffic to healthy backend"
     log_info "Waiting ${DRAIN_TIMEOUT}s for active container to drain connections..."
     sleep "$DRAIN_TIMEOUT"
     
@@ -209,11 +224,11 @@ deploy_new_version() {
     # Stop old active container (now inactive)
     local old_active_container="reforge-api-${active_color}"
     log_info "Stopping old container: $old_active_container"
-    docker-compose -f "$DOCKER_COMPOSE_FILE" stop "$old_active_container"
+    $DOCKER_COMPOSE_CMD -f "$DOCKER_COMPOSE_FILE" stop "$old_active_container"
     
     log_success "=== Deployment Complete ==="
     log_success "Active slot is now: $inactive_color (version: $new_version)"
-    log_success "API available at: https://reforge-api.vasujain.me"
+    log_success "API available at: https://${API_DOMAIN}"
     
     # Show status
     show_status
@@ -231,13 +246,13 @@ show_status() {
     echo ""
     
     # Show container status
-    docker-compose -f "$DOCKER_COMPOSE_FILE" ps
+    $DOCKER_COMPOSE_CMD -f "$DOCKER_COMPOSE_FILE" ps
     
     echo ""
     log_info "Health Check URLs:"
     echo "  Blue:  http://localhost:9173/api/v1/health"
     echo "  Green: http://localhost:9174/api/v1/health"
-    echo "  Public: https://reforge-api.vasujain.me/api/v1/health"
+    echo "  Public: https://${API_DOMAIN}/api/v1/health"
 }
 
 # Rollback to previous version
@@ -254,7 +269,7 @@ rollback() {
     local rollback_container="reforge-api-${inactive_color}"
     log_info "Starting previous version: $rollback_container"
     
-    docker-compose -f "$DOCKER_COMPOSE_FILE" up -d "$rollback_container"
+    $DOCKER_COMPOSE_CMD -f "$DOCKER_COMPOSE_FILE" up -d "$rollback_container"
     
     # Determine port for health check
     local rollback_port
@@ -276,7 +291,7 @@ rollback() {
     # Stop current active (failed deployment)
     local failed_container="reforge-api-${active_color}"
     log_info "Stopping failed deployment: $failed_container"
-    docker-compose -f "$DOCKER_COMPOSE_FILE" stop "$failed_container"
+    $DOCKER_COMPOSE_CMD -f "$DOCKER_COMPOSE_FILE" stop "$failed_container"
     
     log_success "=== Rollback Complete ==="
     log_success "Active slot is now: $inactive_color"

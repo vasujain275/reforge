@@ -1,0 +1,65 @@
+# ============================================================================
+# Traefik Dynamic Configuration - Middlewares
+# CORS, Security Headers, Rate Limiting, etc.
+# ============================================================================
+
+http:
+  middlewares:
+    # ========================================================================
+    # Security Headers
+    # ========================================================================
+    security-headers:
+      headers:
+        # Security headers
+        customResponseHeaders:
+          X-Content-Type-Options: "nosniff"
+          X-Frame-Options: "DENY"
+          X-XSS-Protection: "1; mode=block"
+          Referrer-Policy: "strict-origin-when-cross-origin"
+        
+        # HSTS (HTTP Strict Transport Security)
+        stsSeconds: 31536000
+        stsIncludeSubdomains: true
+        stsPreload: true
+        
+        # Remove server header
+        customRequestHeaders:
+          X-Forwarded-Proto: "https"
+
+    # ========================================================================
+    # CORS Headers (for Reforge API)
+    # ========================================================================
+    cors-reforge:
+      headers:
+        accessControlAllowMethods:
+          - "GET"
+          - "POST"
+          - "PUT"
+          - "DELETE"
+          - "PATCH"
+          - "OPTIONS"
+        accessControlAllowHeaders:
+          - "Content-Type"
+          - "Authorization"
+          - "X-Requested-With"
+        accessControlAllowOriginList:
+          - "${CORS_ORIGIN}"
+        accessControlAllowCredentials: true
+        accessControlMaxAge: 3600
+
+    # ========================================================================
+    # Compression
+    # ========================================================================
+    compression:
+      compress:
+        excludedContentTypes:
+          - "text/event-stream"
+
+    # ========================================================================
+    # Rate Limiting (Optional - Uncomment to enable)
+    # ========================================================================
+    # rate-limit:
+    #   rateLimit:
+    #     average: 100
+    #     burst: 50
+    #     period: 1s

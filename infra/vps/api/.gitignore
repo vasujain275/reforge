@@ -1,0 +1,7 @@
+# Ignore environment file
+.env
+
+# Ignore database backups
+backups/*.sql
+backups/*.sql.gz
+!backups/.gitkeep
